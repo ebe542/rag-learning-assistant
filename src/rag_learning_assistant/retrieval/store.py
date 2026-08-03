@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Protocol
 
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.retrieval.embeddings import Embedding
@@ -72,3 +73,15 @@ class InMemoryVectorStore:
 
         if not embedding or not any(value != 0.0 for value in embedding):
             raise ValueError("Embedding must not be a zero vector")
+
+
+class VectorStore(Protocol):
+    """Store embedded chunks and retrieve similar results."""
+
+    def add(self, chunk: Chunk, embedding: Embedding) -> None:
+        """Add an embedded chunk to the store."""
+        ...
+
+    def search(self, query: Embedding, limit: int) -> list[SearchResult]:
+        """Return the most similar stored chunks."""
+        ...

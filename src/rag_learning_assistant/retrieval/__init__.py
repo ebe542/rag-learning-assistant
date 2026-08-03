@@ -2,6 +2,14 @@
 
 from rag_learning_assistant.retrieval.embeddings import Embedder, Embedding
 from rag_learning_assistant.retrieval.models import SearchResult
-from rag_learning_assistant.retrieval.store import InMemoryVectorStore
+from rag_learning_assistant.retrieval.service import RetrievalService
+from rag_learning_assistant.retrieval.store import InMemoryVectorStore, VectorStore
 
-__all__ = ["Embedder", "Embedding", "InMemoryVectorStore", "SearchResult"]
+__all__ = [
+    "Embedder",
+    "Embedding",
+    "InMemoryVectorStore",
+    "RetrievalService",
+    "SearchResult",
+    "VectorStore",
+]
