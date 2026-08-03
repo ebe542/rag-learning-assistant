@@ -1,0 +1,15 @@
+# Architecture Decision Records
+
+Architecture Decision Records (ADRs) capture decisions that have a lasting impact on the project.
+Each record describes its context, decision, and consequences.
+
+ADRs are immutable after acceptance.
+If a decision changes, add a new ADR that supersedes the earlier record instead of rewriting history.
+
+## Index
+
+- [0001: Use a Python src layout](0001-use-src-layout.md)
+- [0002: Preserve PDF page boundaries](0002-preserve-page-boundaries.md)
+- [0003: Start with character-based chunking](0003-use-character-based-chunking.md)
+- [0004: Separate query and document embeddings](0004-separate-query-and-document-embeddings.md)
+- [0005: Use multilingual E5 as the first embedding model](0005-use-multilingual-e5-small.md)
