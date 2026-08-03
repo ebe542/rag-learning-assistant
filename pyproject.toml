@@ -33,7 +33,7 @@ rag-learn = "rag_learning_assistant.cli:main"
 packages = ["src/rag_learning_assistant"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-markers --strict-config"
+addopts = "--strict-markers --strict-config --import-mode=importlib"
 testpaths = ["tests"]
 
 [tool.ruff]
