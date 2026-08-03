@@ -3,9 +3,9 @@
 An open-source learning assistant that turns your PDF documents into source-grounded
 learning material, questions, and interactive tutoring sessions.
 
-The project is at an early MVP stage. The first milestone extracts text page by page and
-preserves the metadata needed for citations. Retrieval, embeddings, question generation,
-and learning-progress tracking will build on this foundation.
+The project is at an early MVP stage. It extracts text page by page, preserves citation
+metadata, and creates configurable, paragraph-aware chunks. Retrieval, embeddings,
+question generation, and learning-progress tracking will build on this foundation.
 
 ## Current features
 
@@ -13,6 +13,7 @@ and learning-progress tracking will build on this foundation.
 - retain document name and one-based page numbers
 - output structured JSON through a small command-line interface
 - testable core with no model or cloud-service dependency
+- split pages into size-limited, overlapping chunks while preserving paragraph boundaries
 
 Scanned documents do not yet support OCR.
 
@@ -30,10 +31,12 @@ pytest
 Extract a PDF:
 
 ```powershell
-rag-learn path\to\book.pdf
+rag-learn path\to\book.pdf --max-chars 1000 --overlap-chars 150
 ```
 
-The command emits JSON containing the text, source file, and page number for every page.
+The command emits JSON containing the extracted pages and searchable chunks. Every chunk
+retains its source file, page number, and document-wide index. Chunk size and overlap can
+be configured through the command-line options shown above.
 
 ## Planned architecture
 
@@ -46,12 +49,11 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
 
 Planned next milestones:
 
-1. structure-aware chunking with page citations
-2. local embeddings and vector retrieval
-3. answers with quoted source references
-4. summaries and reusable question banks
-5. learner feedback and spaced repetition
-6. optional Ollama and API model providers
+1. local embeddings and vector retrieval
+2. answers with quoted source references
+3. summaries and reusable question banks
+4. learner feedback and spaced repetition
+5. optional Ollama and API model providers
 
 ## Development
 
@@ -68,4 +70,3 @@ Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 This project is available under the [MIT License](LICENSE).
-
