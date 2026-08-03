@@ -1,14 +1,41 @@
+# Python virtual environments
 .venv/
+venv/
+env/
+
+# Python bytecode and interpreter caches
 __pycache__/
 *.py[cod]
+
+# Test, lint, and coverage artifacts
 .pytest_cache/
 .pytest-tmp/
 .ruff_cache/
 .coverage
 htmlcov/
-dist/
+
+# Build and packaging artifacts
 build/
+dist/
 *.egg-info/
+
+# Local environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Editor-specific workspace settings
 .idea/
 .vscode/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local source documents
+# PDFs may contain copyrighted or private learning material.
+*.pdf
+
+# Local model and application data
+# Add concrete directories here when persistent indices are introduced.

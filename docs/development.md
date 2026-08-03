@@ -16,6 +16,8 @@ The current source tree reflects implemented responsibilities rather than antici
 ```text
 src/rag_learning_assistant/
 ├── cli.py
+├── application/
+│   └── document_search.py
 ├── ingestion/
 │   ├── models.py
 │   └── pdf.py
@@ -71,6 +73,14 @@ Dimension: 384
 The adapter adds the E5 `passage: ` and `query: ` prefixes, requests normalized vectors, and loads the model only on first use.
 The model is cached by Hugging Face outside the repository.
 
+### Application flow
+
+`DocumentSearchService` coordinates chunking, indexing, and semantic search without implementing any of those responsibilities itself.
+The CLI exposes this flow through explicit `extract` and `search` subcommands.
+Search arguments are validated before a PDF is opened or a model is loaded.
+
+The current store is in memory, so every CLI search invocation rebuilds the index.
+
 ## Public interfaces
 
 Each feature package exports its supported public API from `__init__.py`.
@@ -84,11 +94,12 @@ from rag_learning_assistant.retrieval import RetrievalService
 
 ## Environment setup
 
-Python 3.11 or newer is required.
+Python 3.11 or newer is supported by the package.
+Python 3.13 is the recommended local version for the current ML toolchain.
 On Windows with Git Bash:
 
 ```bash
-python -m venv .venv && source .venv/Scripts/activate
+py -3.13 -m venv .venv && source .venv/Scripts/activate
 ```
 
 Install the core development dependencies:
@@ -105,6 +116,33 @@ python -m pip install -e ".[dev,embeddings]"
 
 The embedding extra includes Sentence Transformers and its ML runtime dependencies.
 The core PDF and chunking functionality deliberately remains usable without them.
+
+### CUDA-enabled PyTorch on Windows
+
+Installing Sentence Transformers from the regular Python package index can resolve to a CPU-only PyTorch build.
+Changing the Python version alone does not enable GPU execution.
+
+For a supported NVIDIA GPU, install the appropriate CUDA-enabled PyTorch wheel before the project extras:
+
+```bash
+python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
+python -m pip install -e ".[dev,embeddings]"
+```
+
+This order lets the Sentence Transformers dependency reuse the already installed CUDA-enabled PyTorch version.
+The current setup was verified on Windows with Python 3.13, PyTorch `2.13.0+cu132`, CUDA 13.2, and an NVIDIA GeForce RTX 3060 Ti.
+
+Check the runtime after installation:
+
+```bash
+python -c "import torch; print('Torch:', torch.__version__); print('CUDA:', torch.version.cuda); print('Available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
+```
+
+Expected key values for the verified setup are `CUDA: 13.2` and `Available: True`.
+Use the [official PyTorch installation selector](https://pytorch.org/get-started/locally/) when changing versions because CUDA wheel availability is maintained separately from `pyproject.toml`.
+
+The project metadata intentionally does not pin a CUDA-specific PyTorch build.
+CPU, CUDA, and other accelerator variants require different package indexes, so the runtime choice remains an environment setup concern.
 
 ## Quality checks
 
@@ -130,6 +168,7 @@ Unit tests use small fakes at integration boundaries so the default test suite n
 
 The real `multilingual-e5-small` adapter was additionally smoke-tested in German.
 This manual check confirmed 384-dimensional vectors and ranked a Python passage above an unrelated database passage for a question about Python functions.
+The complete CLI flow was then smoke-tested with a real text-based PDF and returned three semantically relevant, page-cited results.
 
 Tests mirror the production structure:
 
@@ -180,8 +219,7 @@ Tests remain the executable specification of behavior.
 
 ## Near-term roadmap
 
-1. Connect PDF ingestion, chunking, E5 embeddings, and retrieval in one application flow.
-2. Add semantic search to the CLI.
-3. Persist vectors, chunks, and embedding-model metadata locally.
-4. Build a small German retrieval evaluation set.
-5. Add grounded answer generation with citations.
+1. Persist vectors, chunks, and embedding-model metadata locally.
+2. Build a small German retrieval evaluation set.
+3. Add grounded answer generation with citations.
+4. Add reusable learning-material and question-generation workflows.

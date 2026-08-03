@@ -20,7 +20,8 @@ Scanned documents do not yet support OCR.
 
 ## Quick start
 
-Python 3.11 or newer is required.
+Python 3.11 or newer is supported.
+Python 3.13 is the recommended version for local ML development.
 
 ```powershell
 python -m venv .venv
@@ -35,18 +36,48 @@ Install the optional local embedding support:
 python -m pip install -e ".[dev,embeddings]"
 ```
 
+### NVIDIA GPU support on Windows
+
+The regular Python package index may install a CPU-only PyTorch build.
+For an NVIDIA GPU, install the CUDA-enabled PyTorch build before installing the embedding dependencies.
+The following setup was verified with Python 3.13, PyTorch 2.13.0, CUDA 13.2, and an NVIDIA GeForce RTX 3060 Ti:
+
+```bash
+py -3.13 -m venv .venv && source .venv/Scripts/activate
+python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
+python -m pip install -e ".[dev,embeddings]"
+```
+
+Verify that PyTorch can use the GPU:
+
+```bash
+python -c "import torch; print('Torch:', torch.__version__); print('CUDA:', torch.version.cuda); print('Available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
+```
+
+The CUDA wheel must match the installed NVIDIA driver and a version offered by PyTorch.
+Refer to the [official PyTorch installation instructions](https://pytorch.org/get-started/locally/) when changing PyTorch or CUDA versions.
+
 The default embedding model is `intfloat/multilingual-e5-small`, pinned to a specific Hugging Face revision for reproducibility.
 The first real embedding request downloads the model into the local Hugging Face cache.
 
-Extract a PDF:
+Extract pages and chunks from a PDF:
 
 ```powershell
-rag-learn path\to\book.pdf --max-chars 1000 --overlap-chars 150
+rag-learn extract path\to\book.pdf --max-chars 1000 --overlap-chars 150
 ```
 
 The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
 Chunk size and overlap can be configured through the command-line options shown above.
+
+Search the document semantically with the local embedding model:
+
+```powershell
+rag-learn search path\to\book.pdf "What are Python functions?" --limit 3
+```
+
+The current in-memory workflow extracts, chunks, and embeds the PDF for every search invocation.
+Persistent indexing is planned as the next storage milestone.
 
 ## Planned architecture
 
@@ -59,12 +90,11 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
 
 Planned next milestones:
 
-1. connect PDF ingestion, embeddings, and semantic search in the CLI
-2. persist embeddings and document metadata locally
-3. answer questions with quoted source references
-4. generate summaries and reusable question banks
-5. track learner feedback and spaced repetition
-6. add optional Ollama and API model providers
+1. persist embeddings and document metadata locally
+2. answer questions with quoted source references
+3. generate summaries and reusable question banks
+4. track learner feedback and spaced repetition
+5. add optional Ollama and API model providers
 
 ## Development
 
