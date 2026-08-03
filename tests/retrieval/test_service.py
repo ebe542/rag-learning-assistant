@@ -7,6 +7,7 @@ from rag_learning_assistant.retrieval import (
     Embedding,
     InMemoryVectorStore,
     RetrievalService,
+    SearchResult,
 )
 
 
@@ -37,6 +38,29 @@ class FakeEmbedder:
 
     def embed_query(self, text: str) -> Embedding:
         return self.embeddings[text]
+
+
+class RecordingVectorStore:
+    """Record batch writes made by the retrieval service."""
+
+    def __init__(self) -> None:
+        self.batches: list[list[tuple[Chunk, Embedding]]] = []
+
+    def add(self, chunk: Chunk, embedding: Embedding) -> None:
+        raise AssertionError("RetrievalService must use a batch write")
+
+    def add_many(
+        self,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        self.batches.append(list(entries))
+
+    def search(
+        self,
+        query: Embedding,
+        limit: int,
+    ) -> list[SearchResult]:
+        return []
 
 
 def test_index_and_search_chunks() -> None:
@@ -88,3 +112,38 @@ def test_index_rejects_wrong_number_of_embeddings() -> None:
         match="Embedder must return one embedding per chunk",
     ):
         service.index_chunks([chunk])
+
+
+def test_index_stores_all_embeddings_in_one_batch() -> None:
+    first_chunk = Chunk(
+        text="Python functions",
+        source="book.pdf",
+        page_number=1,
+        index=0,
+    )
+    second_chunk = Chunk(
+        text="Python classes",
+        source="book.pdf",
+        page_number=2,
+        index=1,
+    )
+    embedder = FakeEmbedder(
+        {
+            "Python functions": (1.0, 0.0),
+            "Python classes": (0.8, 0.2),
+        }
+    )
+    store = RecordingVectorStore()
+    service = RetrievalService(
+        embedder=embedder,
+        store=store,
+    )
+
+    service.index_chunks([first_chunk, second_chunk])
+
+    assert store.batches == [
+        [
+            (first_chunk, (1.0, 0.0)),
+            (second_chunk, (0.8, 0.2)),
+        ]
+    ]

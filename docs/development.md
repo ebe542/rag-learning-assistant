@@ -26,6 +26,7 @@ src/rag_learning_assistant/
 │   └── service.py
 └── retrieval/
     ├── embeddings.py
+    ├── faiss_store.py
     ├── models.py
     ├── sentence_transformer.py
     ├── service.py
@@ -58,9 +59,14 @@ Chunk size is currently measured in characters to keep the core independent of a
 `Embedder` separates document and query embeddings because asymmetric retrieval models may require different input representations.
 `VectorStore` defines storage and search without coupling the application service to a database implementation.
 
-`InMemoryVectorStore` is the first implementation.
+`InMemoryVectorStore` is the reference implementation.
 It uses cosine similarity and validates vector dimensions and non-zero magnitudes.
 `RetrievalService` coordinates batch indexing and query search.
+
+`FaissVectorStore` is the persistent implementation.
+It stores normalized vectors and numeric IDs in an exact FAISS inner-product index and stores chunks plus embedding-model metadata in SQLite.
+For normalized vectors, inner product is equivalent to cosine similarity.
+Batch writes load and persist the FAISS index once per document instead of once per chunk.
 
 `SentenceTransformerEmbedder` provides local embeddings using the pinned default model:
 
@@ -75,11 +81,10 @@ The model is cached by Hugging Face outside the repository.
 
 ### Application flow
 
-`DocumentSearchService` coordinates chunking, indexing, and semantic search without implementing any of those responsibilities itself.
-The CLI exposes this flow through explicit `extract` and `search` subcommands.
-Search arguments are validated before a PDF is opened or a model is loaded.
-
-The current store is in memory, so every CLI search invocation rebuilds the index.
+`DocumentSearchService` coordinates chunking and indexing without implementing those responsibilities itself.
+The CLI exposes `extract`, `index`, and `search` as separate commands.
+`index` processes a PDF into a new persistent index, while `search` opens that index without reopening or re-embedding the PDF.
+Index paths are validated before a PDF or model is loaded.
 
 ## Public interfaces
 
@@ -108,14 +113,47 @@ Install the core development dependencies:
 python -m pip install -e ".[dev]"
 ```
 
-Install local Hugging Face embedding support as well:
+Install local Hugging Face embedding and persistent-storage support as well:
 
 ```bash
-python -m pip install -e ".[dev,embeddings]"
+python -m pip install -e ".[dev,embeddings,storage]"
 ```
 
 The embedding extra includes Sentence Transformers and its ML runtime dependencies.
+The storage extra includes the CPU FAISS runtime; embedding generation can still use CUDA independently.
 The core PDF and chunking functionality deliberately remains usable without them.
+
+## Persistent indexing
+
+Keep private documents and generated indices outside version control:
+
+```text
+local-data/
+├── documents/
+└── indexes/
+```
+
+Create and query an index:
+
+```bash
+rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/book
+rag-learn search local-data/indexes/book "What are Python functions?" --limit 3
+```
+
+An index directory contains:
+
+```text
+book/
+├── vectors.faiss
+└── metadata.sqlite3
+```
+
+SQLite maps persistent FAISS IDs to chunk text, source, page number, and document-wide chunk index.
+It also records model name, pinned revision, and the dimension established by the first embedding.
+Opening an index with a different model identity is rejected.
+
+Indexing currently accepts only a new or empty target directory.
+This intentionally prevents duplicate chunks until document identity and update semantics are implemented.
 
 ### CUDA-enabled PyTorch on Windows
 
@@ -126,7 +164,7 @@ For a supported NVIDIA GPU, install the appropriate CUDA-enabled PyTorch wheel b
 
 ```bash
 python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
-python -m pip install -e ".[dev,embeddings]"
+python -m pip install -e ".[dev,embeddings,storage]"
 ```
 
 This order lets the Sentence Transformers dependency reuse the already installed CUDA-enabled PyTorch version.
@@ -205,6 +243,11 @@ A store implements the `VectorStore` protocol:
 class VectorStore(Protocol):
     def add(self, chunk: Chunk, embedding: Embedding) -> None: ...
 
+    def add_many(
+        self,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None: ...
+
     def search(self, query: Embedding, limit: int) -> list[SearchResult]: ...
 ```
 
@@ -219,7 +262,7 @@ Tests remain the executable specification of behavior.
 
 ## Near-term roadmap
 
-1. Persist vectors, chunks, and embedding-model metadata locally.
+1. Define document identity and index-update semantics.
 2. Build a small German retrieval evaluation set.
 3. Add grounded answer generation with citations.
 4. Add reusable learning-material and question-generation workflows.

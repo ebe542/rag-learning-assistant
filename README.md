@@ -13,7 +13,7 @@ Question generation and learning-progress tracking will build on this foundation
 - output structured JSON through a small command-line interface
 - testable core with no model or cloud-service dependency
 - split pages into size-limited, overlapping chunks while preserving paragraph boundaries
-- search an in-memory vector store using cosine similarity
+- persist and search embeddings with FAISS and SQLite
 - create local multilingual E5 embeddings through an optional Sentence Transformers adapter
 
 Scanned documents do not yet support OCR.
@@ -30,10 +30,10 @@ python -m pip install -e ".[dev]"
 pytest
 ```
 
-Install the optional local embedding support:
+Install the optional local embedding and persistent-storage support:
 
 ```powershell
-python -m pip install -e ".[dev,embeddings]"
+python -m pip install -e ".[dev,embeddings,storage]"
 ```
 
 ### NVIDIA GPU support on Windows
@@ -45,7 +45,7 @@ The following setup was verified with Python 3.13, PyTorch 2.13.0, CUDA 13.2, an
 ```bash
 py -3.13 -m venv .venv && source .venv/Scripts/activate
 python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
-python -m pip install -e ".[dev,embeddings]"
+python -m pip install -e ".[dev,embeddings,storage]"
 ```
 
 Verify that PyTorch can use the GPU:
@@ -70,14 +70,22 @@ The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
 Chunk size and overlap can be configured through the command-line options shown above.
 
-Search the document semantically with the local embedding model:
+Create a persistent index:
 
-```powershell
-rag-learn search path\to\book.pdf "What are Python functions?" --limit 3
+```bash
+mkdir -p local-data/documents local-data/indexes
+rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/book
 ```
 
-The current in-memory workflow extracts, chunks, and embeds the PDF for every search invocation.
-Persistent indexing is planned as the next storage milestone.
+Search the existing index without reopening or re-embedding the PDF:
+
+```bash
+rag-learn search local-data/indexes/book "What are Python functions?" --limit 3
+```
+
+Each index directory contains `vectors.faiss` and `metadata.sqlite3`.
+The SQLite database maps FAISS IDs back to chunks and records the embedding model, revision, and vector dimension.
+Indexing currently requires a new or empty target directory to prevent accidental duplicate chunks.
 
 ## Planned architecture
 
@@ -90,11 +98,10 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
 
 Planned next milestones:
 
-1. persist embeddings and document metadata locally
-2. answer questions with quoted source references
-3. generate summaries and reusable question banks
-4. track learner feedback and spaced repetition
-5. add optional Ollama and API model providers
+1. answer questions with quoted source references
+2. generate summaries and reusable question banks
+3. track learner feedback and spaced repetition
+4. add optional Ollama and API model providers
 
 ## Development
 

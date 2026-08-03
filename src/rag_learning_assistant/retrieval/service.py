@@ -27,8 +27,8 @@ class RetrievalService:
         if len(embeddings) != len(chunks):
             raise ValueError("Embedder must return one embedding per chunk")
 
-        for chunk, embedding in zip(chunks, embeddings, strict=True):
-            self.store.add(chunk, embedding)
+        entries = list(zip(chunks, embeddings, strict=True))
+        self.store.add_many(entries)
 
     def search(self, query: str, limit: int) -> list[SearchResult]:
         """Embed a query and return the most similar chunks."""

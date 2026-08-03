@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Protocol
 
 from rag_learning_assistant.chunking import Chunk
@@ -27,6 +28,15 @@ class InMemoryVectorStore:
             self._dimension = len(embedding)
 
         self._entries.append((chunk, embedding))
+
+    def add_many(
+        self,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        """Add multiple embedded chunks."""
+
+        for chunk, embedding in entries:
+            self.add(chunk, embedding)
 
     def search(self, query: Embedding, limit: int) -> list[SearchResult]:
         """Return the most similar chunks in descending score order."""
@@ -80,6 +90,13 @@ class VectorStore(Protocol):
 
     def add(self, chunk: Chunk, embedding: Embedding) -> None:
         """Add an embedded chunk to the store."""
+        ...
+
+    def add_many(
+        self,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        """Add multiple embedded chunks in one operation."""
         ...
 
     def search(self, query: Embedding, limit: int) -> list[SearchResult]:

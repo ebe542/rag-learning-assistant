@@ -113,7 +113,7 @@ def test_parser_accepts_search_command() -> None:
     args = cli.build_parser().parse_args(
         [
             "search",
-            "book.pdf",
+            ".rag-index/book",
             "What are Python functions?",
             "--limit",
             "3",
@@ -121,9 +121,10 @@ def test_parser_accepts_search_command() -> None:
     )
 
     assert args.command == "search"
-    assert args.pdf == Path("book.pdf")
+    assert args.index_dir == Path(".rag-index/book")
     assert args.query == "What are Python functions?"
     assert args.limit == 3
+    assert not hasattr(args, "pdf")
 
 
 def test_cli_search_outputs_ranked_results(
@@ -131,12 +132,11 @@ def test_cli_search_outputs_ranked_results(
     tmp_path: Path,
     capsys,
 ) -> None:
-    pdf = tmp_path / "course.pdf"
-    pdf.touch()
-    document = Document(
-        "course.pdf",
-        (Page(4, "Python functions", "course.pdf"),),
-    )
+    index_directory = tmp_path / "course-index"
+    index_directory.mkdir()
+    (index_directory / "vectors.faiss").touch()
+    (index_directory / "metadata.sqlite3").touch()
+
     chunk = Chunk(
         text="Python functions",
         source="course.pdf",
@@ -146,21 +146,15 @@ def test_cli_search_outputs_ranked_results(
     search_service = FakeDocumentSearchService([SearchResult(chunk=chunk, score=0.91)])
 
     monkeypatch.setattr(
-        cli.PdfExtractor,
-        "extract",
-        lambda self, path: document,
-    )
-    monkeypatch.setattr(
         cli,
-        "build_document_search",
-        lambda chunker: search_service,
-        raising=False,
+        "build_persistent_retrieval",
+        lambda index_dir: search_service,
     )
 
     result = cli.main(
         [
             "search",
-            str(pdf),
+            str(index_directory),
             "How do Python functions work?",
             "--limit",
             "3",
@@ -168,7 +162,6 @@ def test_cli_search_outputs_ranked_results(
     )
 
     assert result == 0
-    assert search_service.indexed_documents == [document]
     assert search_service.search_calls == [("How do Python functions work?", 3)]
     assert json.loads(capsys.readouterr().out) == {
         "query": "How do Python functions work?",
@@ -190,14 +183,13 @@ def test_search_limit_must_be_positive(
     tmp_path: Path,
     capsys,
 ) -> None:
-    pdf = tmp_path / "course.pdf"
-    pdf.touch()
+    index_directory = tmp_path / "course-index"
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(
             [
                 "search",
-                str(pdf),
+                str(index_directory),
                 "What is Python?",
                 "--limit",
                 limit,
@@ -214,17 +206,138 @@ def test_search_query_must_not_be_blank(
     tmp_path: Path,
     capsys,
 ) -> None:
-    pdf = tmp_path / "course.pdf"
-    pdf.touch()
+    index_directory = tmp_path / "course-index"
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(
             [
                 "search",
-                str(pdf),
+                str(index_directory),
                 query,
             ]
         )
 
     assert exc_info.value.code == 2
     assert "must not be blank" in capsys.readouterr().err
+
+
+def test_parser_accepts_index_command() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "index",
+            "book.pdf",
+            "--index-dir",
+            ".rag-index/book",
+        ]
+    )
+
+    assert args.command == "index"
+    assert args.pdf == Path("book.pdf")
+    assert args.index_dir == Path(".rag-index/book")
+
+
+def test_cli_index_persists_document(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    pdf = tmp_path / "course.pdf"
+    pdf.touch()
+    index_directory = tmp_path / "course-index"
+    document = Document(
+        "course.pdf",
+        (Page(1, "Python functions", "course.pdf"),),
+    )
+    search_service = FakeDocumentSearchService([])
+
+    monkeypatch.setattr(
+        cli.PdfExtractor,
+        "extract",
+        lambda self, path: document,
+    )
+    monkeypatch.setattr(
+        cli,
+        "build_persistent_document_search",
+        lambda chunker, index_dir: search_service,
+        raising=False,
+    )
+
+    result = cli.main(
+        [
+            "index",
+            str(pdf),
+            "--index-dir",
+            str(index_directory),
+        ]
+    )
+
+    assert result == 0
+    assert search_service.indexed_documents == [document]
+    assert json.loads(capsys.readouterr().out) == {
+        "source": "course.pdf",
+        "index_directory": str(index_directory),
+        "chunks_indexed": 0,
+    }
+
+
+def test_index_rejects_non_empty_index_directory(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    pdf = tmp_path / "course.pdf"
+    pdf.touch()
+    index_directory = tmp_path / "course-index"
+    index_directory.mkdir()
+    (index_directory / "vectors.faiss").touch()
+
+    def fail_if_pdf_is_opened(self, path):
+        raise AssertionError("PDF must not be opened for an invalid index directory")
+
+    monkeypatch.setattr(
+        cli.PdfExtractor,
+        "extract",
+        fail_if_pdf_is_opened,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "index",
+                str(pdf),
+                "--index-dir",
+                str(index_directory),
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "index directory must be empty" in capsys.readouterr().err
+
+
+def test_search_rejects_missing_index_directory(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    missing_index = tmp_path / "missing-index"
+
+    def fail_if_retrieval_is_built(index_directory):
+        raise AssertionError("Retrieval must not be built for a missing index")
+
+    monkeypatch.setattr(
+        cli,
+        "build_persistent_retrieval",
+        fail_if_retrieval_is_built,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "search",
+                str(missing_index),
+                "What is Python?",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "index directory is incomplete" in capsys.readouterr().err

@@ -37,5 +37,6 @@ Desktop.ini
 # PDFs may contain copyrighted or private learning material.
 *.pdf
 
-# Local model and application data
-# Add concrete directories here when persistent indices are introduced.
+# Local test documents, generated indices, and application data
+# Everything in this directory must remain reproducible.
+local-data/

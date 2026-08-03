@@ -11,7 +11,7 @@ from rag_learning_assistant.application import DocumentSearchService
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import Document, PdfExtractor
 from rag_learning_assistant.retrieval import (
-    InMemoryVectorStore,
+    FaissVectorStore,
     RetrievalService,
     SentenceTransformerEmbedder,
 )
@@ -44,6 +44,28 @@ def non_blank_text(value: str) -> str:
     return value
 
 
+def validate_empty_index_directory(index_directory: Path) -> None:
+    """Require a new or empty directory for document indexing."""
+
+    if not index_directory.exists():
+        return
+
+    if not index_directory.is_dir() or any(index_directory.iterdir()):
+        raise ValueError("index directory must be empty")
+
+
+def validate_existing_index_directory(index_directory: Path) -> None:
+    """Require both persistent index files before starting retrieval."""
+
+    required_files = (
+        index_directory / "vectors.faiss",
+        index_directory / "metadata.sqlite3",
+    )
+
+    if not index_directory.is_dir() or not all(path.is_file() for path in required_files):
+        raise ValueError("index directory is incomplete")
+
+
 def add_chunking_arguments(parser: argparse.ArgumentParser) -> None:
     """Add options shared by commands that process documents."""
 
@@ -62,6 +84,23 @@ def add_chunking_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def build_persistent_retrieval(
+    index_directory: Path,
+) -> RetrievalService:
+    """Build retrieval backed by an existing persistent index."""
+
+    embedder = SentenceTransformerEmbedder()
+    store = FaissVectorStore(
+        index_directory,
+        model_name=embedder.model_name,
+        model_revision=embedder.model_revision,
+    )
+    return RetrievalService(
+        embedder=embedder,
+        store=store,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build learning material from PDF documents")
     commands = parser.add_subparsers(
@@ -75,16 +114,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_chunking_arguments(extract_parser)
 
+    index_parser = commands.add_parser(
+        "index",
+        help="Create a persistent search index for a PDF",
+    )
+    add_chunking_arguments(index_parser)
+
+    index_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        required=True,
+        help="Directory for the FAISS index and SQLite metadata",
+    )
+
     search_parser = commands.add_parser(
         "search",
-        help="Search a PDF semantically",
+        help="Search an existing persistent index",
     )
-    add_chunking_arguments(search_parser)
+    search_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the FAISS index and SQLite metadata",
+    )
+
     search_parser.add_argument(
         "query",
         type=non_blank_text,
         help="Question or search text",
     )
+
     search_parser.add_argument(
         "--limit",
         type=positive_int,
@@ -95,19 +153,38 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_document_search(
+def build_persistent_document_search(
     chunker: TextChunker,
+    index_directory: Path,
 ) -> DocumentSearchService:
-    """Build the local semantic-search application service."""
+    """Build document indexing backed by a persistent FAISS index."""
 
-    retrieval = RetrievalService(
-        embedder=SentenceTransformerEmbedder(),
-        store=InMemoryVectorStore(),
-    )
     return DocumentSearchService(
         chunker=chunker,
-        retrieval=retrieval,
+        retrieval=build_persistent_retrieval(index_directory),
     )
+
+
+def run_index(
+    document: Document,
+    chunker: TextChunker,
+    index_directory: Path,
+) -> int:
+    """Persist the searchable chunks of a document."""
+
+    search = build_persistent_document_search(
+        chunker,
+        index_directory,
+    )
+    chunks = search.index_document(document)
+
+    payload = {
+        "source": document.source,
+        "index_directory": str(index_directory),
+        "chunks_indexed": len(chunks),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
 
 
 def run_extract(
@@ -142,16 +219,14 @@ def run_extract(
 
 
 def run_search(
-    document: Document,
-    chunker: TextChunker,
+    index_directory: Path,
     query: str,
     limit: int,
 ) -> int:
-    """Index a document and write ranked search results as JSON."""
+    """Search an existing index and write ranked results as JSON."""
 
-    search = build_document_search(chunker)
-    search.index_document(document)
-    results = search.search(query, limit=limit)
+    retrieval = build_persistent_retrieval(index_directory)
+    results = retrieval.search(query, limit=limit)
 
     payload = {
         "query": query,
@@ -174,6 +249,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "search":
+        try:
+            validate_existing_index_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        return run_search(
+            index_directory=args.index_dir,
+            query=args.query,
+            limit=args.limit,
+        )
+
+    if args.command == "index":
+        try:
+            validate_empty_index_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
     try:
         chunker = TextChunker(
             max_chars=args.max_chars,
@@ -187,11 +280,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "extract":
         return run_extract(document, chunker)
 
-    return run_search(
+    return run_index(
         document=document,
         chunker=chunker,
-        query=args.query,
-        limit=args.limit,
+        index_directory=args.index_dir,
     )
 
 
