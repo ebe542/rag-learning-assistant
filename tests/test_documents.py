@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from rag_learning_assistant.documents import Document, Page, PdfExtractor
+from rag_learning_assistant.ingestion import Document, Page, PdfExtractor
 
 
 class FakePage:

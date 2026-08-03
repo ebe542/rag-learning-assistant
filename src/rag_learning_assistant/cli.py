@@ -7,7 +7,7 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from rag_learning_assistant.documents import PdfExtractor
+from rag_learning_assistant.ingestion import PdfExtractor
 
 
 def build_parser() -> argparse.ArgumentParser:

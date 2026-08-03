@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from rag_learning_assistant.ingestion import Document, Page
+from rag_learning_assistant.ingestion.models import Document, Page
 
 
 class PdfPage(Protocol):

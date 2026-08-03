@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from rag_learning_assistant import cli
-from rag_learning_assistant.documents import Document, Page
+from rag_learning_assistant.ingestion import Document, Page
 
 
 def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) -> None:
