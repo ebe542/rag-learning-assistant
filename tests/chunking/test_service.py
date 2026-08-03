@@ -109,3 +109,56 @@ def test_word_longer_than_max_chars_is_split() -> None:
 
     assert [chunk.text for chunk in chunks] == ["abcde", "fgh"]
     assert all(len(chunk.text) <= 5 for chunk in chunks)
+
+
+def test_paragraph_boundary_is_preferred() -> None:
+    page = Page(
+        number=1,
+        text="alpha beta\n\ngamma delta epsilon",
+        source="book.pdf",
+    )
+    chunker = TextChunker(max_chars=25, overlap_chars=0)
+
+    chunks = chunker.chunk_pages([page])
+
+    assert [chunk.text for chunk in chunks] == [
+        "alpha beta",
+        "gamma delta epsilon",
+    ]
+
+
+def test_complete_paragraphs_do_not_overlap() -> None:
+    page = Page(
+        number=1,
+        text="alpha beta\n\ngamma delta epsilon",
+        source="book.pdf",
+    )
+    chunker = TextChunker(max_chars=25, overlap_chars=5)
+
+    chunks = chunker.chunk_pages([page])
+
+    assert [chunk.text for chunk in chunks] == [
+        "alpha beta",
+        "gamma delta epsilon",
+    ]
+
+
+def test_chunk_indices_continue_across_pages() -> None:
+    pages = [
+        Page(
+            number=1,
+            text="one two three four",
+            source="book.pdf",
+        ),
+        Page(
+            number=2,
+            text="five six",
+            source="book.pdf",
+        ),
+    ]
+    chunker = TextChunker(max_chars=9, overlap_chars=0)
+
+    chunks = chunker.chunk_pages(pages)
+
+    assert [chunk.index for chunk in chunks] == [0, 1, 2, 3]
+    assert [chunk.page_number for chunk in chunks] == [1, 1, 1, 2]

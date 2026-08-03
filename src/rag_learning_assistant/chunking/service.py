@@ -1,5 +1,6 @@
 """Services for splitting document pages into searchable chunks."""
 
+import re
 from collections.abc import Iterable
 
 from rag_learning_assistant.chunking.models import Chunk
@@ -42,6 +43,47 @@ class TextChunker:
         return chunks
 
     def _split_text(self, text: str) -> list[str]:
+        """Split text at paragraph boundaries whenever possible.
+
+        Complete paragraphs do not overlap because they already represent
+        semantic boundaries. Overlap is applied only when a paragraph must
+        be split because it exceeds the configured maximum size.
+        """
+
+        paragraphs = [
+            " ".join(paragraph.split())
+            for paragraph in re.split(r"\n\s*\n", text)
+            if paragraph.strip()
+        ]
+        chunks: list[str] = []
+        current_paragraphs: list[str] = []
+        current_length = 0
+
+        for paragraph in paragraphs:
+            separator_length = 2 if current_paragraphs else 0
+            candidate_length = current_length + separator_length + len(paragraph)
+
+            if len(paragraph) > self.max_chars:
+                if current_paragraphs:
+                    chunks.append("\n\n".join(current_paragraphs))
+                    current_paragraphs = []
+                    current_length = 0
+
+                chunks.extend(self._split_words(paragraph))
+            elif current_paragraphs and candidate_length > self.max_chars:
+                chunks.append("\n\n".join(current_paragraphs))
+                current_paragraphs = [paragraph]
+                current_length = len(paragraph)
+            else:
+                current_paragraphs.append(paragraph)
+                current_length = candidate_length
+
+        if current_paragraphs:
+            chunks.append("\n\n".join(current_paragraphs))
+
+        return chunks
+
+    def _split_words(self, text: str) -> list[str]:
         """Split text into overlapping chunks at word boundaries."""
 
         words = self._split_long_words(text)
