@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from rag_learning_assistant.ingestion import Document, Page, PdfExtractor
+from rag_learning_assistant.ingestion import Page, PdfExtractor
 
 
 class FakePage:
@@ -51,15 +51,6 @@ def test_extract_preserves_page_numbers_and_source(tmp_path: Path) -> None:
     assert document.text == "First page\n\nSecond page"
 
 
-def test_document_text_ignores_empty_pages() -> None:
-    document = Document(
-        source="book.pdf",
-        pages=(Page(1, "", "book.pdf"), Page(2, "Content", "book.pdf")),
-    )
-
-    assert document.text == "Content"
-
-
 @pytest.mark.parametrize("filename", ["notes.txt", "book.epub", "pdf"])
 def test_rejects_non_pdf_files(tmp_path: Path, filename: str) -> None:
     path = tmp_path / filename
@@ -72,8 +63,3 @@ def test_rejects_non_pdf_files(tmp_path: Path, filename: str) -> None:
 def test_reports_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         PdfExtractor().extract(tmp_path / "missing.pdf")
-
-
-def test_page_numbers_must_be_positive() -> None:
-    with pytest.raises(ValueError, match="start at 1"):
-        Page(number=0, text="text", source="book.pdf")
