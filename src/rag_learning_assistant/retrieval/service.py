@@ -22,7 +22,7 @@ class RetrievalService:
     def index_chunks(self, chunks: Sequence[Chunk]) -> None:
         """Embed and store a batch of chunks."""
 
-        embeddings = self.embedder.embed([chunk.text for chunk in chunks])
+        embeddings = self.embedder.embed_documents([chunk.text for chunk in chunks])
 
         if len(embeddings) != len(chunks):
             raise ValueError("Embedder must return one embedding per chunk")
@@ -33,11 +33,6 @@ class RetrievalService:
     def search(self, query: str, limit: int) -> list[SearchResult]:
         """Embed a query and return the most similar chunks."""
 
-        query_embeddings = self.embedder.embed([query])
-
-        if len(query_embeddings) != 1:
-            raise ValueError("Embedder must return exactly one query embedding")
-
-        query_embedding = query_embeddings[0]
+        query_embedding = self.embedder.embed_query(query)
 
         return self.store.search(query_embedding, limit=limit)

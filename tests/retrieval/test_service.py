@@ -11,10 +11,16 @@ from rag_learning_assistant.retrieval import (
 
 
 class EmptyEmbedder:
-    """Return no vectors regardless of the input."""
+    """Return no document vectors regardless of the input."""
 
-    def embed(self, texts: Sequence[str]) -> list[Embedding]:
+    def embed_documents(
+        self,
+        texts: Sequence[str],
+    ) -> list[Embedding]:
         return []
+
+    def embed_query(self, text: str) -> Embedding:
+        return ()
 
 
 class FakeEmbedder:
@@ -23,18 +29,14 @@ class FakeEmbedder:
     def __init__(self, embeddings: dict[str, Embedding]) -> None:
         self.embeddings = embeddings
 
-    def embed(self, texts: Sequence[str]) -> list[Embedding]:
+    def embed_documents(
+        self,
+        texts: Sequence[str],
+    ) -> list[Embedding]:
         return [self.embeddings[text] for text in texts]
 
-
-class FixedEmbedder:
-    """Return a fixed list of embeddings for every call."""
-
-    def __init__(self, embeddings: list[Embedding]) -> None:
-        self.embeddings = embeddings
-
-    def embed(self, texts: Sequence[str]) -> list[Embedding]:
-        return self.embeddings
+    def embed_query(self, text: str) -> Embedding:
+        return self.embeddings[text]
 
 
 def test_index_and_search_chunks() -> None:
@@ -86,25 +88,3 @@ def test_index_rejects_wrong_number_of_embeddings() -> None:
         match="Embedder must return one embedding per chunk",
     ):
         service.index_chunks([chunk])
-
-
-@pytest.mark.parametrize(
-    "embeddings",
-    [
-        [],
-        [(1.0, 0.0), (0.0, 1.0)],
-    ],
-)
-def test_search_requires_exactly_one_query_embedding(
-    embeddings: list[Embedding],
-) -> None:
-    service = RetrievalService(
-        embedder=FixedEmbedder(embeddings),
-        store=InMemoryVectorStore(),
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="Embedder must return exactly one query embedding",
-    ):
-        service.search("What is Python?", limit=1)

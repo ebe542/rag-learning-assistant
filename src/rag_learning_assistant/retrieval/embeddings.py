@@ -7,8 +7,15 @@ Embedding: TypeAlias = tuple[float, ...]
 
 
 class Embedder(Protocol):
-    """Convert batches of text into numeric vectors."""
+    """Create embeddings for documents and search queries."""
 
-    def embed(self, texts: Sequence[str]) -> list[Embedding]:
-        """Return one embedding for every input text."""
+    def embed_documents(
+        self,
+        texts: Sequence[str],
+    ) -> list[Embedding]:
+        """Return one passage embedding for every document text."""
+        ...
+
+    def embed_query(self, text: str) -> Embedding:
+        """Return one query embedding for a search text."""
         ...
