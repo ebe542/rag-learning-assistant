@@ -6,6 +6,8 @@ import pytest
 from rag_learning_assistant import cli
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.ingestion import Document, Page
+from rag_learning_assistant.interfaces.cli import commands, entrypoint
+from rag_learning_assistant.interfaces.cli.parser import build_parser
 from rag_learning_assistant.retrieval import SearchResult
 
 
@@ -28,7 +30,7 @@ def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) 
     pdf = tmp_path / "course.pdf"
     pdf.touch()
     document = Document("course.pdf", (Page(1, "Lesson", "course.pdf"),))
-    monkeypatch.setattr(cli.PdfExtractor, "extract", lambda self, path: document)
+    monkeypatch.setattr(entrypoint.PdfExtractor, "extract", lambda self, path: document)
 
     assert cli.main(["extract", str(pdf)]) == 0
     assert json.loads(capsys.readouterr().out) == {
@@ -58,7 +60,7 @@ def test_cli_accepts_chunking_options(monkeypatch, tmp_path: Path, capsys) -> No
         "course.pdf",
         (Page(1, "one two three", "course.pdf"),),
     )
-    monkeypatch.setattr(cli.PdfExtractor, "extract", lambda self, path: document)
+    monkeypatch.setattr(entrypoint.PdfExtractor, "extract", lambda self, path: document)
 
     result = cli.main(
         [
@@ -91,7 +93,7 @@ def test_cli_rejects_invalid_chunking_options(
         "course.pdf",
         (Page(1, "Lesson", "course.pdf"),),
     )
-    monkeypatch.setattr(cli.PdfExtractor, "extract", lambda self, path: document)
+    monkeypatch.setattr(entrypoint.PdfExtractor, "extract", lambda self, path: document)
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(
@@ -110,7 +112,7 @@ def test_cli_rejects_invalid_chunking_options(
 
 
 def test_parser_accepts_search_command() -> None:
-    args = cli.build_parser().parse_args(
+    args = build_parser().parse_args(
         [
             "search",
             ".rag-index/book",
@@ -146,7 +148,7 @@ def test_cli_search_outputs_ranked_results(
     search_service = FakeDocumentSearchService([SearchResult(chunk=chunk, score=0.91)])
 
     monkeypatch.setattr(
-        cli,
+        commands,
         "build_persistent_retrieval",
         lambda index_dir: search_service,
     )
@@ -222,7 +224,7 @@ def test_search_query_must_not_be_blank(
 
 
 def test_parser_accepts_index_command() -> None:
-    args = cli.build_parser().parse_args(
+    args = build_parser().parse_args(
         [
             "index",
             "book.pdf",
@@ -251,15 +253,14 @@ def test_cli_index_persists_document(
     search_service = FakeDocumentSearchService([])
 
     monkeypatch.setattr(
-        cli.PdfExtractor,
+        entrypoint.PdfExtractor,
         "extract",
         lambda self, path: document,
     )
     monkeypatch.setattr(
-        cli,
+        commands,
         "build_persistent_document_search",
         lambda chunker, index_dir: search_service,
-        raising=False,
     )
 
     result = cli.main(
@@ -295,7 +296,7 @@ def test_index_rejects_non_empty_index_directory(
         raise AssertionError("PDF must not be opened for an invalid index directory")
 
     monkeypatch.setattr(
-        cli.PdfExtractor,
+        entrypoint.PdfExtractor,
         "extract",
         fail_if_pdf_is_opened,
     )
@@ -325,7 +326,7 @@ def test_search_rejects_missing_index_directory(
         raise AssertionError("Retrieval must not be built for a missing index")
 
     monkeypatch.setattr(
-        cli,
+        commands,
         "build_persistent_retrieval",
         fail_if_retrieval_is_built,
     )

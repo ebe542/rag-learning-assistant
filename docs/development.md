@@ -18,6 +18,11 @@ src/rag_learning_assistant/
 ├── cli.py
 ├── application/
 │   └── document_search.py
+├── interfaces/
+│   └── cli/
+│       ├── commands.py
+│       ├── entrypoint.py
+│       └── parser.py
 ├── ingestion/
 │   ├── models.py
 │   └── pdf.py
@@ -85,6 +90,15 @@ The model is cached by Hugging Face outside the repository.
 The CLI exposes `extract`, `index`, and `search` as separate commands.
 `index` processes a PDF into a new persistent index, while `search` opens that index without reopening or re-embedding the PDF.
 Index paths are validated before a PDF or model is loaded.
+
+### Command-line interface
+
+The top-level `cli.py` remains the stable console-script target and delegates to the interface package.
+`interfaces/cli/parser.py` owns argument definitions and boundary validation.
+`interfaces/cli/commands.py` owns JSON output, command execution, and wiring concrete adapters into application services.
+`interfaces/cli/entrypoint.py` dispatches parsed commands and coordinates only the steps shared at the CLI boundary.
+
+This separation keeps parsing and presentation concerns out of application and retrieval modules while preserving `rag_learning_assistant.cli:main` as the installed entry point.
 
 ## Public interfaces
 
