@@ -1,10 +1,14 @@
 """Command execution and dependency wiring for the CLI."""
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 from rag_learning_assistant.application import (
+    BatchImportService,
     DocumentSearchService,
+    ImportOutcome,
+    ImportStatus,
     LibraryCatalog,
     LibraryService,
 )
@@ -74,28 +78,53 @@ def build_library_catalog(
 
 
 def run_index(
-    pdf_path: Path,
+    pdf_paths: Sequence[Path],
     chunker: TextChunker,
     index_directory: Path,
 ) -> int:
-    """Index and register one document in a persistent library."""
+    """Index and register documents in a persistent library."""
 
     library = build_library_service(
         chunker,
         index_directory,
     )
-    document = library.add_document(pdf_path)
+    outcomes = BatchImportService(library).add_documents(pdf_paths)
 
     payload = {
-        "id": str(document.id),
-        "source": document.source,
-        "content_sha256": document.content_sha256,
-        "page_count": document.page_count,
-        "chunk_count": document.chunk_count,
         "index_directory": str(index_directory),
+        "results": [_serialize_import_outcome(outcome) for outcome in outcomes],
+        "summary": {
+            "added": sum(outcome.status is ImportStatus.ADDED for outcome in outcomes),
+            "skipped": sum(outcome.status is ImportStatus.SKIPPED for outcome in outcomes),
+            "failed": sum(outcome.status is ImportStatus.FAILED for outcome in outcomes),
+        },
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0
+    return 1 if any(outcome.status is ImportStatus.FAILED for outcome in outcomes) else 0
+
+
+def _serialize_import_outcome(outcome: ImportOutcome) -> dict[str, object]:
+    """Convert one batch result into a JSON-compatible mapping."""
+
+    document = outcome.document
+    document_payload = (
+        {
+            "id": str(document.id),
+            "source": document.source,
+            "content_sha256": document.content_sha256,
+            "page_count": document.page_count,
+            "chunk_count": document.chunk_count,
+        }
+        if document is not None
+        else None
+    )
+
+    return {
+        "path": str(outcome.path),
+        "status": outcome.status.value,
+        "document": document_payload,
+        "message": outcome.message,
+    }
 
 
 def run_extract(

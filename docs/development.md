@@ -154,11 +154,13 @@ local-data/
 └── indexes/
 ```
 
-Create a library, add another document, inspect it, and search it:
+Create a library with multiple documents, inspect it, and search it:
 
 ```bash
-rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/learning
-rag-learn index local-data/documents/notes.pdf --index-dir local-data/indexes/learning
+rag-learn index \
+  local-data/documents/book.pdf \
+  local-data/documents/notes.pdf \
+  --index-dir local-data/indexes/learning
 rag-learn list local-data/indexes/learning
 rag-learn search local-data/indexes/learning "What are Python functions?" --limit 3
 ```
@@ -178,6 +180,11 @@ Opening an index with a different model identity is rejected.
 Document UUIDs remain stable identifiers for future update and deletion operations.
 SHA-256 identifies the current file content independently of its filename, so renamed duplicate files are rejected before PDF extraction and GPU embedding.
 Indices created before document management are migrated with nullable document IDs; their existing vectors remain searchable but are not automatically registered as library documents.
+
+`BatchImportService` processes input paths sequentially in their original order.
+This avoids running multiple embedding-model instances against limited GPU memory.
+Every path produces an `ImportOutcome` with status `added`, `skipped`, or `failed`; duplicates are skipped and ordinary per-file exceptions are isolated so later inputs still run.
+The CLI prints all outcomes as JSON and returns exit code 1 if any input failed.
 
 ### CUDA-enabled PyTorch on Windows
 

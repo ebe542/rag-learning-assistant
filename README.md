@@ -72,11 +72,14 @@ The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
 Chunk size and overlap can be configured through the command-line options shown above.
 
-Create a persistent library and add a document:
+Create a persistent library and add one or more documents:
 
 ```bash
 mkdir -p local-data/documents local-data/indexes
-rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/learning
+rag-learn index \
+  local-data/documents/book.pdf \
+  local-data/documents/notes.pdf \
+  --index-dir local-data/indexes/learning
 ```
 
 Add more documents to the same library and list its contents:
@@ -95,6 +98,9 @@ rag-learn search local-data/indexes/learning "What are Python functions?" --limi
 Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
 SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.
 Adding identical file content again is rejected before PDF extraction or embedding generation.
+Batch imports process documents sequentially and report each path as `added`, `skipped`, or `failed`.
+Duplicates are skipped, while other per-file errors do not prevent later inputs from being processed.
+The command exits with status 1 when at least one document fails.
 
 ## Planned architecture
 

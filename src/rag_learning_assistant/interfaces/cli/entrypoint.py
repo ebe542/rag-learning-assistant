@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 
-from rag_learning_assistant.application import DuplicateDocumentError
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import PdfExtractor
 from rag_learning_assistant.interfaces.cli import commands
@@ -55,14 +54,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(str(exc))
 
     if args.command == "index":
-        try:
-            return commands.run_index(
-                pdf_path=args.pdf,
-                chunker=chunker,
-                index_directory=args.index_dir,
-            )
-        except DuplicateDocumentError as exc:
-            parser.error(str(exc))
+        return commands.run_index(
+            pdf_paths=args.pdfs,
+            chunker=chunker,
+            index_directory=args.index_dir,
+        )
 
     document = PdfExtractor().extract(args.pdf)
     return commands.run_extract(document, chunker)

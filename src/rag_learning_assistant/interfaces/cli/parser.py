@@ -32,7 +32,7 @@ def non_blank_text(value: str) -> str:
 
 
 def validate_index_directory(index_directory: Path) -> None:
-    """Require a new, empty, or complete library directory."""
+    """Require a directory that can safely receive indexed documents."""
 
     if not index_directory.exists():
         return
@@ -45,12 +45,15 @@ def validate_index_directory(index_directory: Path) -> None:
     if not entries:
         return
 
-    required_entries = {
+    allowed_entries = {
         "vectors.faiss",
         "metadata.sqlite3",
     }
 
-    if entries != required_entries:
+    # A failed first import can leave valid metadata before vectors exist. The
+    # directory must remain reusable, while a vector index without metadata is
+    # incomplete and cannot be assigned to library documents safely.
+    if not entries.issubset(allowed_entries) or entries == {"vectors.faiss"}:
         raise ValueError("index directory is incomplete")
 
 
@@ -75,10 +78,9 @@ def validate_library_directory(index_directory: Path) -> None:
         raise ValueError("library directory is incomplete")
 
 
-def add_chunking_arguments(parser: argparse.ArgumentParser) -> None:
+def add_chunking_options(parser: argparse.ArgumentParser) -> None:
     """Add options shared by commands that process documents."""
 
-    parser.add_argument("pdf", type=Path, help="Path to a text-based PDF")
     parser.add_argument(
         "--max-chars",
         type=int,
@@ -106,19 +108,31 @@ def build_parser() -> argparse.ArgumentParser:
         "extract",
         help="Extract pages and chunks as JSON",
     )
-    add_chunking_arguments(extract_parser)
+    extract_parser.add_argument(
+        "pdf",
+        type=Path,
+        help="Path to a text-based PDF",
+    )
+    add_chunking_options(extract_parser)
 
     index_parser = commands.add_parser(
         "index",
-        help="Create a persistent search index for a PDF",
+        help="Add one or more PDFs to a persistent library",
     )
-    add_chunking_arguments(index_parser)
+    index_parser.add_argument(
+        "pdfs",
+        nargs="+",
+        type=Path,
+        help="Paths to text-based PDF documents",
+    )
+    add_chunking_options(index_parser)
     index_parser.add_argument(
         "--index-dir",
         type=Path,
         required=True,
         help="Directory for the FAISS index and SQLite metadata",
     )
+
     list_parser = commands.add_parser(
         "list",
         help="List documents in a persistent library",
