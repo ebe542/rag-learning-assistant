@@ -26,6 +26,19 @@ class DocumentRepository(Protocol):
         """Return the document with this content hash, if present."""
         ...
 
+    def find_by_id(
+        self,
+        document_id: UUID,
+    ) -> IndexedDocument | None:
+        """Return the document with this ID, if present."""
+
+        ...
+
+    def remove(self, document_id: UUID) -> None:
+        """Remove one document's metadata."""
+
+        ...
+
 
 class SqliteDocumentRepository:
     """Persist indexed document metadata in SQLite."""
@@ -112,6 +125,44 @@ class SqliteDocumentRepository:
             return None
 
         return self._document_from_row(row)
+
+    def find_by_id(
+        self,
+        document_id: UUID,
+    ) -> IndexedDocument | None:
+        """Return the document with this ID, if present."""
+
+        with sqlite3.connect(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    source,
+                    content_sha256,
+                    page_count,
+                    chunk_count
+                FROM documents
+                WHERE id = ?
+                """,
+                (str(document_id),),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._document_from_row(row)
+
+    def remove(self, document_id: UUID) -> None:
+        """Remove one document's metadata."""
+
+        with sqlite3.connect(self.database_path) as connection:
+            connection.execute(
+                """
+                DELETE FROM documents
+                WHERE id = ?
+                """,
+                (str(document_id),),
+            )
 
     def _initialize_database(self) -> None:
         """Create the document metadata table when needed."""

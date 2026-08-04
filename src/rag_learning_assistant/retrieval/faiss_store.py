@@ -112,6 +112,57 @@ class FaissVectorStore:
             # Write once per batch instead of once per chunk.
             faiss.write_index(index, str(self.index_path))
 
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all vectors and chunk metadata belonging to a document."""
+
+        with sqlite3.connect(self.metadata_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id
+                FROM chunks
+                WHERE document_id = ?
+                """,
+                (str(document_id),),
+            ).fetchall()
+
+        entry_ids = [row[0] for row in rows]
+
+        if not entry_ids:
+            return 0
+
+        if not self.index_path.is_file():
+            raise RuntimeError("FAISS index is missing for stored chunks")
+
+        faiss, numpy = self._load_vector_libraries()
+        index = faiss.read_index(str(self.index_path))
+        id_array = numpy.asarray(entry_ids, dtype="int64")
+        removed_count = int(index.remove_ids(id_array))
+
+        if removed_count != len(entry_ids):
+            raise RuntimeError("FAISS and SQLite contain different document chunks")
+
+        temporary_index_path = self.index_path.with_suffix(".faiss.tmp")
+
+        try:
+            faiss.write_index(index, str(temporary_index_path))
+
+            with sqlite3.connect(self.metadata_path) as connection:
+                connection.execute(
+                    """
+                    DELETE FROM chunks
+                    WHERE document_id = ?
+                    """,
+                    (str(document_id),),
+                )
+
+                # Replace the persisted index only after both storage operations
+                # have succeeded up to this point.
+                temporary_index_path.replace(self.index_path)
+        finally:
+            temporary_index_path.unlink(missing_ok=True)
+
+        return removed_count
+
     def search(self, query: Embedding, limit: int) -> list[SearchResult]:
         """Return the most similar persisted chunks."""
 

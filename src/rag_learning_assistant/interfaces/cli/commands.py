@@ -3,6 +3,7 @@
 import json
 from collections.abc import Sequence
 from pathlib import Path
+from uuid import UUID
 
 from rag_learning_assistant.application import (
     BatchImportService,
@@ -180,6 +181,33 @@ def run_search(
             }
             for result in results
         ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_remove(
+    document_id: UUID,
+    chunker: TextChunker,
+    index_directory: Path,
+) -> int:
+    """Remove one document and write its former metadata as JSON."""
+
+    library = build_library_service(
+        chunker,
+        index_directory,
+    )
+    document = library.remove_document(document_id)
+
+    payload = {
+        "index_directory": str(index_directory),
+        "removed_document": {
+            "id": str(document.id),
+            "source": document.source,
+            "content_sha256": document.content_sha256,
+            "page_count": document.page_count,
+            "chunk_count": document.chunk_count,
+        },
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0

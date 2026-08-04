@@ -2,10 +2,13 @@
 
 from collections.abc import Sequence
 
+from rag_learning_assistant.application import DocumentNotFoundError
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import PdfExtractor
 from rag_learning_assistant.interfaces.cli import commands
 from rag_learning_assistant.interfaces.cli.parser import (
+    DEFAULT_MAX_CHARS,
+    DEFAULT_OVERLAP_CHARS,
     build_parser,
     validate_existing_index_directory,
     validate_index_directory,
@@ -38,6 +41,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(str(exc))
 
         return commands.run_list(args.index_dir)
+
+    if args.command == "remove":
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        chunker = TextChunker(
+            max_chars=DEFAULT_MAX_CHARS,
+            overlap_chars=DEFAULT_OVERLAP_CHARS,
+        )
+        try:
+            return commands.run_remove(
+                document_id=args.document_id,
+                chunker=chunker,
+                index_directory=args.index_dir,
+            )
+        except DocumentNotFoundError as exc:
+            parser.error(str(exc))
 
     if args.command == "index":
         try:

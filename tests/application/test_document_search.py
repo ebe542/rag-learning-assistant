@@ -7,6 +7,16 @@ from rag_learning_assistant.ingestion import Document, Page
 from rag_learning_assistant.retrieval import SearchResult
 
 
+class RecordingRetrieval:
+    def __init__(self, removed_chunk_count: int) -> None:
+        self.removed_chunk_count = removed_chunk_count
+        self.removed_document_ids: list[UUID] = []
+
+    def remove_document(self, document_id: UUID) -> int:
+        self.removed_document_ids.append(document_id)
+        return self.removed_chunk_count
+
+
 class RecordingRetrievalService:
     """Record indexed chunks without creating real embeddings."""
 
@@ -102,3 +112,20 @@ def test_index_document_assigns_document_id_to_all_chunks() -> None:
         document_id,
     ]
     assert retrieval.indexed_chunks == chunks
+
+
+def test_remove_document_delegates_to_retrieval() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    retrieval = RecordingRetrieval(removed_chunk_count=4)
+    service = DocumentSearchService(
+        chunker=TextChunker(
+            max_chars=1000,
+            overlap_chars=150,
+        ),
+        retrieval=retrieval,
+    )
+
+    removed_count = service.remove_document(document_id)
+
+    assert removed_count == 4
+    assert retrieval.removed_document_ids == [document_id]

@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from uuid import UUID
 
 import pytest
 
@@ -45,6 +46,8 @@ class RecordingVectorStore:
 
     def __init__(self) -> None:
         self.batches: list[list[tuple[Chunk, Embedding]]] = []
+        self.removed_document_ids: list[UUID] = []
+        self.removed_chunk_count = 0
 
     def add(self, chunk: Chunk, embedding: Embedding) -> None:
         raise AssertionError("RetrievalService must use a batch write")
@@ -54,6 +57,10 @@ class RecordingVectorStore:
         entries: Sequence[tuple[Chunk, Embedding]],
     ) -> None:
         self.batches.append(list(entries))
+
+    def remove_document(self, document_id: UUID) -> int:
+        self.removed_document_ids.append(document_id)
+        return self.removed_chunk_count
 
     def search(
         self,
@@ -147,3 +154,18 @@ def test_index_stores_all_embeddings_in_one_batch() -> None:
             (second_chunk, (0.8, 0.2)),
         ]
     ]
+
+
+def test_remove_document_delegates_to_vector_store() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    store = RecordingVectorStore()
+    store.removed_chunk_count = 3
+    service = RetrievalService(
+        embedder=EmptyEmbedder(),
+        store=store,
+    )
+
+    removed_count = service.remove_document(document_id)
+
+    assert removed_count == 3
+    assert store.removed_document_ids == [document_id]

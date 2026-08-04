@@ -21,6 +21,11 @@ class RetrievalGateway(Protocol):
         """Return chunks relevant to a query."""
         ...
 
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all indexed chunks belonging to a document."""
+
+        ...
+
 
 class DocumentSearchService:
     """Coordinate document chunking and retrieval indexing."""
@@ -49,6 +54,11 @@ class DocumentSearchService:
 
         self.retrieval.index_chunks(chunks)
         return chunks
+
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all searchable chunks belonging to a document."""
+
+        return self.retrieval.remove_document(document_id)
 
     def search(self, query: str, limit: int) -> list[SearchResult]:
         """Return chunks relevant to a search query."""

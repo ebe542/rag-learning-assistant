@@ -1,6 +1,7 @@
 """Application service for indexing and retrieving chunks."""
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.retrieval.embeddings import Embedder
@@ -29,6 +30,11 @@ class RetrievalService:
 
         entries = list(zip(chunks, embeddings, strict=True))
         self.store.add_many(entries)
+
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all stored chunks belonging to a document."""
+
+        return self.store.remove_document(document_id)
 
     def search(self, query: str, limit: int) -> list[SearchResult]:
         """Embed a query and return the most similar chunks."""

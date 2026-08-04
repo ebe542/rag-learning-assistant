@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+from uuid import UUID
 
 DEFAULT_MAX_CHARS = 1000
 DEFAULT_OVERLAP_CHARS = 150
@@ -141,6 +142,21 @@ def build_parser() -> argparse.ArgumentParser:
         "index_dir",
         type=Path,
         help="Directory containing the library metadata",
+    )
+    remove_parser = commands.add_parser(
+        "remove",
+        help="Remove a document from a persistent library",
+    )
+    remove_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the document to remove",
+    )
+    remove_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        required=True,
+        help="Directory containing the library index",
     )
     search_parser = commands.add_parser(
         "search",

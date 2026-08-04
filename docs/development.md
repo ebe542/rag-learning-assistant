@@ -91,11 +91,11 @@ The model is cached by Hugging Face outside the repository.
 ### Application flow
 
 `DocumentSearchService` coordinates chunking and indexing without implementing those responsibilities itself.
-`LibraryService` calculates content hashes, rejects duplicates, assigns document UUIDs, coordinates indexing, and registers persistent metadata.
+`LibraryService` calculates content hashes, rejects duplicates, assigns document UUIDs, coordinates indexing, registers persistent metadata, and removes documents consistently across vector and catalog storage.
 `LibraryCatalog` exposes read-only document listing without constructing PDF or embedding dependencies.
 
-The CLI exposes `extract`, `index`, `list`, and `search` as separate commands.
-`index` adds a PDF to a new or existing library, while `list` reads its document catalog and `search` opens its vectors without reopening or re-embedding PDFs.
+The CLI exposes `extract`, `index`, `list`, `remove`, and `search` as separate commands.
+`index` adds PDFs to a new or existing library, `list` reads its document catalog, `remove` deletes one document by UUID, and `search` opens its vectors without reopening or re-embedding PDFs.
 Index paths are validated before a PDF or model is loaded.
 
 ### Command-line interface
@@ -162,6 +162,9 @@ rag-learn index \
   local-data/documents/notes.pdf \
   --index-dir local-data/indexes/learning
 rag-learn list local-data/indexes/learning
+rag-learn remove \
+  12345678-1234-5678-1234-567812345678 \
+  --index-dir local-data/indexes/learning
 rag-learn search local-data/indexes/learning "What are Python functions?" --limit 3
 ```
 
@@ -180,6 +183,11 @@ Opening an index with a different model identity is rejected.
 Document UUIDs remain stable identifiers for future update and deletion operations.
 SHA-256 identifies the current file content independently of its filename, so renamed duplicate files are rejected before PDF extraction and GPU embedding.
 Indices created before document management are migrated with nullable document IDs; their existing vectors remain searchable but are not automatically registered as library documents.
+
+Document removal follows the UUID across all layers.
+The persistent store first identifies the associated SQLite chunk IDs, removes the same IDs from an in-memory FAISS index, writes that index to a temporary file, deletes the chunk rows, and then replaces the persisted FAISS file.
+`LibraryService` removes the catalog entry only after the vector store reports the expected number of removed chunks.
+An unknown UUID is reported as a CLI usage error without changing storage.
 
 `BatchImportService` processes input paths sequentially in their original order.
 This avoids running multiple embedding-model instances against limited GPU memory.

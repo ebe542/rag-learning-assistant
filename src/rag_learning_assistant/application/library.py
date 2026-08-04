@@ -18,6 +18,10 @@ class DuplicateDocumentError(ValueError):
     """Raised when identical document content is already registered."""
 
 
+class DocumentNotFoundError(LookupError):
+    """Raised when a requested library document does not exist."""
+
+
 class DocumentExtractor(Protocol):
     """Extract a document from a source file."""
 
@@ -36,6 +40,11 @@ class DocumentIndexer(Protocol):
         document_id: UUID | None = None,
     ) -> list[Chunk]:
         """Index a document and return its chunks."""
+        ...
+
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all searchable chunks belonging to a document."""
+
         ...
 
 
@@ -92,6 +101,24 @@ class LibraryService(LibraryCatalog):
         )
         self.repository.add(indexed_document)
         return indexed_document
+
+    def remove_document(self, document_id: UUID) -> IndexedDocument:
+        """Remove a document's searchable data and library metadata."""
+
+        document = self.repository.find_by_id(document_id)
+
+        if document is None:
+            raise DocumentNotFoundError(f"Document does not exist: {document_id}")
+
+        removed_chunk_count = self.indexer.remove_document(document_id)
+
+        # Keep the catalog entry if vector storage does not match its metadata.
+        # Removing it would hide an inconsistent index from library management.
+        if removed_chunk_count != document.chunk_count:
+            raise RuntimeError("Removed chunk count does not match document metadata")
+
+        self.repository.remove(document_id)
+        return document
 
     @staticmethod
     def _calculate_sha256(path: Path) -> str:

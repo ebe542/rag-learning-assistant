@@ -89,6 +89,14 @@ rag-learn index local-data/documents/notes.pdf --index-dir local-data/indexes/le
 rag-learn list local-data/indexes/learning
 ```
 
+Remove a document by the stable UUID shown by `list`:
+
+```bash
+rag-learn remove \
+  12345678-1234-5678-1234-567812345678 \
+  --index-dir local-data/indexes/learning
+```
+
 Search the existing library without reopening or re-embedding its PDFs:
 
 ```bash
@@ -101,6 +109,7 @@ Adding identical file content again is rejected before PDF extraction or embeddi
 Batch imports process documents sequentially and report each path as `added`, `skipped`, or `failed`.
 Duplicates are skipped, while other per-file errors do not prevent later inputs from being processed.
 The command exits with status 1 when at least one document fails.
+Removing a document deletes only its FAISS vectors, chunk metadata, and catalog entry; other library documents remain searchable.
 
 ## Planned architecture
 

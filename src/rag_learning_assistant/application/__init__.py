@@ -9,6 +9,7 @@ from rag_learning_assistant.application.document_search import (
     DocumentSearchService,
 )
 from rag_learning_assistant.application.library import (
+    DocumentNotFoundError,
     DuplicateDocumentError,
     LibraryCatalog,
     LibraryService,
@@ -16,6 +17,7 @@ from rag_learning_assistant.application.library import (
 
 __all__ = [
     "BatchImportService",
+    "DocumentNotFoundError",
     "DocumentSearchService",
     "DuplicateDocumentError",
     "ImportOutcome",

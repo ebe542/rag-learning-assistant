@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from typing import Protocol
+from uuid import UUID
 
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.retrieval.embeddings import Embedding
@@ -101,4 +102,9 @@ class VectorStore(Protocol):
 
     def search(self, query: Embedding, limit: int) -> list[SearchResult]:
         """Return the most similar stored chunks."""
+        ...
+
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all chunks belonging to a document."""
+
         ...

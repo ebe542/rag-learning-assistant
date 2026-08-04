@@ -5,7 +5,10 @@ from uuid import UUID
 import pytest
 
 from rag_learning_assistant import cli
-from rag_learning_assistant.application import DuplicateDocumentError
+from rag_learning_assistant.application import (
+    DocumentNotFoundError,
+    DuplicateDocumentError,
+)
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.ingestion import Document, Page
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
@@ -36,9 +39,14 @@ class FakeLibraryService:
     def __init__(self, document: IndexedDocument) -> None:
         self.document = document
         self.paths: list[Path] = []
+        self.removed_document_ids: list[UUID] = []
 
     def add_document(self, path: Path) -> IndexedDocument:
         self.paths.append(path)
+        return self.document
+
+    def remove_document(self, document_id: UUID) -> IndexedDocument:
+        self.removed_document_ids.append(document_id)
         return self.document
 
 
@@ -480,6 +488,99 @@ def test_cli_lists_library_documents(
     }
 
 
+def test_cli_removes_document_and_outputs_json(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    index_directory = tmp_path / "learning-library"
+    index_directory.mkdir()
+    (index_directory / "metadata.sqlite3").touch()
+    document = IndexedDocument(
+        id=document_id,
+        source="python-book.pdf",
+        content_sha256="a" * 64,
+        page_count=10,
+        chunk_count=25,
+    )
+    library_service = FakeLibraryService(document)
+
+    monkeypatch.setattr(
+        commands,
+        "build_library_service",
+        lambda chunker, index_directory: library_service,
+    )
+
+    result = cli.main(
+        [
+            "remove",
+            str(document_id),
+            "--index-dir",
+            str(index_directory),
+        ]
+    )
+
+    assert result == 0
+    assert library_service.removed_document_ids == [document_id]
+    assert json.loads(capsys.readouterr().out) == {
+        "index_directory": str(index_directory),
+        "removed_document": {
+            "id": str(document_id),
+            "source": "python-book.pdf",
+            "content_sha256": "a" * 64,
+            "page_count": 10,
+            "chunk_count": 25,
+        },
+    }
+
+
+def test_cli_remove_reports_unknown_document(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    index_directory = tmp_path / "learning-library"
+    index_directory.mkdir()
+    (index_directory / "metadata.sqlite3").touch()
+
+    def raise_not_found(document_id: UUID) -> IndexedDocument:
+        raise DocumentNotFoundError(f"Document does not exist: {document_id}")
+
+    document = IndexedDocument(
+        id=document_id,
+        source="unused.pdf",
+        content_sha256="a" * 64,
+        page_count=1,
+        chunk_count=1,
+    )
+    library_service = FakeLibraryService(document)
+    monkeypatch.setattr(
+        library_service,
+        "remove_document",
+        raise_not_found,
+    )
+    monkeypatch.setattr(
+        commands,
+        "build_library_service",
+        lambda chunker, index_directory: library_service,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "remove",
+                str(document_id),
+                "--index-dir",
+                str(index_directory),
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert f"Document does not exist: {document_id}" in capsys.readouterr().err
+
+
 def test_parser_accepts_search_command() -> None:
     args = build_parser().parse_args(
         [
@@ -496,6 +597,25 @@ def test_parser_accepts_search_command() -> None:
     assert args.query == "What are Python functions?"
     assert args.limit == 3
     assert not hasattr(args, "pdf")
+
+
+def test_parser_accepts_remove_command() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+
+    args = build_parser().parse_args(
+        [
+            "remove",
+            str(document_id),
+            "--index-dir",
+            "local-data/indexes/learning",
+        ]
+    )
+
+    assert args.command == "remove"
+    assert args.document_id == document_id
+    assert args.index_dir == Path("local-data/indexes/learning")
+    assert not hasattr(args, "max_chars")
+    assert not hasattr(args, "overlap_chars")
 
 
 @pytest.mark.parametrize("limit", ["0", "-1"])
