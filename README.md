@@ -14,6 +14,8 @@ Question generation and learning-progress tracking will build on this foundation
 - testable core with no model or cloud-service dependency
 - split pages into size-limited, overlapping chunks while preserving paragraph boundaries
 - persist and search embeddings with FAISS and SQLite
+- manage multiple documents in one local library
+- detect duplicate document content using SHA-256
 - create local multilingual E5 embeddings through an optional Sentence Transformers adapter
 
 Scanned documents do not yet support OCR.
@@ -70,22 +72,29 @@ The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
 Chunk size and overlap can be configured through the command-line options shown above.
 
-Create a persistent index:
+Create a persistent library and add a document:
 
 ```bash
 mkdir -p local-data/documents local-data/indexes
-rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/book
+rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/learning
 ```
 
-Search the existing index without reopening or re-embedding the PDF:
+Add more documents to the same library and list its contents:
 
 ```bash
-rag-learn search local-data/indexes/book "What are Python functions?" --limit 3
+rag-learn index local-data/documents/notes.pdf --index-dir local-data/indexes/learning
+rag-learn list local-data/indexes/learning
 ```
 
-Each index directory contains `vectors.faiss` and `metadata.sqlite3`.
-The SQLite database maps FAISS IDs back to chunks and records the embedding model, revision, and vector dimension.
-Indexing currently requires a new or empty target directory to prevent accidental duplicate chunks.
+Search the existing library without reopening or re-embedding its PDFs:
+
+```bash
+rag-learn search local-data/indexes/learning "What are Python functions?" --limit 3
+```
+
+Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
+SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.
+Adding identical file content again is rejected before PDF extraction or embedding generation.
 
 ## Planned architecture
 

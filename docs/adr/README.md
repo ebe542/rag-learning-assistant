@@ -15,3 +15,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0005: Use multilingual E5 as the first embedding model](0005-use-multilingual-e5-small.md)
 - [0006: Introduce application services for workflow orchestration](0006-introduce-application-services.md)
 - [0007: Persist retrieval with FAISS and SQLite](0007-persist-retrieval-with-faiss-and-sqlite.md)
+- [0008: Identify documents with UUIDs and content hashes](0008-identify-library-documents.md)

@@ -1,6 +1,7 @@
 """Data models for document chunks."""
 
 from dataclasses import dataclass
+from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,6 +12,7 @@ class Chunk:
     source: str
     page_number: int
     index: int
+    document_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not self.text.strip():

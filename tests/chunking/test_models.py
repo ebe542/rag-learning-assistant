@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 
 from rag_learning_assistant.chunking import Chunk
@@ -57,3 +59,17 @@ def test_chunk_source_must_not_be_blank(source: str) -> None:
             page_number=1,
             index=0,
         )
+
+
+def test_chunk_can_reference_an_indexed_document() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+
+    chunk = Chunk(
+        text="Python functions",
+        source="python-book.pdf",
+        page_number=1,
+        index=0,
+        document_id=document_id,
+    )
+
+    assert chunk.document_id == document_id

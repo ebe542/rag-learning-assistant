@@ -2,13 +2,15 @@
 
 from collections.abc import Sequence
 
+from rag_learning_assistant.application import DuplicateDocumentError
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import PdfExtractor
 from rag_learning_assistant.interfaces.cli import commands
 from rag_learning_assistant.interfaces.cli.parser import (
     build_parser,
-    validate_empty_index_directory,
     validate_existing_index_directory,
+    validate_index_directory,
+    validate_library_directory,
 )
 
 
@@ -30,9 +32,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             limit=args.limit,
         )
 
+    if args.command == "list":
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        return commands.run_list(args.index_dir)
+
     if args.command == "index":
         try:
-            validate_empty_index_directory(args.index_dir)
+            validate_index_directory(args.index_dir)
         except ValueError as exc:
             parser.error(str(exc))
 
@@ -44,13 +54,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    if args.command == "index":
+        try:
+            return commands.run_index(
+                pdf_path=args.pdf,
+                chunker=chunker,
+                index_directory=args.index_dir,
+            )
+        except DuplicateDocumentError as exc:
+            parser.error(str(exc))
+
     document = PdfExtractor().extract(args.pdf)
-
-    if args.command == "extract":
-        return commands.run_extract(document, chunker)
-
-    return commands.run_index(
-        document=document,
-        chunker=chunker,
-        index_directory=args.index_dir,
-    )
+    return commands.run_extract(document, chunker)

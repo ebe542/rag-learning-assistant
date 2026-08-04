@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from uuid import UUID
 
 from rag_learning_assistant.application import DocumentSearchService
 from rag_learning_assistant.chunking import Chunk, TextChunker
@@ -74,3 +75,30 @@ def test_search_delegates_query_and_limit_to_retrieval() -> None:
 
     assert results is expected
     assert retrieval.search_calls == [("How do functions work?", 3)]
+
+
+def test_index_document_assigns_document_id_to_all_chunks() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    document = Document(
+        source="python-book.pdf",
+        pages=(
+            Page(1, "Python functions", "python-book.pdf"),
+            Page(2, "Python classes", "python-book.pdf"),
+        ),
+    )
+    retrieval = RecordingRetrievalService()
+    service = DocumentSearchService(
+        chunker=TextChunker(max_chars=100, overlap_chars=0),
+        retrieval=retrieval,
+    )
+
+    chunks = service.index_document(
+        document,
+        document_id=document_id,
+    )
+
+    assert [chunk.document_id for chunk in chunks] == [
+        document_id,
+        document_id,
+    ]
+    assert retrieval.indexed_chunks == chunks

@@ -17,7 +17,8 @@ The current source tree reflects implemented responsibilities rather than antici
 src/rag_learning_assistant/
 ├── cli.py
 ├── application/
-│   └── document_search.py
+│   ├── document_search.py
+│   └── library.py
 ├── interfaces/
 │   └── cli/
 │       ├── commands.py
@@ -26,6 +27,9 @@ src/rag_learning_assistant/
 ├── ingestion/
 │   ├── models.py
 │   └── pdf.py
+├── library/
+│   ├── models.py
+│   └── repository.py
 ├── chunking/
 │   ├── models.py
 │   └── service.py
@@ -87,8 +91,11 @@ The model is cached by Hugging Face outside the repository.
 ### Application flow
 
 `DocumentSearchService` coordinates chunking and indexing without implementing those responsibilities itself.
-The CLI exposes `extract`, `index`, and `search` as separate commands.
-`index` processes a PDF into a new persistent index, while `search` opens that index without reopening or re-embedding the PDF.
+`LibraryService` calculates content hashes, rejects duplicates, assigns document UUIDs, coordinates indexing, and registers persistent metadata.
+`LibraryCatalog` exposes read-only document listing without constructing PDF or embedding dependencies.
+
+The CLI exposes `extract`, `index`, `list`, and `search` as separate commands.
+`index` adds a PDF to a new or existing library, while `list` reads its document catalog and `search` opens its vectors without reopening or re-embedding PDFs.
 Index paths are validated before a PDF or model is loaded.
 
 ### Command-line interface
@@ -137,7 +144,7 @@ The embedding extra includes Sentence Transformers and its ML runtime dependenci
 The storage extra includes the CPU FAISS runtime; embedding generation can still use CUDA independently.
 The core PDF and chunking functionality deliberately remains usable without them.
 
-## Persistent indexing
+## Persistent document libraries
 
 Keep private documents and generated indices outside version control:
 
@@ -147,27 +154,30 @@ local-data/
 └── indexes/
 ```
 
-Create and query an index:
+Create a library, add another document, inspect it, and search it:
 
 ```bash
-rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/book
-rag-learn search local-data/indexes/book "What are Python functions?" --limit 3
+rag-learn index local-data/documents/book.pdf --index-dir local-data/indexes/learning
+rag-learn index local-data/documents/notes.pdf --index-dir local-data/indexes/learning
+rag-learn list local-data/indexes/learning
+rag-learn search local-data/indexes/learning "What are Python functions?" --limit 3
 ```
 
 An index directory contains:
 
 ```text
-book/
+learning/
 ├── vectors.faiss
 └── metadata.sqlite3
 ```
 
-SQLite maps persistent FAISS IDs to chunk text, source, page number, and document-wide chunk index.
+SQLite stores one `IndexedDocument` row per library document and maps persistent FAISS IDs to chunk text, source, page number, document-wide chunk index, and document UUID.
 It also records model name, pinned revision, and the dimension established by the first embedding.
 Opening an index with a different model identity is rejected.
 
-Indexing currently accepts only a new or empty target directory.
-This intentionally prevents duplicate chunks until document identity and update semantics are implemented.
+Document UUIDs remain stable identifiers for future update and deletion operations.
+SHA-256 identifies the current file content independently of its filename, so renamed duplicate files are rejected before PDF extraction and GPU embedding.
+Indices created before document management are migrated with nullable document IDs; their existing vectors remain searchable but are not automatically registered as library documents.
 
 ### CUDA-enabled PyTorch on Windows
 
@@ -227,6 +237,8 @@ Tests mirror the production structure:
 ```text
 tests/
 ├── test_cli.py
+├── application/
+├── library/
 ├── ingestion/
 ├── chunking/
 └── retrieval/
@@ -276,7 +288,7 @@ Tests remain the executable specification of behavior.
 
 ## Near-term roadmap
 
-1. Define document identity and index-update semantics.
-2. Build a small German retrieval evaluation set.
-3. Add grounded answer generation with citations.
-4. Add reusable learning-material and question-generation workflows.
+1. Add document removal and replacement semantics.
+2. Add consistency recovery for interrupted FAISS and SQLite writes.
+3. Build a small German retrieval evaluation set.
+4. Add grounded answer generation with citations.

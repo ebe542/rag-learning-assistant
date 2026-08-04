@@ -1,7 +1,9 @@
 """Application service for indexing and searching documents."""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Protocol
+from uuid import UUID
 
 from rag_learning_assistant.chunking import Chunk, TextChunker
 from rag_learning_assistant.ingestion import Document
@@ -31,10 +33,20 @@ class DocumentSearchService:
         self.chunker = chunker
         self.retrieval = retrieval
 
-    def index_document(self, document: Document) -> list[Chunk]:
+    def index_document(
+        self,
+        document: Document,
+        *,
+        document_id: UUID | None = None,
+    ) -> list[Chunk]:
         """Chunk a document, index all chunks, and return them."""
 
         chunks = self.chunker.chunk_pages(document.pages)
+
+        if document_id is not None:
+            # Chunks are immutable, so library metadata is added by copying.
+            chunks = [replace(chunk, document_id=document_id) for chunk in chunks]
+
         self.retrieval.index_chunks(chunks)
         return chunks
 

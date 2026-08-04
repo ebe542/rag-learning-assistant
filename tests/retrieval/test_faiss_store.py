@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -172,3 +173,87 @@ def test_add_many_persists_all_entries(tmp_path: Path) -> None:
         first_chunk,
         second_chunk,
     ]
+
+
+def test_document_id_survives_reopening(tmp_path: Path) -> None:
+    index_directory = tmp_path / "rag-index"
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    chunk = Chunk(
+        text="Python functions",
+        source="book.pdf",
+        page_number=1,
+        index=0,
+        document_id=document_id,
+    )
+    store = FaissVectorStore(
+        index_directory,
+        model_name="example/model",
+        model_revision="revision-1",
+    )
+    store.add(chunk, (1.0, 0.0))
+
+    reopened_store = FaissVectorStore(
+        index_directory,
+        model_name="example/model",
+        model_revision="revision-1",
+    )
+    results = reopened_store.search((1.0, 0.0), limit=1)
+
+    assert results[0].chunk.document_id == document_id
+
+
+def test_opening_old_database_adds_document_id_column(
+    tmp_path: Path,
+) -> None:
+    index_directory = tmp_path / "rag-index"
+    index_directory.mkdir()
+    database_path = index_directory / "metadata.sqlite3"
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE chunks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT NOT NULL,
+                source TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                chunk_index INTEGER NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO chunks (
+                text,
+                source,
+                page_number,
+                chunk_index
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                "Python functions",
+                "book.pdf",
+                1,
+                0,
+            ),
+        )
+
+    FaissVectorStore(
+        index_directory,
+        model_name="example/model",
+        model_revision="revision-1",
+    )
+
+    with sqlite3.connect(database_path) as connection:
+        column_names = {row[1] for row in connection.execute("PRAGMA table_info(chunks)")}
+        stored_document_id = connection.execute(
+            """
+            SELECT document_id
+            FROM chunks
+            WHERE id = 1
+            """
+        ).fetchone()
+
+    assert "document_id" in column_names
+    assert stored_document_id == (None,)

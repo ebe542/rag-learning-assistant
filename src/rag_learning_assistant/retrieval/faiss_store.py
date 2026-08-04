@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.retrieval.embeddings import Embedding
@@ -76,15 +77,17 @@ class FaissVectorStore:
                         text,
                         source,
                         page_number,
-                        chunk_index
+                        chunk_index,
+                        document_id
                     )
-                    VALUES (?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         chunk.text,
                         chunk.source,
                         chunk.page_number,
                         chunk.index,
+                        (str(chunk.document_id) if chunk.document_id is not None else None),
                     ),
                 )
                 entry_id = cursor.lastrowid
@@ -132,6 +135,10 @@ class FaissVectorStore:
         # Stored vectors and queries must use the same normalization.
         faiss.normalize_L2(query_vector)
         result_count = min(limit, index.ntotal)
+
+        if result_count == 0:
+            return []
+
         scores, entry_ids = index.search(query_vector, result_count)
 
         ordered_ids = [int(entry_id) for entry_id in entry_ids[0]]
@@ -140,7 +147,13 @@ class FaissVectorStore:
             placeholders = ", ".join("?" for _ in ordered_ids)
             rows = connection.execute(
                 f"""
-                SELECT id, text, source, page_number, chunk_index
+                SELECT
+                    id,
+                    text,
+                    source,
+                    page_number,
+                    chunk_index,
+                    document_id
                 FROM chunks
                 WHERE id IN ({placeholders})
                 """,
@@ -153,6 +166,7 @@ class FaissVectorStore:
                 source=row[2],
                 page_number=row[3],
                 index=row[4],
+                document_id=(UUID(row[5]) if row[5] is not None else None),
             )
             for row in rows
         }
@@ -186,10 +200,12 @@ class FaissVectorStore:
                     text TEXT NOT NULL,
                     source TEXT NOT NULL,
                     page_number INTEGER NOT NULL,
-                    chunk_index INTEGER NOT NULL
+                    chunk_index INTEGER NOT NULL,
+                    document_id TEXT
                 )
                 """
             )
+            self._ensure_document_id_column(connection)
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS index_metadata (
@@ -200,6 +216,17 @@ class FaissVectorStore:
                 )
                 """
             )
+
+    @staticmethod
+    def _ensure_document_id_column(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add document IDs to indices created before library support."""
+
+        column_names = {row[1] for row in connection.execute("PRAGMA table_info(chunks)")}
+
+        if "document_id" not in column_names:
+            connection.execute("ALTER TABLE chunks ADD COLUMN document_id TEXT")
 
     def _initialize_model_metadata(
         self,

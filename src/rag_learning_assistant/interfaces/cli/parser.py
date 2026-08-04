@@ -31,14 +31,27 @@ def non_blank_text(value: str) -> str:
     return value
 
 
-def validate_empty_index_directory(index_directory: Path) -> None:
-    """Require a new or empty directory for document indexing."""
+def validate_index_directory(index_directory: Path) -> None:
+    """Require a new, empty, or complete library directory."""
 
     if not index_directory.exists():
         return
 
-    if not index_directory.is_dir() or any(index_directory.iterdir()):
-        raise ValueError("index directory must be empty")
+    if not index_directory.is_dir():
+        raise ValueError("index directory is incomplete")
+
+    entries = {path.name for path in index_directory.iterdir()}
+
+    if not entries:
+        return
+
+    required_entries = {
+        "vectors.faiss",
+        "metadata.sqlite3",
+    }
+
+    if entries != required_entries:
+        raise ValueError("index directory is incomplete")
 
 
 def validate_existing_index_directory(index_directory: Path) -> None:
@@ -51,6 +64,15 @@ def validate_existing_index_directory(index_directory: Path) -> None:
 
     if not index_directory.is_dir() or not all(path.is_file() for path in required_files):
         raise ValueError("index directory is incomplete")
+
+
+def validate_library_directory(index_directory: Path) -> None:
+    """Require the SQLite metadata of an existing library."""
+
+    metadata_path = index_directory / "metadata.sqlite3"
+
+    if not index_directory.is_dir() or not metadata_path.is_file():
+        raise ValueError("library directory is incomplete")
 
 
 def add_chunking_arguments(parser: argparse.ArgumentParser) -> None:
@@ -97,7 +119,15 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Directory for the FAISS index and SQLite metadata",
     )
-
+    list_parser = commands.add_parser(
+        "list",
+        help="List documents in a persistent library",
+    )
+    list_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
     search_parser = commands.add_parser(
         "search",
         help="Search an existing persistent index",

@@ -1,13 +1,16 @@
 import json
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
 from rag_learning_assistant import cli
+from rag_learning_assistant.application import DuplicateDocumentError
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.ingestion import Document, Page
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
 from rag_learning_assistant.interfaces.cli.parser import build_parser
+from rag_learning_assistant.library import IndexedDocument
 from rag_learning_assistant.retrieval import SearchResult
 
 
@@ -24,6 +27,26 @@ class FakeDocumentSearchService:
     def search(self, query: str, limit: int) -> list[SearchResult]:
         self.search_calls.append((query, limit))
         return self.results
+
+
+class FakeLibraryService:
+    def __init__(self, document: IndexedDocument) -> None:
+        self.document = document
+        self.paths: list[Path] = []
+
+    def add_document(self, path: Path) -> IndexedDocument:
+        self.paths.append(path)
+        return self.document
+
+
+class FakeLibraryCatalog:
+    def __init__(self, documents: list[IndexedDocument]) -> None:
+        self.documents = documents
+        self.list_calls = 0
+
+    def list_documents(self) -> list[IndexedDocument]:
+        self.list_calls += 1
+        return list(self.documents)
 
 
 def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -111,22 +134,37 @@ def test_cli_rejects_invalid_chunking_options(
     assert "overlap_chars must be smaller than max_chars" in capsys.readouterr().err
 
 
-def test_parser_accepts_search_command() -> None:
-    args = build_parser().parse_args(
-        [
-            "search",
-            ".rag-index/book",
-            "What are Python functions?",
-            "--limit",
-            "3",
-        ]
+def test_cli_reports_duplicate_document(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    pdf = tmp_path / "duplicate.pdf"
+    pdf.touch()
+    index_directory = tmp_path / "learning-library"
+
+    class DuplicateLibraryService:
+        def add_document(self, path: Path) -> IndexedDocument:
+            raise DuplicateDocumentError("Document content is already indexed as original.pdf")
+
+    monkeypatch.setattr(
+        commands,
+        "build_library_service",
+        lambda chunker, index_dir: DuplicateLibraryService(),
     )
 
-    assert args.command == "search"
-    assert args.index_dir == Path(".rag-index/book")
-    assert args.query == "What are Python functions?"
-    assert args.limit == 3
-    assert not hasattr(args, "pdf")
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "index",
+                str(pdf),
+                "--index-dir",
+                str(index_directory),
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "Document content is already indexed as original.pdf" in capsys.readouterr().err
 
 
 def test_cli_search_outputs_ranked_results(
@@ -177,6 +215,164 @@ def test_cli_search_outputs_ranked_results(
             }
         ],
     }
+
+
+def test_cli_index_registers_library_document(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    pdf = tmp_path / "course.pdf"
+    pdf.touch()
+    index_directory = tmp_path / "course-index"
+    indexed_document = IndexedDocument(
+        id=UUID("12345678-1234-5678-1234-567812345678"),
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=2,
+        chunk_count=3,
+    )
+    library_service = FakeLibraryService(indexed_document)
+
+    def fail_if_entrypoint_extracts_pdf(self, path):
+        raise AssertionError("LibraryService must coordinate PDF extraction")
+
+    monkeypatch.setattr(
+        entrypoint.PdfExtractor,
+        "extract",
+        fail_if_entrypoint_extracts_pdf,
+    )
+    monkeypatch.setattr(
+        commands,
+        "build_library_service",
+        lambda chunker, index_dir: library_service,
+        raising=False,
+    )
+
+    result = cli.main(
+        [
+            "index",
+            str(pdf),
+            "--index-dir",
+            str(index_directory),
+        ]
+    )
+
+    assert result == 0
+    assert library_service.paths == [pdf]
+    assert json.loads(capsys.readouterr().out) == {
+        "id": "12345678-1234-5678-1234-567812345678",
+        "source": "course.pdf",
+        "content_sha256": "a" * 64,
+        "page_count": 2,
+        "chunk_count": 3,
+        "index_directory": str(index_directory),
+    }
+
+
+def test_cli_index_accepts_existing_library(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    pdf = tmp_path / "second-book.pdf"
+    pdf.touch()
+    index_directory = tmp_path / "learning-library"
+    index_directory.mkdir()
+    (index_directory / "vectors.faiss").touch()
+    (index_directory / "metadata.sqlite3").touch()
+    indexed_document = IndexedDocument(
+        id=UUID("12345678-1234-5678-1234-567812345678"),
+        source="second-book.pdf",
+        content_sha256="b" * 64,
+        page_count=10,
+        chunk_count=25,
+    )
+    library_service = FakeLibraryService(indexed_document)
+
+    monkeypatch.setattr(
+        commands,
+        "build_library_service",
+        lambda chunker, index_dir: library_service,
+    )
+
+    result = cli.main(
+        [
+            "index",
+            str(pdf),
+            "--index-dir",
+            str(index_directory),
+        ]
+    )
+
+    assert result == 0
+    assert library_service.paths == [pdf]
+    assert json.loads(capsys.readouterr().out)["source"] == ("second-book.pdf")
+
+
+def test_cli_lists_library_documents(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    index_directory = tmp_path / "learning-library"
+    index_directory.mkdir()
+    (index_directory / "metadata.sqlite3").touch()
+    document = IndexedDocument(
+        id=UUID("12345678-1234-5678-1234-567812345678"),
+        source="python-book.pdf",
+        content_sha256="a" * 64,
+        page_count=120,
+        chunk_count=758,
+    )
+    catalog = FakeLibraryCatalog([document])
+
+    monkeypatch.setattr(
+        commands,
+        "build_library_catalog",
+        lambda index_dir: catalog,
+        raising=False,
+    )
+
+    result = cli.main(
+        [
+            "list",
+            str(index_directory),
+        ]
+    )
+
+    assert result == 0
+    assert catalog.list_calls == 1
+    assert json.loads(capsys.readouterr().out) == {
+        "index_directory": str(index_directory),
+        "documents": [
+            {
+                "id": "12345678-1234-5678-1234-567812345678",
+                "source": "python-book.pdf",
+                "content_sha256": "a" * 64,
+                "page_count": 120,
+                "chunk_count": 758,
+            }
+        ],
+    }
+
+
+def test_parser_accepts_search_command() -> None:
+    args = build_parser().parse_args(
+        [
+            "search",
+            ".rag-index/book",
+            "What are Python functions?",
+            "--limit",
+            "3",
+        ]
+    )
+
+    assert args.command == "search"
+    assert args.index_dir == Path(".rag-index/book")
+    assert args.query == "What are Python functions?"
+    assert args.limit == 3
+    assert not hasattr(args, "pdf")
 
 
 @pytest.mark.parametrize("limit", ["0", "-1"])
@@ -238,50 +434,7 @@ def test_parser_accepts_index_command() -> None:
     assert args.index_dir == Path(".rag-index/book")
 
 
-def test_cli_index_persists_document(
-    monkeypatch,
-    tmp_path: Path,
-    capsys,
-) -> None:
-    pdf = tmp_path / "course.pdf"
-    pdf.touch()
-    index_directory = tmp_path / "course-index"
-    document = Document(
-        "course.pdf",
-        (Page(1, "Python functions", "course.pdf"),),
-    )
-    search_service = FakeDocumentSearchService([])
-
-    monkeypatch.setattr(
-        entrypoint.PdfExtractor,
-        "extract",
-        lambda self, path: document,
-    )
-    monkeypatch.setattr(
-        commands,
-        "build_persistent_document_search",
-        lambda chunker, index_dir: search_service,
-    )
-
-    result = cli.main(
-        [
-            "index",
-            str(pdf),
-            "--index-dir",
-            str(index_directory),
-        ]
-    )
-
-    assert result == 0
-    assert search_service.indexed_documents == [document]
-    assert json.loads(capsys.readouterr().out) == {
-        "source": "course.pdf",
-        "index_directory": str(index_directory),
-        "chunks_indexed": 0,
-    }
-
-
-def test_index_rejects_non_empty_index_directory(
+def test_index_rejects_incomplete_index_directory(
     monkeypatch,
     tmp_path: Path,
     capsys,
@@ -312,7 +465,7 @@ def test_index_rejects_non_empty_index_directory(
         )
 
     assert exc_info.value.code == 2
-    assert "index directory must be empty" in capsys.readouterr().err
+    assert "index directory is incomplete" in capsys.readouterr().err
 
 
 def test_search_rejects_missing_index_directory(
@@ -342,3 +495,15 @@ def test_search_rejects_missing_index_directory(
 
     assert exc_info.value.code == 2
     assert "index directory is incomplete" in capsys.readouterr().err
+
+
+def test_parser_accepts_list_command() -> None:
+    args = build_parser().parse_args(
+        [
+            "list",
+            "local-data/indexes/learning",
+        ]
+    )
+
+    assert args.command == "list"
+    assert args.index_dir == Path("local-data/indexes/learning")
