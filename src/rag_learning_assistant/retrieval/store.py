@@ -39,6 +39,36 @@ class InMemoryVectorStore:
         for chunk, embedding in entries:
             self.add(chunk, embedding)
 
+    def remove_document(self, document_id: UUID) -> int:
+        """Remove all entries belonging to a document."""
+
+        retained_entries = [entry for entry in self._entries if entry[0].document_id != document_id]
+        removed_count = len(self._entries) - len(retained_entries)
+        self._entries = retained_entries
+        return removed_count
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        """Replace all entries belonging to a document."""
+
+        for chunk, embedding in entries:
+            if chunk.document_id != document_id:
+                raise ValueError("Replacement chunks must use the replaced document ID")
+
+            self._validate_non_zero(embedding)
+            self._validate_dimension(embedding)
+
+        # Build the complete new state only after every replacement entry has
+        # been validated, so a bad batch leaves the old document untouched.
+        retained_entries = [entry for entry in self._entries if entry[0].document_id != document_id]
+        self._entries = retained_entries + list(entries)
+
+        if self._dimension is None and entries:
+            self._dimension = len(entries[0][1])
+
     def search(self, query: Embedding, limit: int) -> list[SearchResult]:
         """Return the most similar chunks in descending score order."""
 
@@ -106,5 +136,14 @@ class VectorStore(Protocol):
 
     def remove_document(self, document_id: UUID) -> int:
         """Remove all chunks belonging to a document."""
+
+        ...
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        """Replace all stored chunks belonging to a document."""
 
         ...

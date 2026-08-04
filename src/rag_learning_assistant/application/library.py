@@ -47,6 +47,15 @@ class DocumentIndexer(Protocol):
 
         ...
 
+    def replace_document(
+        self,
+        document: Document,
+        document_id: UUID,
+    ) -> list[Chunk]:
+        """Replace all searchable chunks while preserving the document ID."""
+
+        ...
+
 
 class LibraryCatalog:
     """Provide read-only access to registered library documents."""
@@ -101,6 +110,41 @@ class LibraryService(LibraryCatalog):
         )
         self.repository.add(indexed_document)
         return indexed_document
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        path: Path,
+    ) -> IndexedDocument:
+        """Replace a registered document while preserving its identity."""
+
+        existing_document = self.repository.find_by_id(document_id)
+
+        if existing_document is None:
+            raise DocumentNotFoundError(f"Document does not exist: {document_id}")
+
+        content_sha256 = self._calculate_sha256(path)
+        duplicate_document = self.repository.find_by_content_hash(content_sha256)
+
+        if duplicate_document is not None and duplicate_document.id != document_id:
+            raise DuplicateDocumentError(
+                f"Document content is already indexed as {duplicate_document.source}"
+            )
+
+        document = self.extractor.extract(path)
+        chunks = self.indexer.replace_document(
+            document,
+            document_id,
+        )
+        replaced_document = IndexedDocument(
+            id=document_id,
+            source=document.source,
+            content_sha256=content_sha256,
+            page_count=len(document.pages),
+            chunk_count=len(chunks),
+        )
+        self.repository.update(replaced_document)
+        return replaced_document
 
     def remove_document(self, document_id: UUID) -> IndexedDocument:
         """Remove a document's searchable data and library metadata."""

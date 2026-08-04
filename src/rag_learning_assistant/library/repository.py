@@ -39,6 +39,11 @@ class DocumentRepository(Protocol):
 
         ...
 
+    def update(self, document: IndexedDocument) -> None:
+        """Replace the metadata of an existing document."""
+
+        ...
+
 
 class SqliteDocumentRepository:
     """Persist indexed document metadata in SQLite."""
@@ -151,6 +156,32 @@ class SqliteDocumentRepository:
             return None
 
         return self._document_from_row(row)
+
+    def update(self, document: IndexedDocument) -> None:
+        """Replace the metadata of an existing document."""
+
+        with sqlite3.connect(self.database_path) as connection:
+            cursor = connection.execute(
+                """
+                UPDATE documents
+                SET
+                    source = ?,
+                    content_sha256 = ?,
+                    page_count = ?,
+                    chunk_count = ?
+                WHERE id = ?
+                """,
+                (
+                    document.source,
+                    document.content_sha256,
+                    document.page_count,
+                    document.chunk_count,
+                    str(document.id),
+                ),
+            )
+
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"Document metadata does not exist: {document.id}")
 
     def remove(self, document_id: UUID) -> None:
         """Remove one document's metadata."""

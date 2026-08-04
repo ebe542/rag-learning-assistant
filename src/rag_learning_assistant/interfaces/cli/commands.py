@@ -186,6 +186,37 @@ def run_search(
     return 0
 
 
+def run_replace(
+    document_id: UUID,
+    pdf_path: Path,
+    chunker: TextChunker,
+    index_directory: Path,
+) -> int:
+    """Replace one document and write its updated metadata as JSON."""
+
+    library = build_library_service(
+        chunker,
+        index_directory,
+    )
+    document = library.replace_document(
+        document_id,
+        pdf_path,
+    )
+
+    payload = {
+        "index_directory": str(index_directory),
+        "replaced_document": {
+            "id": str(document.id),
+            "source": document.source,
+            "content_sha256": document.content_sha256,
+            "page_count": document.page_count,
+            "chunk_count": document.chunk_count,
+        },
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def run_remove(
     document_id: UUID,
     chunker: TextChunker,

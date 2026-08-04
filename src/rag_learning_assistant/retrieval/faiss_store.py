@@ -112,6 +112,123 @@ class FaissVectorStore:
             # Write once per batch instead of once per chunk.
             faiss.write_index(index, str(self.index_path))
 
+    def replace_document(
+        self,
+        document_id: UUID,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        """Replace a document's vectors and chunk metadata."""
+
+        for chunk, embedding in entries:
+            if chunk.document_id != document_id:
+                raise ValueError("Replacement chunks must use the replaced document ID")
+
+            if not embedding or not any(value != 0.0 for value in embedding):
+                raise ValueError("Embedding must not be a zero vector")
+
+        if entries:
+            dimension = len(entries[0][1])
+
+            for _, embedding in entries:
+                if len(embedding) != dimension:
+                    raise ValueError(f"Embedding dimension must be {dimension}")
+
+            self._validate_or_store_dimension(dimension)
+
+        faiss, numpy = self._load_vector_libraries()
+
+        with sqlite3.connect(self.metadata_path) as connection:
+            old_rows = connection.execute(
+                """
+                SELECT id
+                FROM chunks
+                WHERE document_id = ?
+                """,
+                (str(document_id),),
+            ).fetchall()
+            old_entry_ids = [row[0] for row in old_rows]
+
+            if self.index_path.is_file():
+                index = faiss.read_index(str(self.index_path))
+            elif entries:
+                index = self._load_or_create_index(
+                    len(entries[0][1]),
+                    faiss,
+                )
+            elif old_entry_ids:
+                raise RuntimeError("FAISS index is missing for stored chunks")
+            else:
+                return
+
+            if old_entry_ids:
+                removed_count = int(index.remove_ids(numpy.asarray(old_entry_ids, dtype="int64")))
+
+                if removed_count != len(old_entry_ids):
+                    raise RuntimeError("FAISS and SQLite contain different document chunks")
+
+            connection.execute(
+                """
+                DELETE FROM chunks
+                WHERE document_id = ?
+                """,
+                (str(document_id),),
+            )
+
+            new_entry_ids: list[int] = []
+
+            for chunk, _ in entries:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO chunks (
+                        text,
+                        source,
+                        page_number,
+                        chunk_index,
+                        document_id
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        chunk.text,
+                        chunk.source,
+                        chunk.page_number,
+                        chunk.index,
+                        str(document_id),
+                    ),
+                )
+
+                if cursor.lastrowid is None:
+                    raise RuntimeError("SQLite did not create a chunk ID")
+
+                new_entry_ids.append(cursor.lastrowid)
+
+            if entries:
+                vectors = numpy.asarray(
+                    [embedding for _, embedding in entries],
+                    dtype="float32",
+                )
+
+                if index.d != vectors.shape[1]:
+                    raise ValueError(f"Embedding dimension must be {index.d}")
+
+                faiss.normalize_L2(vectors)
+                index.add_with_ids(
+                    vectors,
+                    numpy.asarray(new_entry_ids, dtype="int64"),
+                )
+
+            temporary_index_path = self.index_path.with_suffix(".faiss.tmp")
+
+            try:
+                faiss.write_index(index, str(temporary_index_path))
+
+                # SQLite changes are still transactional at this point. The
+                # original index remains untouched until the replacement is
+                # completely constructed.
+                temporary_index_path.replace(self.index_path)
+            finally:
+                temporary_index_path.unlink(missing_ok=True)
+
     def remove_document(self, document_id: UUID) -> int:
         """Remove all vectors and chunk metadata belonging to a document."""
 

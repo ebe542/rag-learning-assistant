@@ -31,6 +31,21 @@ class RetrievalService:
         entries = list(zip(chunks, embeddings, strict=True))
         self.store.add_many(entries)
 
+    def replace_document(
+        self,
+        document_id: UUID,
+        chunks: Sequence[Chunk],
+    ) -> None:
+        """Embed replacement chunks and replace their stored vectors."""
+
+        embeddings = self.embedder.embed_documents([chunk.text for chunk in chunks])
+
+        if len(embeddings) != len(chunks):
+            raise ValueError("Embedder must return one embedding per chunk")
+
+        entries = list(zip(chunks, embeddings, strict=True))
+        self.store.replace_document(document_id, entries)
+
     def remove_document(self, document_id: UUID) -> int:
         """Remove all stored chunks belonging to a document."""
 

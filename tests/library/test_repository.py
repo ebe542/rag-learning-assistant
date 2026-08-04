@@ -70,3 +70,35 @@ def test_remove_document_by_id_survives_reopening(
 
     assert reopened_repository.find_by_id(removed_document.id) is None
     assert reopened_repository.list_all() == [retained_document]
+
+
+def test_update_document_preserves_id_and_replaces_metadata(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    original_document = IndexedDocument(
+        id=document_id,
+        source="old-book.pdf",
+        content_sha256="a" * 64,
+        page_count=5,
+        chunk_count=12,
+    )
+    updated_document = IndexedDocument(
+        id=document_id,
+        source="new-book.pdf",
+        content_sha256="b" * 64,
+        page_count=8,
+        chunk_count=20,
+    )
+    repository = SqliteDocumentRepository(database_path)
+    repository.add(original_document)
+
+    repository.update(updated_document)
+
+    reopened_repository = SqliteDocumentRepository(database_path)
+
+    assert reopened_repository.find_by_id(document_id) == updated_document
+    assert reopened_repository.find_by_content_hash("a" * 64) is None
+    assert reopened_repository.find_by_content_hash("b" * 64) == updated_document
+    assert reopened_repository.list_all() == [updated_document]

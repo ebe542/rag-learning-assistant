@@ -162,6 +162,10 @@ rag-learn index \
   local-data/documents/notes.pdf \
   --index-dir local-data/indexes/learning
 rag-learn list local-data/indexes/learning
+rag-learn replace \
+  12345678-1234-5678-1234-567812345678 \
+  local-data/documents/revised-book.pdf \
+  --index-dir local-data/indexes/learning
 rag-learn remove \
   12345678-1234-5678-1234-567812345678 \
   --index-dir local-data/indexes/learning
@@ -188,6 +192,12 @@ Document removal follows the UUID across all layers.
 The persistent store first identifies the associated SQLite chunk IDs, removes the same IDs from an in-memory FAISS index, writes that index to a temporary file, deletes the chunk rows, and then replaces the persisted FAISS file.
 `LibraryService` removes the catalog entry only after the vector store reports the expected number of removed chunks.
 An unknown UUID is reported as a CLI usage error without changing storage.
+
+Document replacement preserves the registered UUID while updating its source, content hash, page count, chunk count, chunk metadata, and vectors.
+The replacement PDF is hashed, checked for duplicates, extracted, chunked, and embedded before persistent chunks are changed.
+Both vector-store adapters validate the complete replacement batch before removing the old entries.
+The FAISS adapter constructs the replacement index in memory and persists it through a temporary file, while unrelated document vectors remain untouched.
+Invalid replacement embeddings therefore leave the previous document searchable.
 
 `BatchImportService` processes input paths sequentially in their original order.
 This avoids running multiple embedding-model instances against limited GPU memory.

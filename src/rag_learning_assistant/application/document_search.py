@@ -26,6 +26,15 @@ class RetrievalGateway(Protocol):
 
         ...
 
+    def replace_document(
+        self,
+        document_id: UUID,
+        chunks: Sequence[Chunk],
+    ) -> None:
+        """Replace all indexed chunks belonging to a document."""
+
+        ...
+
 
 class DocumentSearchService:
     """Coordinate document chunking and retrieval indexing."""
@@ -53,6 +62,23 @@ class DocumentSearchService:
             chunks = [replace(chunk, document_id=document_id) for chunk in chunks]
 
         self.retrieval.index_chunks(chunks)
+        return chunks
+
+    def replace_document(
+        self,
+        document: Document,
+        document_id: UUID,
+    ) -> list[Chunk]:
+        """Chunk a replacement document while preserving its ID."""
+
+        chunks = [
+            replace(chunk, document_id=document_id)
+            for chunk in self.chunker.chunk_pages(document.pages)
+        ]
+        self.retrieval.replace_document(
+            document_id,
+            chunks,
+        )
         return chunks
 
     def remove_document(self, document_id: UUID) -> int:

@@ -89,6 +89,15 @@ rag-learn index local-data/documents/notes.pdf --index-dir local-data/indexes/le
 rag-learn list local-data/indexes/learning
 ```
 
+Replace a document while preserving the UUID shown by `list`:
+
+```bash
+rag-learn replace \
+  12345678-1234-5678-1234-567812345678 \
+  local-data/documents/revised-book.pdf \
+  --index-dir local-data/indexes/learning
+```
+
 Remove a document by the stable UUID shown by `list`:
 
 ```bash
@@ -110,6 +119,7 @@ Batch imports process documents sequentially and report each path as `added`, `s
 Duplicates are skipped, while other per-file errors do not prevent later inputs from being processed.
 The command exits with status 1 when at least one document fails.
 Removing a document deletes only its FAISS vectors, chunk metadata, and catalog entry; other library documents remain searchable.
+Replacing validates, extracts, chunks, and embeds the new PDF before changing the stored document, then updates its vectors and metadata without changing its UUID.
 
 ## Planned architecture
 

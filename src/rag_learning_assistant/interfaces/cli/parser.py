@@ -158,6 +158,28 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Directory containing the library index",
     )
+    replace_parser = commands.add_parser(
+        "replace",
+        help="Replace a library document while preserving its UUID",
+    )
+    replace_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the document to replace",
+    )
+    replace_parser.add_argument(
+        "pdf",
+        type=Path,
+        help="Path to the replacement PDF",
+    )
+    replace_parser.add_argument(
+        "--index-dir",
+        type=Path,
+        required=True,
+        help="Directory containing the library index",
+    )
+    add_chunking_options(replace_parser)
+
     search_parser = commands.add_parser(
         "search",
         help="Search an existing persistent index",

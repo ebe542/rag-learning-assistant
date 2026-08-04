@@ -2,7 +2,10 @@
 
 from collections.abc import Sequence
 
-from rag_learning_assistant.application import DocumentNotFoundError
+from rag_learning_assistant.application import (
+    DocumentNotFoundError,
+    DuplicateDocumentError,
+)
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import PdfExtractor
 from rag_learning_assistant.interfaces.cli import commands
@@ -61,6 +64,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         except DocumentNotFoundError as exc:
             parser.error(str(exc))
 
+    if args.command == "replace":
+        try:
+            validate_existing_index_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
     if args.command == "index":
         try:
             validate_index_directory(args.index_dir)
@@ -74,6 +83,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except ValueError as exc:
         parser.error(str(exc))
+
+    if args.command == "replace":
+        try:
+            return commands.run_replace(
+                document_id=args.document_id,
+                pdf_path=args.pdf,
+                chunker=chunker,
+                index_directory=args.index_dir,
+            )
+        except (
+            DocumentNotFoundError,
+            DuplicateDocumentError,
+        ) as exc:
+            parser.error(str(exc))
 
     if args.command == "index":
         return commands.run_index(

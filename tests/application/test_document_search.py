@@ -24,6 +24,7 @@ class RecordingRetrievalService:
         self.indexed_chunks: list[Chunk] = []
         self.search_calls: list[tuple[str, int]] = []
         self.results: list[SearchResult] = []
+        self.replacements: list[tuple[UUID, list[Chunk]]] = []
 
     def index_chunks(self, chunks: Sequence[Chunk]) -> None:
         self.indexed_chunks.extend(chunks)
@@ -31,6 +32,13 @@ class RecordingRetrievalService:
     def search(self, query: str, limit: int) -> list[SearchResult]:
         self.search_calls.append((query, limit))
         return self.results
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        chunks: Sequence[Chunk],
+    ) -> None:
+        self.replacements.append((document_id, list(chunks)))
 
 
 def test_index_document_chunks_and_indexes_all_pages() -> None:
@@ -129,3 +137,50 @@ def test_remove_document_delegates_to_retrieval() -> None:
 
     assert removed_count == 4
     assert retrieval.removed_document_ids == [document_id]
+
+
+def test_replace_document_chunks_pages_and_preserves_document_id() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    document = Document(
+        source="new-book.pdf",
+        pages=(
+            Page(1, "Modern Python functions", "new-book.pdf"),
+            Page(2, "Modern Python classes", "new-book.pdf"),
+        ),
+    )
+    retrieval = RecordingRetrievalService()
+    service = DocumentSearchService(
+        chunker=TextChunker(
+            max_chars=100,
+            overlap_chars=0,
+        ),
+        retrieval=retrieval,
+    )
+
+    chunks = service.replace_document(
+        document,
+        document_id,
+    )
+
+    assert chunks == [
+        Chunk(
+            text="Modern Python functions",
+            source="new-book.pdf",
+            page_number=1,
+            index=0,
+            document_id=document_id,
+        ),
+        Chunk(
+            text="Modern Python classes",
+            source="new-book.pdf",
+            page_number=2,
+            index=1,
+            document_id=document_id,
+        ),
+    ]
+    assert retrieval.replacements == [
+        (
+            document_id,
+            chunks,
+        )
+    ]

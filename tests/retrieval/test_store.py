@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 
 from rag_learning_assistant.chunking import Chunk
@@ -86,3 +88,69 @@ def test_search_rejects_different_query_dimension() -> None:
 
     with pytest.raises(ValueError, match="Embedding dimension must be 2"):
         store.search((1.0, 0.0, 0.0), limit=1)
+
+
+def test_remove_document_keeps_entries_from_other_documents() -> None:
+    removed_document_id = UUID("12345678-1234-5678-1234-567812345678")
+    retained_document_id = UUID("87654321-4321-8765-4321-876543218765")
+    removed_chunk = Chunk(
+        text="Python functions",
+        source="python.pdf",
+        page_number=1,
+        index=0,
+        document_id=removed_document_id,
+    )
+    retained_chunk = Chunk(
+        text="Relational databases",
+        source="database.pdf",
+        page_number=1,
+        index=0,
+        document_id=retained_document_id,
+    )
+    store = InMemoryVectorStore()
+    store.add(removed_chunk, (1.0, 0.0))
+    store.add(retained_chunk, (0.0, 1.0))
+
+    removed_count = store.remove_document(removed_document_id)
+
+    assert removed_count == 1
+    assert [result.chunk for result in store.search((1.0, 0.0), limit=10)] == [retained_chunk]
+
+
+def test_replace_document_keeps_other_entries() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    retained_document_id = UUID("87654321-4321-8765-4321-876543218765")
+    old_chunk = Chunk(
+        text="Old Python",
+        source="old.pdf",
+        page_number=1,
+        index=0,
+        document_id=document_id,
+    )
+    replacement_chunk = Chunk(
+        text="Modern Python",
+        source="new.pdf",
+        page_number=1,
+        index=0,
+        document_id=document_id,
+    )
+    retained_chunk = Chunk(
+        text="Databases",
+        source="database.pdf",
+        page_number=1,
+        index=0,
+        document_id=retained_document_id,
+    )
+    store = InMemoryVectorStore()
+    store.add(old_chunk, (1.0, 0.0))
+    store.add(retained_chunk, (0.0, 1.0))
+
+    store.replace_document(
+        document_id,
+        [(replacement_chunk, (0.8, 0.2))],
+    )
+
+    assert [result.chunk for result in store.search((1.0, 0.0), limit=10)] == [
+        replacement_chunk,
+        retained_chunk,
+    ]

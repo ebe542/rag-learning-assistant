@@ -48,6 +48,7 @@ class RecordingVectorStore:
         self.batches: list[list[tuple[Chunk, Embedding]]] = []
         self.removed_document_ids: list[UUID] = []
         self.removed_chunk_count = 0
+        self.replacements: list[tuple[UUID, list[tuple[Chunk, Embedding]]]] = []
 
     def add(self, chunk: Chunk, embedding: Embedding) -> None:
         raise AssertionError("RetrievalService must use a batch write")
@@ -68,6 +69,13 @@ class RecordingVectorStore:
         limit: int,
     ) -> list[SearchResult]:
         return []
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        entries: Sequence[tuple[Chunk, Embedding]],
+    ) -> None:
+        self.replacements.append((document_id, list(entries)))
 
 
 def test_index_and_search_chunks() -> None:
@@ -169,3 +177,33 @@ def test_remove_document_delegates_to_vector_store() -> None:
 
     assert removed_count == 3
     assert store.removed_document_ids == [document_id]
+
+
+def test_replace_document_embeds_chunks_and_replaces_store_entries() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    chunk = Chunk(
+        text="Modern Python functions",
+        source="new-book.pdf",
+        page_number=1,
+        index=0,
+        document_id=document_id,
+    )
+    embedder = FakeEmbedder(
+        {
+            "Modern Python functions": (1.0, 0.0),
+        }
+    )
+    store = RecordingVectorStore()
+    service = RetrievalService(
+        embedder=embedder,
+        store=store,
+    )
+
+    service.replace_document(document_id, [chunk])
+
+    assert store.replacements == [
+        (
+            document_id,
+            [(chunk, (1.0, 0.0))],
+        )
+    ]

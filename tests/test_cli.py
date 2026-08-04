@@ -40,6 +40,7 @@ class FakeLibraryService:
         self.document = document
         self.paths: list[Path] = []
         self.removed_document_ids: list[UUID] = []
+        self.replacements: list[tuple[UUID, Path]] = []
 
     def add_document(self, path: Path) -> IndexedDocument:
         self.paths.append(path)
@@ -47,6 +48,14 @@ class FakeLibraryService:
 
     def remove_document(self, document_id: UUID) -> IndexedDocument:
         self.removed_document_ids.append(document_id)
+        return self.document
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        path: Path,
+    ) -> IndexedDocument:
+        self.replacements.append((document_id, path))
         return self.document
 
 
@@ -581,6 +590,57 @@ def test_cli_remove_reports_unknown_document(
     assert f"Document does not exist: {document_id}" in capsys.readouterr().err
 
 
+def test_cli_replaces_document_and_outputs_json(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    replacement_pdf = tmp_path / "new-book.pdf"
+    replacement_pdf.touch()
+    index_directory = tmp_path / "learning-library"
+    index_directory.mkdir()
+    (index_directory / "metadata.sqlite3").touch()
+    (index_directory / "vectors.faiss").touch()
+    document = IndexedDocument(
+        id=document_id,
+        source="new-book.pdf",
+        content_sha256="b" * 64,
+        page_count=8,
+        chunk_count=20,
+    )
+    library_service = FakeLibraryService(document)
+
+    monkeypatch.setattr(
+        commands,
+        "build_library_service",
+        lambda chunker, index_directory: library_service,
+    )
+
+    result = cli.main(
+        [
+            "replace",
+            str(document_id),
+            str(replacement_pdf),
+            "--index-dir",
+            str(index_directory),
+        ]
+    )
+
+    assert result == 0
+    assert library_service.replacements == [(document_id, replacement_pdf)]
+    assert json.loads(capsys.readouterr().out) == {
+        "index_directory": str(index_directory),
+        "replaced_document": {
+            "id": str(document_id),
+            "source": "new-book.pdf",
+            "content_sha256": "b" * 64,
+            "page_count": 8,
+            "chunk_count": 20,
+        },
+    }
+
+
 def test_parser_accepts_search_command() -> None:
     args = build_parser().parse_args(
         [
@@ -765,3 +825,28 @@ def test_parser_accepts_list_command() -> None:
 
     assert args.command == "list"
     assert args.index_dir == Path("local-data/indexes/learning")
+
+
+def test_parser_accepts_replace_command() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+
+    args = build_parser().parse_args(
+        [
+            "replace",
+            str(document_id),
+            "new-book.pdf",
+            "--index-dir",
+            "local-data/indexes/learning",
+            "--max-chars",
+            "800",
+            "--overlap-chars",
+            "100",
+        ]
+    )
+
+    assert args.command == "replace"
+    assert args.document_id == document_id
+    assert args.pdf == Path("new-book.pdf")
+    assert args.index_dir == Path("local-data/indexes/learning")
+    assert args.max_chars == 800
+    assert args.overlap_chars == 100
