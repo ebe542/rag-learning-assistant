@@ -20,6 +20,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: python -m pip install -e ".[dev]"
+      # Storage tests exercise the real FAISS adapter, so CI needs that optional extra.
+      - run: python -m pip install -e ".[dev,storage]"
       # CI and local milestone checks intentionally share one quality gate.
       - run: python scripts/check_milestone.py
