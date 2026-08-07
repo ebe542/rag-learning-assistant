@@ -1,9 +1,18 @@
+# Automatically distinguish text files from binary files.
 * text=auto
 
+# Keep source and configuration files consistent across operating systems.
 .gitattributes text eol=lf
 *.py text eol=lf
 *.toml text eol=lf
+*.md text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-*.md text eol=lf
+*.json text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
 *.sh text eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=lf

@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Sequence
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -69,7 +70,7 @@ class FaissVectorStore:
 
         entry_ids: list[int] = []
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             for chunk, _ in entries:
                 cursor = connection.execute(
                     """
@@ -137,7 +138,7 @@ class FaissVectorStore:
 
         faiss, numpy = self._load_vector_libraries()
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             old_rows = connection.execute(
                 """
                 SELECT id
@@ -232,7 +233,7 @@ class FaissVectorStore:
     def remove_document(self, document_id: UUID) -> int:
         """Remove all vectors and chunk metadata belonging to a document."""
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             rows = connection.execute(
                 """
                 SELECT id
@@ -263,7 +264,7 @@ class FaissVectorStore:
         try:
             faiss.write_index(index, str(temporary_index_path))
 
-            with sqlite3.connect(self.metadata_path) as connection:
+            with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
                 connection.execute(
                     """
                     DELETE FROM chunks
@@ -311,7 +312,7 @@ class FaissVectorStore:
 
         ordered_ids = [int(entry_id) for entry_id in entry_ids[0]]
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             placeholders = ", ".join("?" for _ in ordered_ids)
             rows = connection.execute(
                 f"""
@@ -360,7 +361,7 @@ class FaissVectorStore:
     def _initialize_database(self) -> None:
         """Create the metadata schema when opening a new index directory."""
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chunks (
@@ -403,7 +404,7 @@ class FaissVectorStore:
     ) -> None:
         """Create model metadata or verify an existing index."""
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             stored_metadata = connection.execute(
                 """
                 SELECT model_name, model_revision
@@ -433,7 +434,7 @@ class FaissVectorStore:
     def _validate_or_store_dimension(self, dimension: int) -> None:
         """Store the first vector dimension and validate later vectors."""
 
-        with sqlite3.connect(self.metadata_path) as connection:
+        with closing(sqlite3.connect(self.metadata_path)) as connection, connection:
             stored_row = connection.execute(
                 """
                 SELECT embedding_dimension

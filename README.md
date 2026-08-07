@@ -145,11 +145,12 @@ Planned next milestones:
 
 Run the checks locally:
 
-```powershell
-pytest --cov=rag_learning_assistant
-ruff check .
-ruff format --check .
+```bash
+python scripts/check_milestone.py
 ```
+
+The milestone check verifies formatting, lint rules, the complete test suite,
+at least 90% coverage, unclosed resources, and invalid Git whitespace.
 
 Contributions are welcome.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md).

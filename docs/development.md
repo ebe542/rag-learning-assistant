@@ -249,6 +249,17 @@ git status --short && git diff --check && git diff --stat
 CI runs tests with coverage and verifies Ruff formatting without modifying files.
 Pytest uses `--import-mode=importlib`, allowing identically named test modules in different responsibility-based directories.
 
+At the end of a milestone, run the same complete quality gate as CI:
+
+```bash
+python scripts/check_milestone.py
+```
+
+Unlike the fast development command, this check treats resource and unraisable
+warnings as errors, requires at least 90% test coverage, and checks the Git diff
+for whitespace errors. The hardware- and network-dependent generation smoke test
+remains separate so the quality gate is reproducible on every supported system.
+
 ## Testing strategy
 
 Behavior is generally developed using a red-green-refactor cycle.

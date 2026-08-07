@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
@@ -123,7 +124,7 @@ def test_first_embedding_persists_its_dimension(tmp_path: Path) -> None:
 
     store.add(chunk, (1.0, 0.0, 0.0))
 
-    with sqlite3.connect(index_directory / "metadata.sqlite3") as connection:
+    with closing(sqlite3.connect(index_directory / "metadata.sqlite3")) as connection, connection:
         stored_dimension = connection.execute(
             """
             SELECT embedding_dimension
@@ -209,7 +210,7 @@ def test_opening_old_database_adds_document_id_column(
     index_directory.mkdir()
     database_path = index_directory / "metadata.sqlite3"
 
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection, connection:
         connection.execute(
             """
             CREATE TABLE chunks (
@@ -245,7 +246,7 @@ def test_opening_old_database_adds_document_id_column(
         model_revision="revision-1",
     )
 
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection, connection:
         column_names = {row[1] for row in connection.execute("PRAGMA table_info(chunks)")}
         stored_document_id = connection.execute(
             """

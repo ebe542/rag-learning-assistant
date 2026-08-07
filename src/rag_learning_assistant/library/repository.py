@@ -1,6 +1,7 @@
 """Persistence interfaces and SQLite adapter for library documents."""
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
@@ -56,7 +57,8 @@ class SqliteDocumentRepository:
     def add(self, document: IndexedDocument) -> None:
         """Store one indexed document."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute(
                 """
                 INSERT INTO documents (
@@ -80,7 +82,8 @@ class SqliteDocumentRepository:
     def list_all(self) -> list[IndexedDocument]:
         """Return all stored documents in insertion order."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             rows = connection.execute(
                 """
                 SELECT
@@ -111,7 +114,8 @@ class SqliteDocumentRepository:
     ) -> IndexedDocument | None:
         """Return the document with this content hash, if present."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             row = connection.execute(
                 """
                 SELECT
@@ -137,7 +141,8 @@ class SqliteDocumentRepository:
     ) -> IndexedDocument | None:
         """Return the document with this ID, if present."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             row = connection.execute(
                 """
                 SELECT
@@ -160,7 +165,8 @@ class SqliteDocumentRepository:
     def update(self, document: IndexedDocument) -> None:
         """Replace the metadata of an existing document."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             cursor = connection.execute(
                 """
                 UPDATE documents
@@ -186,7 +192,8 @@ class SqliteDocumentRepository:
     def remove(self, document_id: UUID) -> None:
         """Remove one document's metadata."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute(
                 """
                 DELETE FROM documents
@@ -198,7 +205,8 @@ class SqliteDocumentRepository:
     def _initialize_database(self) -> None:
         """Create the document metadata table when needed."""
 
-        with sqlite3.connect(self.database_path) as connection:
+        # sqlite3 manages transactions but does not close connections itself.
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS documents (
