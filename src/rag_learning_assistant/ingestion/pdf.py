@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from rag_learning_assistant.ingestion.models import Document, Page
 
@@ -21,7 +21,10 @@ class PdfHandle(Protocol):
 
     def __exit__(self, *args: object) -> None: ...
 
-    def __iter__(self): ...
+    @property
+    def page_count(self) -> int: ...
+
+    def load_page(self, page_id: int) -> PdfPage: ...
 
 
 class PdfExtractor:
@@ -34,11 +37,11 @@ class PdfExtractor:
         with self._open(pdf_path) as pdf:
             pages = tuple(
                 Page(
-                    number=index,
-                    text=self._normalise(page.get_text("text")),
+                    number=page_index + 1,
+                    text=self._normalise(pdf.load_page(page_index).get_text("text")),
                     source=pdf_path.name,
                 )
-                for index, page in enumerate(pdf, start=1)
+                for page_index in range(pdf.page_count)
             )
 
         return Document(source=pdf_path.name, pages=pages)
@@ -52,7 +55,7 @@ class PdfExtractor:
             ) from exc
 
         try:
-            return pymupdf.open(path)
+            return cast(PdfHandle, pymupdf.open(path))
         except Exception as exc:
             raise ValueError(f"Could not open PDF: {path}") from exc
 

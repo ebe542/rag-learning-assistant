@@ -24,8 +24,12 @@ class FakePdf:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def __iter__(self):
-        return iter(self.pages)
+    @property
+    def page_count(self) -> int:
+        return len(self.pages)
+
+    def load_page(self, page_id: int) -> FakePage:
+        return self.pages[page_id]
 
 
 class StubExtractor(PdfExtractor):
