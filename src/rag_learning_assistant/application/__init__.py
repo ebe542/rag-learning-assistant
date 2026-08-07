@@ -14,6 +14,9 @@ from rag_learning_assistant.application.library import (
     LibraryCatalog,
     LibraryService,
 )
+from rag_learning_assistant.application.question_answering import (
+    QuestionAnsweringService,
+)
 
 __all__ = [
     "BatchImportService",
@@ -24,4 +27,5 @@ __all__ = [
     "ImportStatus",
     "LibraryCatalog",
     "LibraryService",
+    "QuestionAnsweringService",
 ]
