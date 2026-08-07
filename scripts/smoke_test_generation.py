@@ -1,8 +1,10 @@
 """Manual GPU smoke test for the local Hugging Face generator."""
 
 import sys
+from pathlib import Path
 
 import torch
+from dotenv import load_dotenv
 
 from rag_learning_assistant.generation import (
     HuggingFaceTextGenerator,
@@ -23,6 +25,18 @@ Two plus two equals four.
 
 def main() -> int:
     """Run one real generation and report GPU usage."""
+
+    dotenv_path = Path(__file__).resolve().parents[1] / ".env"
+
+    try:
+        # A local token improves Hub rate limits, but authentication is not a
+        # prerequisite because the pinned model is publicly accessible.
+        load_dotenv(dotenv_path=dotenv_path)
+    except Exception as exc:
+        print(
+            f"Warning: could not load {dotenv_path}: {exc}",
+            file=sys.stderr,
+        )
 
     if not torch.cuda.is_available():
         print(
