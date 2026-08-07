@@ -17,6 +17,7 @@ Question generation and learning-progress tracking will build on this foundation
 - manage multiple documents in one local library
 - detect duplicate document content using SHA-256
 - create local multilingual E5 embeddings through an optional Sentence Transformers adapter
+- build source-grounded answers through an optional local Qwen3 generator
 
 Scanned documents do not yet support OCR.
 
@@ -32,10 +33,10 @@ python -m pip install -e ".[dev]"
 pytest
 ```
 
-Install the optional local embedding and persistent-storage support:
+Install the optional local embedding, generation, and persistent-storage support:
 
 ```powershell
-python -m pip install -e ".[dev,embeddings,storage]"
+python -m pip install -e ".[dev,embeddings,generation,storage]"
 ```
 
 ### NVIDIA GPU support on Windows
@@ -47,7 +48,7 @@ The following setup was verified with Python 3.13, PyTorch 2.13.0, CUDA 13.2, an
 ```bash
 py -3.13 -m venv .venv && source .venv/Scripts/activate
 python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
-python -m pip install -e ".[dev,embeddings,storage]"
+python -m pip install -e ".[dev,embeddings,generation,storage]"
 ```
 
 Verify that PyTorch can use the GPU:
@@ -61,6 +62,9 @@ Refer to the [official PyTorch installation instructions](https://pytorch.org/ge
 
 The default embedding model is `intfloat/multilingual-e5-small`, pinned to a specific Hugging Face revision for reproducibility.
 The first real embedding request downloads the model into the local Hugging Face cache.
+The first local generation provider uses `Qwen/Qwen3-1.7B`, also pinned to a specific revision.
+It requests strict JSON containing answer text and references to numbered retrieval contexts; application code resolves those numbers to trusted source metadata.
+A Windows CUDA smoke test used approximately 4.2 GB of GPU memory on an RTX 3060 Ti.
 
 Extract pages and chunks from a PDF:
 

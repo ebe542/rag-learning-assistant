@@ -134,13 +134,14 @@ Install the core development dependencies:
 python -m pip install -e ".[dev]"
 ```
 
-Install local Hugging Face embedding and persistent-storage support as well:
+Install local Hugging Face embedding, generation, and persistent-storage support as well:
 
 ```bash
-python -m pip install -e ".[dev,embeddings,storage]"
+python -m pip install -e ".[dev,embeddings,generation,storage]"
 ```
 
 The embedding extra includes Sentence Transformers and its ML runtime dependencies.
+The generation extra includes Transformers, Accelerate, and PyTorch for local text generation.
 The storage extra includes the CPU FAISS runtime; embedding generation can still use CUDA independently.
 The core PDF and chunking functionality deliberately remains usable without them.
 
@@ -213,7 +214,7 @@ For a supported NVIDIA GPU, install the appropriate CUDA-enabled PyTorch wheel b
 
 ```bash
 python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
-python -m pip install -e ".[dev,embeddings,storage]"
+python -m pip install -e ".[dev,embeddings,generation,storage]"
 ```
 
 This order lets the Sentence Transformers dependency reuse the already installed CUDA-enabled PyTorch version.
@@ -257,12 +258,35 @@ The real `multilingual-e5-small` adapter was additionally smoke-tested in German
 This manual check confirmed 384-dimensional vectors and ranked a Python passage above an unrelated database passage for a question about Python functions.
 The complete CLI flow was then smoke-tested with a real text-based PDF and returned three semantically relevant, page-cited results.
 
+### Local generation GPU smoke test
+
+`scripts/smoke_test_generation.py` exercises the real pinned `Qwen/Qwen3-1.7B` model rather than a test double.
+It requires a CUDA-capable GPU and the `generation` dependency extra.
+The first run downloads the model into the Hugging Face cache; later runs reuse that cache.
+
+Run it from the repository root:
+
+```bash
+python scripts/smoke_test_generation.py
+```
+
+The script verifies that CUDA is available, loads the generator lazily, produces a structured answer for one controlled context, and requires citation `(1,)`.
+It also prints the GPU name, generated text, citations, and peak allocated GPU memory.
+The exact wording is deliberately not asserted because it may vary across compatible runtime versions; the stable smoke-test contract is successful structured parsing and correct source selection.
+
+The test was last verified on 7 August 2026 with an NVIDIA GeForce RTX 3060 Ti.
+It returned the answer `four`, citation `(1,)`, and approximately 4173 MB peak allocated GPU memory.
+
+This check is intentionally not part of the default pytest suite.
+Normal tests must remain fast, offline-capable, and independent of a specific GPU, while this script validates the real ML runtime on demand.
+
 Tests mirror the production structure:
 
 ```text
 tests/
 ├── test_cli.py
 ├── application/
+├── generation/
 ├── library/
 ├── ingestion/
 ├── chunking/
@@ -313,7 +337,7 @@ Tests remain the executable specification of behavior.
 
 ## Near-term roadmap
 
-1. Add document removal and replacement semantics.
+1. Expose grounded answer generation through the CLI.
 2. Add consistency recovery for interrupted FAISS and SQLite writes.
-3. Build a small German retrieval evaluation set.
-4. Add grounded answer generation with citations.
+3. Build a small German retrieval and answer-quality evaluation set.
+4. Compare the local Qwen baseline with larger or remote providers.

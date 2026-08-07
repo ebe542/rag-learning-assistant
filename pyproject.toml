@@ -27,6 +27,11 @@ dev = [
 embeddings = [
   "sentence-transformers>=5,<6",
 ]
+generation = [
+  "accelerate>=1,<2",
+  "torch>=2.6,<3",
+  "transformers>=5,<6",
+]
 storage = [
   "faiss-cpu>=1.14,<2",
 ]
