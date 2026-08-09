@@ -52,6 +52,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             limit=args.limit,
         )
 
+    if args.command == "summarize":
+        try:
+            validate_existing_index_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            return commands.run_summarize(
+                index_directory=args.index_dir,
+                document_id=args.document_id,
+            )
+        except DocumentNotFoundError as exc:
+            parser.error(str(exc))
+
     if args.command == "list":
         try:
             validate_library_directory(args.index_dir)

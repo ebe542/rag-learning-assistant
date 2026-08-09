@@ -230,6 +230,40 @@ class FaissVectorStore:
             finally:
                 temporary_index_path.unlink(missing_ok=True)
 
+    def list_document_chunks(
+        self,
+        document_id: UUID,
+    ) -> list[Chunk]:
+        """Return all chunks of one document in their original order."""
+
+        # Summarization needs complete document coverage, not similarity-ranked
+        # vectors. SQLite already contains the authoritative chunk metadata.
+        with closing(sqlite3.connect(self.metadata_path)) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    text,
+                    source,
+                    page_number,
+                    chunk_index
+                FROM chunks
+                WHERE document_id = ?
+                ORDER BY chunk_index, id
+                """,
+                (str(document_id),),
+            ).fetchall()
+
+        return [
+            Chunk(
+                text=str(row[0]),
+                source=str(row[1]),
+                page_number=int(row[2]),
+                index=int(row[3]),
+                document_id=document_id,
+            )
+            for row in rows
+        ]
+
     def remove_document(self, document_id: UUID) -> int:
         """Remove all vectors and chunk metadata belonging to a document."""
 

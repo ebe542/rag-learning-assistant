@@ -8,6 +8,7 @@ from uuid import UUID
 from rag_learning_assistant.application import (
     BatchImportService,
     DocumentSearchService,
+    DocumentSummarizationService,
     ImportOutcome,
     ImportStatus,
     LibraryCatalog,
@@ -91,6 +92,28 @@ def build_library_catalog(
     return LibraryCatalog(repository)
 
 
+def build_document_summarization_service(
+    index_directory: Path,
+) -> DocumentSummarizationService:
+    """Build document-wide summarization for a persistent library."""
+
+    # The vector store validates that its embedding metadata matches the
+    # existing index, even though summarization reads only stored chunks.
+    embedder = SentenceTransformerEmbedder()
+    store = FaissVectorStore(
+        index_directory,
+        model_name=embedder.model_name,
+        model_revision=embedder.model_revision,
+    )
+    repository = SqliteDocumentRepository(index_directory / "metadata.sqlite3")
+
+    return DocumentSummarizationService(
+        documents=repository,
+        chunks=store,
+        generator=HuggingFaceTextGenerator(),
+    )
+
+
 def run_index(
     pdf_paths: Sequence[Path],
     chunker: TextChunker,
@@ -115,6 +138,36 @@ def run_index(
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 1 if any(outcome.status is ImportStatus.FAILED for outcome in outcomes) else 0
+
+
+def run_summarize(
+    index_directory: Path,
+    document_id: UUID,
+) -> int:
+    """Summarize one indexed document and write the result as JSON."""
+
+    service = build_document_summarization_service(index_directory)
+    summary = service.summarize(document_id)
+
+    payload = {
+        "document_id": str(summary.document_id),
+        "source": summary.source,
+        "summary": summary.text,
+        # Citation metadata is reconstructed from persistent chunks rather
+        # than accepted from model-generated text.
+        "citations": [
+            {
+                "number": citation.number,
+                "source": citation.source,
+                "page_number": citation.page_number,
+                "chunk_index": citation.chunk_index,
+                "excerpt": citation.excerpt,
+            }
+            for citation in summary.citations
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
 
 
 def _serialize_import_outcome(outcome: ImportOutcome) -> dict[str, object]:

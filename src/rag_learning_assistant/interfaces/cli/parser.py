@@ -221,4 +221,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_RESULT_LIMIT,
         help=f"Maximum number of source contexts (default: {DEFAULT_RESULT_LIMIT})",
     )
+
+    summarize_parser = commands.add_parser(
+        "summarize",
+        help="Summarize one document from an existing persistent index",
+    )
+    summarize_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library index",
+    )
+    summarize_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the document to summarize",
+    )
+
     return parser
