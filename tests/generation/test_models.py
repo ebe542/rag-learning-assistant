@@ -9,6 +9,7 @@ from rag_learning_assistant.generation import (
 
 def test_grounded_answer_contains_question_text_and_sources() -> None:
     citation = Citation(
+        number=1,
         source="python-book.pdf",
         page_number=42,
         chunk_index=7,
@@ -41,6 +42,7 @@ def test_citation_rejects_blank_text_fields(
     message: str,
 ) -> None:
     values = {
+        "number": 1,
         "source": "python-book.pdf",
         "page_number": 1,
         "chunk_index": 0,
@@ -61,6 +63,7 @@ def test_citation_requires_positive_page_number(
         match="Citation page number must be positive",
     ):
         Citation(
+            number=1,
             source="python-book.pdf",
             page_number=page_number,
             chunk_index=0,
@@ -74,6 +77,7 @@ def test_citation_rejects_negative_chunk_index() -> None:
         match="Citation chunk index must not be negative",
     ):
         Citation(
+            number=1,
             source="python-book.pdf",
             page_number=1,
             chunk_index=-1,
@@ -146,4 +150,18 @@ def test_generation_result_rejects_duplicate_citation_numbers() -> None:
         GenerationResult(
             text="Generated answer",
             citation_numbers=(1, 1),
+        )
+
+
+def test_citation_requires_positive_number() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Citation number must be positive",
+    ):
+        Citation(
+            number=0,
+            source="python-book.pdf",
+            page_number=42,
+            chunk_index=15,
+            excerpt="A class defines objects.",
         )

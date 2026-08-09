@@ -74,6 +74,7 @@ def test_answer_searches_builds_context_and_maps_used_citations() -> None:
         text="A class defines object structure and behavior.",
         citations=(
             Citation(
+                number=2,
                 source="python-book.pdf",
                 page_number=42,
                 chunk_index=15,

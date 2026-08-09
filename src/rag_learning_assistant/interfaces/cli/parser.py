@@ -201,4 +201,24 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Maximum number of results (default: {DEFAULT_RESULT_LIMIT})",
     )
 
+    ask_parser = commands.add_parser(
+        "ask",
+        help="Answer a question using an existing persistent index",
+    )
+    ask_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the FAISS index and SQLite metadata",
+    )
+    ask_parser.add_argument(
+        "question",
+        type=non_blank_text,
+        help="Question to answer from the indexed documents",
+    )
+    ask_parser.add_argument(
+        "--limit",
+        type=positive_int,
+        default=DEFAULT_RESULT_LIMIT,
+        help=f"Maximum number of source contexts (default: {DEFAULT_RESULT_LIMIT})",
+    )
     return parser

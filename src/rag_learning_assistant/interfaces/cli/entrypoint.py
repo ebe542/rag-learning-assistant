@@ -25,15 +25,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "search":
+    if args.command in {"search", "ask"}:
         try:
             validate_existing_index_directory(args.index_dir)
         except ValueError as exc:
             parser.error(str(exc))
 
-        return commands.run_search(
+        if args.command == "search":
+            return commands.run_search(
+                index_directory=args.index_dir,
+                query=args.query,
+                limit=args.limit,
+            )
+
+        return commands.run_ask(
             index_directory=args.index_dir,
-            query=args.query,
+            question=args.question,
             limit=args.limit,
         )
 

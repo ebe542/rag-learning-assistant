@@ -12,8 +12,10 @@ from rag_learning_assistant.application import (
     ImportStatus,
     LibraryCatalog,
     LibraryService,
+    QuestionAnsweringService,
 )
 from rag_learning_assistant.chunking import TextChunker
+from rag_learning_assistant.generation import HuggingFaceTextGenerator
 from rag_learning_assistant.ingestion import Document, PdfExtractor
 from rag_learning_assistant.library import SqliteDocumentRepository
 from rag_learning_assistant.retrieval import (
@@ -37,6 +39,17 @@ def build_persistent_retrieval(
     return RetrievalService(
         embedder=embedder,
         store=store,
+    )
+
+
+def build_question_answering_service(
+    index_directory: Path,
+) -> QuestionAnsweringService:
+    """Build source-grounded question answering for a persistent index."""
+
+    return QuestionAnsweringService(
+        search=build_persistent_retrieval(index_directory),
+        generator=HuggingFaceTextGenerator(),
     )
 
 
@@ -180,6 +193,36 @@ def run_search(
                 "index": result.chunk.index,
             }
             for result in results
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_ask(
+    index_directory: Path,
+    question: str,
+    limit: int,
+) -> int:
+    """Answer a question and write the grounded result as JSON."""
+
+    answerer = build_question_answering_service(index_directory)
+    answer = answerer.answer(question, limit=limit)
+
+    payload = {
+        "question": answer.question,
+        "answer": answer.text,
+        # Citation metadata comes from retrieval, not from model-generated text.
+        # This keeps source references trustworthy even if the model misbehaves.
+        "citations": [
+            {
+                "number": citation.number,
+                "source": citation.source,
+                "page_number": citation.page_number,
+                "chunk_index": citation.chunk_index,
+                "excerpt": citation.excerpt,
+            }
+            for citation in answer.citations
         ],
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))

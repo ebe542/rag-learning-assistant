@@ -66,7 +66,10 @@ class QuestionAnsweringService:
                 raise ValueError(f"Citation number {citation_number} does not exist")
 
         citations = tuple(
-            self._citation_from_result(results[citation_number - 1])
+            self._citation_from_result(
+                results[citation_number - 1],
+                number=citation_number,
+            )
             for citation_number in generation.citation_numbers
         )
 
@@ -114,11 +117,14 @@ class QuestionAnsweringService:
     @staticmethod
     def _citation_from_result(
         result: SearchResult,
+        *,
+        number: int,
     ) -> Citation:
         """Create trusted citation metadata from retrieval output."""
 
         chunk = result.chunk
         return Citation(
+            number=number,
             source=chunk.source,
             page_number=chunk.page_number,
             chunk_index=chunk.index,

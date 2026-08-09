@@ -7,12 +7,16 @@ from dataclasses import dataclass
 class Citation:
     """A source passage supporting a generated answer."""
 
+    number: int
     source: str
     page_number: int
     chunk_index: int
     excerpt: str
 
     def __post_init__(self) -> None:
+        if self.number < 1:
+            raise ValueError("Citation number must be positive")
+
         if not self.source.strip():
             raise ValueError("Citation source must not be blank")
 
