@@ -35,6 +35,15 @@ class RecordingDocumentRepository:
             None,
         )
 
+    def find_by_id(self, document_id: UUID) -> IndexedDocument | None:
+        raise AssertionError("find_by_id must not be called while adding or listing documents")
+
+    def remove(self, document_id: UUID) -> None:
+        raise AssertionError("remove must not be called while adding or listing documents")
+
+    def update(self, document: IndexedDocument) -> None:
+        raise AssertionError("update must not be called while adding or listing documents")
+
 
 class FakeExtractor:
     def __init__(self, document: Document) -> None:
@@ -59,6 +68,16 @@ class FakeDocumentIndexer:
     ) -> list[Chunk]:
         self.indexed_documents.append((document, document_id))
         return list(self.chunks)
+
+    def remove_document(self, document_id: UUID) -> int:
+        raise AssertionError("remove_document must not be called while adding documents")
+
+    def replace_document(
+        self,
+        document: Document,
+        document_id: UUID,
+    ) -> list[Chunk]:
+        raise AssertionError("replace_document must not be called while adding documents")
 
     def search(self, query: str, limit: int) -> list[SearchResult]:
         return []

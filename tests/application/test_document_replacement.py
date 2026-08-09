@@ -26,6 +26,15 @@ class RecordingRepository:
         self.updated_documents: list[IndexedDocument] = []
         self.duplicate_document = duplicate_document
 
+    def add(self, document: IndexedDocument) -> None:
+        raise AssertionError("add must not be called during document replacement")
+
+    def list_all(self) -> list[IndexedDocument]:
+        raise AssertionError("list_all must not be called during document replacement")
+
+    def remove(self, document_id: UUID) -> None:
+        raise AssertionError("remove must not be called during document replacement")
+
     def find_by_id(
         self,
         document_id: UUID,
@@ -80,6 +89,17 @@ class RecordingIndexer:
         self.events.append("replace chunks")
         self.calls.append((document, document_id))
         return list(self.chunks)
+
+    def index_document(
+        self,
+        document: Document,
+        *,
+        document_id: UUID | None = None,
+    ) -> list[Chunk]:
+        raise AssertionError("index_document must not be called during document replacement")
+
+    def remove_document(self, document_id: UUID) -> int:
+        raise AssertionError("remove_document must not be called during document replacement")
 
 
 def test_replace_document_preserves_id_and_updates_metadata(

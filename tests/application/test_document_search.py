@@ -12,6 +12,19 @@ class RecordingRetrieval:
         self.removed_chunk_count = removed_chunk_count
         self.removed_document_ids: list[UUID] = []
 
+    def index_chunks(self, chunks: Sequence[Chunk]) -> None:
+        raise AssertionError("index_chunks must not be called while removing a document")
+
+    def search(self, query: str, limit: int) -> list[SearchResult]:
+        raise AssertionError("search must not be called while removing a document")
+
+    def replace_document(
+        self,
+        document_id: UUID,
+        chunks: Sequence[Chunk],
+    ) -> None:
+        raise AssertionError("replace_document must not be called while removing a document")
+
     def remove_document(self, document_id: UUID) -> int:
         self.removed_document_ids.append(document_id)
         return self.removed_chunk_count
@@ -39,6 +52,9 @@ class RecordingRetrievalService:
         chunks: Sequence[Chunk],
     ) -> None:
         self.replacements.append((document_id, list(chunks)))
+
+    def remove_document(self, document_id: UUID) -> int:
+        raise AssertionError("remove_document is covered by its dedicated test double")
 
 
 def test_index_document_chunks_and_indexes_all_pages() -> None:
