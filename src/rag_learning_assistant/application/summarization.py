@@ -1,5 +1,6 @@
 """Application models and services for document-wide summarization."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -64,6 +65,7 @@ class DocumentSummarizationService:
         chunks: DocumentChunkReader,
         generator: TextGenerator,
         max_batch_chars: int = 12_000,
+        progress: Callable[[str, int, int], None] | None = None,
     ) -> None:
         if max_batch_chars < 1:
             raise ValueError("max_batch_chars must be positive")
@@ -72,6 +74,7 @@ class DocumentSummarizationService:
         self.chunks = chunks
         self.generator = generator
         self.max_batch_chars = max_batch_chars
+        self.progress = progress
 
     def summarize(self, document_id: UUID) -> DocumentSummary:
         """Summarize one registered document using all stored chunks."""
@@ -96,7 +99,13 @@ class DocumentSummarizationService:
         partial_summaries: list[tuple[str, tuple[int, ...]]] = []
         context_offset = 0
 
-        for batch in self._batch_chunks(chunks):
+        batches = self._batch_chunks(chunks)
+
+        for batch_number, batch in enumerate(batches, start=1):
+            if self.progress is not None:
+                # Report before generation so long-running model calls remain visible.
+                self.progress("map", batch_number, len(batches))
+
             first_context_number = context_offset + 1
             last_context_number = context_offset + len(batch)
 
@@ -120,6 +129,9 @@ class DocumentSummarizationService:
         if len(partial_summaries) == 1:
             final_text, final_citation_numbers = partial_summaries[0]
         else:
+            if self.progress is not None:
+                self.progress("reduce", 1, 1)
+
             reduction = self.generator.generate(self._build_reduction_prompt(partial_summaries))
 
             # The reduction may only cite original contexts that supported at least

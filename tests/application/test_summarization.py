@@ -456,3 +456,63 @@ def test_summarize_rejects_document_without_chunks_before_generation() -> None:
         service.summarize(document_id)
 
     assert generator.prompts == []
+
+
+def test_summarize_reports_map_and_reduce_progress() -> None:
+    document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    document = IndexedDocument(
+        id=document_id,
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=2,
+        chunk_count=2,
+    )
+    chunks = [
+        Chunk(
+            text="First long section.",
+            source="course.pdf",
+            page_number=1,
+            index=0,
+            document_id=document_id,
+        ),
+        Chunk(
+            text="Second long section.",
+            source="course.pdf",
+            page_number=2,
+            index=1,
+            document_id=document_id,
+        ),
+    ]
+    generator = SequentialSummaryGenerator(
+        [
+            GenerationResult(
+                text="First summary.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="Second summary.",
+                citation_numbers=(2,),
+            ),
+            GenerationResult(
+                text="Complete summary.",
+                citation_numbers=(1, 2),
+            ),
+        ]
+    )
+    progress_events: list[tuple[str, int, int]] = []
+
+    service = DocumentSummarizationService(
+        RecordingDocumentLookup(document),
+        RecordingChunkReader(chunks),
+        generator,
+        max_batch_chars=20,
+        progress=lambda phase, current, total: progress_events.append((phase, current, total)),
+    )
+
+    service.summarize(document_id)
+
+    assert progress_events == [
+        ("map", 1, 2),
+        ("map", 2, 2),
+        ("reduce", 1, 1),
+    ]

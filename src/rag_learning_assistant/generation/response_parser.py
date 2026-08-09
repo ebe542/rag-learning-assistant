@@ -13,7 +13,9 @@ def parse_generation_response(raw_response: str) -> GenerationResult:
     try:
         payload = json.loads(raw_response)
     except json.JSONDecodeError as exc:
-        raise ValueError("Model response must be valid JSON") from exc
+        raise ValueError(
+            f"Model response must be valid JSON: {exc.msg} at line {exc.lineno}, column {exc.colno}"
+        ) from exc
 
     if not isinstance(payload, dict):
         raise ValueError("Model response must be a JSON object")

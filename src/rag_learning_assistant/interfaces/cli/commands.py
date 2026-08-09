@@ -1,6 +1,7 @@
 """Command execution and dependency wiring for the CLI."""
 
 import json
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from uuid import UUID
@@ -92,8 +93,26 @@ def build_library_catalog(
     return LibraryCatalog(repository)
 
 
+def write_summarization_progress(
+    phase: str,
+    current: int,
+    total: int,
+) -> None:
+    """Write human-readable summarization progress without corrupting JSON."""
+
+    if phase == "map":
+        message = f"Summarizing batch {current}/{total}..."
+    else:
+        message = "Combining partial summaries..."
+
+    # Flush immediately because each following model call may take minutes.
+    print(message, file=sys.stderr, flush=True)
+
+
 def build_document_summarization_service(
     index_directory: Path,
+    max_new_tokens: int,
+    max_batch_chars: int,
 ) -> DocumentSummarizationService:
     """Build document-wide summarization for a persistent library."""
 
@@ -110,7 +129,11 @@ def build_document_summarization_service(
     return DocumentSummarizationService(
         documents=repository,
         chunks=store,
-        generator=HuggingFaceTextGenerator(),
+        generator=HuggingFaceTextGenerator(
+            max_new_tokens=max_new_tokens,
+        ),
+        max_batch_chars=max_batch_chars,
+        progress=write_summarization_progress,
     )
 
 
@@ -143,10 +166,16 @@ def run_index(
 def run_summarize(
     index_directory: Path,
     document_id: UUID,
+    max_new_tokens: int,
+    max_batch_chars: int,
 ) -> int:
     """Summarize one indexed document and write the result as JSON."""
 
-    service = build_document_summarization_service(index_directory)
+    service = build_document_summarization_service(
+        index_directory,
+        max_new_tokens,
+        max_batch_chars,
+    )
     summary = service.summarize(document_id)
 
     payload = {

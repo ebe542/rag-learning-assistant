@@ -60,6 +60,33 @@ class RecordingPipeline:
         ]
 
 
+class SequentialRecordingPipeline:
+    def __init__(self, response_texts: list[str]) -> None:
+        self.response_texts = response_texts
+        self.calls: list[tuple[list[dict[str, str]], dict[str, Any]]] = []
+        self.generation_config = RecordingGenerationConfig()
+
+    def __call__(
+        self,
+        messages: list[dict[str, str]],
+        **options: Any,
+    ) -> list[dict[str, object]]:
+        self.calls.append((messages, options))
+        response_text = self.response_texts[len(self.calls) - 1]
+
+        return [
+            {
+                "generated_text": [
+                    *messages,
+                    {
+                        "role": "assistant",
+                        "content": response_text,
+                    },
+                ]
+            }
+        ]
+
+
 def test_generate_uses_chat_messages_and_parses_response() -> None:
     pipeline = RecordingPipeline(
         """
@@ -236,3 +263,55 @@ def test_pipeline_loading_uses_pinned_model_revision(
         "dtype": "auto",
         "device_map": "auto",
     }
+
+
+def test_generate_retries_once_after_invalid_json() -> None:
+    invalid_response = '{"text": "A "quoted" term is explained.", "citation_numbers": [1]}'
+    pipeline = SequentialRecordingPipeline(
+        [
+            invalid_response,
+            ('{"text": "A quoted term is explained.", "citation_numbers": [1]}'),
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=512,
+    )
+
+    result = generator.generate("Question and contexts")
+
+    assert result.text == "A quoted term is explained."
+    assert result.citation_numbers == (1,)
+    assert len(pipeline.calls) == 2
+
+    retry_messages, _ = pipeline.calls[1]
+
+    assert retry_messages[-2] == {
+        "role": "assistant",
+        "content": invalid_response,
+    }
+    assert retry_messages[-1]["role"] == "user"
+    assert "valid JSON" in retry_messages[-1]["content"]
+    assert "Do not add or remove factual claims" in (retry_messages[-1]["content"])
+    assert "Do not add or remove citation numbers" in (retry_messages[-1]["content"])
+
+
+def test_generate_stops_after_one_failed_json_repair() -> None:
+    pipeline = SequentialRecordingPipeline(
+        [
+            "not JSON",
+            "still not JSON",
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=512,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Model response must be valid JSON",
+    ):
+        generator.generate("Question and contexts")
+
+    assert len(pipeline.calls) == 2

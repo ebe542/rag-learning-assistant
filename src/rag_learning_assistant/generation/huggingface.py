@@ -18,6 +18,17 @@ Return only valid JSON with exactly these fields:
 Use citation_numbers only for contexts that directly support the answer.
 Do not wrap the JSON in Markdown code fences.
 """.strip()
+
+JSON_REPAIR_PROMPT = """
+Your previous response did not match the required JSON format.
+Return the response again as valid JSON with exactly the fields "text" and
+"citation_numbers".
+Correct only the JSON representation.
+Do not add or remove factual claims.
+Do not add or remove citation numbers.
+Do not wrap the JSON in Markdown code fences.
+""".strip()
+
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
 
@@ -83,6 +94,34 @@ class HuggingFaceTextGenerator:
                 "content": prompt,
             },
         ]
+        raw_response = self._generate_raw_response(messages)
+
+        try:
+            return parse_generation_response(raw_response)
+        except ValueError:
+            # A small local model can produce grounded content but malformed JSON.
+            # Give it exactly one format-repair attempt without permitting factual
+            # or citation changes.
+            repair_messages = [
+                *messages,
+                {
+                    "role": "assistant",
+                    "content": raw_response,
+                },
+                {
+                    "role": "user",
+                    "content": JSON_REPAIR_PROMPT,
+                },
+            ]
+            repaired_response = self._generate_raw_response(repair_messages)
+            return parse_generation_response(repaired_response)
+
+    def _generate_raw_response(
+        self,
+        messages: list[dict[str, str]],
+    ) -> str:
+        """Generate and extract one raw assistant response."""
+
         outputs = self._get_pipeline()(
             messages,
             clean_up_tokenization_spaces=False,
@@ -95,9 +134,7 @@ class HuggingFaceTextGenerator:
 
         # Chat pipelines return the complete conversation. The final message is
         # the newly generated assistant response, not part of the input prompt.
-        raw_response = self._extract_response(outputs)
-
-        return parse_generation_response(raw_response)
+        return self._extract_response(outputs)
 
     def _get_pipeline(self) -> ChatPipeline:
         """Load and configure the local model once."""
