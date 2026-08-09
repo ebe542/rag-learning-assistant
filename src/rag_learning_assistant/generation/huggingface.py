@@ -22,8 +22,25 @@ DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
 
 
+class PipelineGenerationConfig(Protocol):
+    """Mutable generation settings exposed by a Transformers pipeline."""
+
+    max_length: int | None
+    max_new_tokens: int | None
+    do_sample: bool
+    temperature: float | None
+    top_p: float | None
+    top_k: int | None
+
+
 class ChatPipeline(Protocol):
     """Subset of the Transformers chat pipeline used by the adapter."""
+
+    @property
+    def generation_config(self) -> PipelineGenerationConfig:
+        """Expose mutable generation settings without replacing the config object."""
+
+        ...
 
     def __call__(
         self,
@@ -68,8 +85,6 @@ class HuggingFaceTextGenerator:
         ]
         outputs = self._get_pipeline()(
             messages,
-            max_new_tokens=self.max_new_tokens,
-            do_sample=False,
             clean_up_tokenization_spaces=False,
             # Qwen3 enables reasoning by default. Disabling it prevents
             # <think> blocks from corrupting the strict JSON response.
@@ -85,10 +100,22 @@ class HuggingFaceTextGenerator:
         return parse_generation_response(raw_response)
 
     def _get_pipeline(self) -> ChatPipeline:
-        """Load the local model once and reuse it for later requests."""
+        """Load and configure the local model once."""
 
         if self._pipeline is None:
             self._pipeline = self._load_pipeline()
+
+        # Transformers 5 expects generation settings in one place. Clearing
+        # max_length avoids competing limits when max_new_tokens is configured.
+        self._pipeline.generation_config.max_length = None
+        self._pipeline.generation_config.max_new_tokens = self.max_new_tokens
+        self._pipeline.generation_config.do_sample = False
+
+        # Sampling controls are meaningless during deterministic greedy
+        # decoding and cause Transformers to report an invalid configuration.
+        self._pipeline.generation_config.temperature = 1.0
+        self._pipeline.generation_config.top_p = 1.0
+        self._pipeline.generation_config.top_k = 50
 
         return self._pipeline
 

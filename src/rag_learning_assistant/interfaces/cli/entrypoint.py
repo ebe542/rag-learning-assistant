@@ -1,6 +1,9 @@
 """Command-line argument dispatch."""
 
 from collections.abc import Sequence
+from contextlib import suppress
+
+from dotenv import load_dotenv
 
 from rag_learning_assistant.application import (
     DocumentNotFoundError,
@@ -21,6 +24,11 @@ from rag_learning_assistant.interfaces.cli.parser import (
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse arguments and execute the selected command."""
+
+    # Environment loading is optional. A missing or unreadable .env must not
+    # prevent commands that do not need Hugging Face authentication.
+    with suppress(Exception):
+        load_dotenv()
 
     parser = build_parser()
     args = parser.parse_args(argv)

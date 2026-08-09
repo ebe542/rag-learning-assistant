@@ -64,6 +64,7 @@ The default embedding model is `intfloat/multilingual-e5-small`, pinned to a spe
 The first real embedding request downloads the model into the local Hugging Face cache.
 The first local generation provider uses `Qwen/Qwen3-1.7B`, also pinned to a specific revision.
 It requests strict JSON containing answer text and references to numbered retrieval contexts; application code resolves those numbers to trusted source metadata.
+A repository-root `.env` is loaded optionally by the CLI, allowing `HF_TOKEN` to be used without making authentication a requirement for public models.
 A Windows CUDA smoke test used approximately 4.2 GB of GPU memory on an RTX 3060 Ti.
 
 Extract pages and chunks from a PDF:
@@ -116,6 +117,16 @@ Search the existing library without reopening or re-embedding its PDFs:
 rag-learn search local-data/indexes/learning "What are Python functions?" --limit 3
 ```
 
+Ask a source-grounded question using the retrieved passages and local generator:
+
+```bash
+rag-learn ask local-data/indexes/learning "What are Python functions?" --limit 3
+```
+
+The command emits JSON containing the answer and trusted citations with context number, source, page, chunk index, and excerpt.
+Grounding instructions require every factual claim to be supported by retrieved context and forbid the model from using prior knowledge.
+The command is intended for focused questions; document-wide summaries require a separate summarization workflow because a small top-k result cannot represent an entire library reliably.
+
 Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
 SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.
 Adding identical file content again is rejected before PDF extraction or embedding generation.
@@ -136,10 +147,9 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
 
 Planned next milestones:
 
-1. answer questions with quoted source references
-2. generate summaries and reusable question banks
-3. track learner feedback and spaced repetition
-4. add optional Ollama and API model providers
+1. generate summaries and reusable question banks
+2. track learner feedback and spaced repetition
+3. add optional Ollama and API model providers
 
 ## Development
 

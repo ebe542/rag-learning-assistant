@@ -230,3 +230,42 @@ def test_prompt_marks_retrieved_text_as_untrusted_source_data() -> None:
     assert '<context number="1">' in prompt
     assert "</context>" in prompt
     assert chunk.text in prompt
+
+
+def test_prompt_forbids_prior_knowledge_and_unsupported_claims() -> None:
+    chunk = Chunk(
+        text="The book teaches Python through practice and repetition.",
+        source="python-book.pdf",
+        page_number=20,
+        index=50,
+    )
+    search = RecordingSearch(
+        [
+            SearchResult(
+                chunk=chunk,
+                score=0.8,
+            )
+        ]
+    )
+    generator = RecordingGenerator(
+        GenerationResult(
+            text="The book teaches Python through practice.",
+            citation_numbers=(1,),
+        )
+    )
+    service = QuestionAnsweringService(
+        search=search,
+        generator=generator,
+    )
+
+    service.answer(
+        "What does the book teach?",
+        limit=1,
+    )
+
+    prompt = generator.prompts[0]
+
+    assert "Do not use facts from prior knowledge." in prompt
+    assert "Every factual claim must be directly supported by at least one context." in prompt
+    assert "Omit any claim that is not explicitly supported." in prompt
+    assert "If the contexts are insufficient, state that limitation." in prompt

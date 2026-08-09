@@ -291,6 +291,24 @@ It returned the answer `four`, citation `(1,)`, and approximately 4173 MB peak a
 This check is intentionally not part of the default pytest suite.
 Normal tests must remain fast, offline-capable, and independent of a specific GPU, while this script validates the real ML runtime on demand.
 
+### Full local RAG smoke test
+
+The `ask` command is the manual end-to-end smoke test for the complete RAG path: query embedding, FAISS retrieval, prompt construction, local generation, strict response parsing, and trusted citation mapping.
+It requires an existing local library as well as the `embeddings`, `generation`, and `storage` dependency extras.
+
+Run it with a focused question against any locally indexed documents:
+
+```bash
+rag-learn ask local-data/indexes/learning "What are Python functions?" --limit 3
+```
+
+The stable contract is a successful JSON response containing `question`, `answer`, and `citations`; every cited item must include its context number, source, page number, chunk index, and excerpt.
+The output should contain no Hugging Face or Transformers configuration warnings, and its factual claims must be supported by the returned excerpts.
+Exact wording and local document content are deliberately not asserted or committed.
+
+This smoke test is intentionally excluded from CI because the index, source documents, model cache, and suitable accelerator are local resources.
+Broad requests such as summarizing an entire book are outside this retrieval path: top-k similarity search is designed for focused questions, while complete summaries require document-wide coverage.
+
 Tests mirror the production structure:
 
 ```text

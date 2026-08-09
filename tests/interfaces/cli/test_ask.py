@@ -190,3 +190,53 @@ def test_entrypoint_rejects_incomplete_ask_index_before_loading_services(
 
     assert exc_info.value.code == 2
     assert "index directory is incomplete" in capsys.readouterr().err
+
+
+def test_cli_loads_optional_environment_before_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    monkeypatch.setattr(
+        entrypoint,
+        "load_dotenv",
+        lambda: events.append("load environment"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        entrypoint,
+        "build_parser",
+        lambda: events.append("build parser"),
+    )
+
+    with pytest.raises(AttributeError):
+        entrypoint.main([])
+
+    assert events == [
+        "load environment",
+        "build parser",
+    ]
+
+
+def test_cli_continues_when_optional_environment_loading_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_to_load_environment() -> None:
+        raise OSError("Cannot read .env")
+
+    def stop_after_environment_loading() -> None:
+        raise RuntimeError("Parser was reached")
+
+    monkeypatch.setattr(
+        entrypoint,
+        "load_dotenv",
+        fail_to_load_environment,
+    )
+    monkeypatch.setattr(
+        entrypoint,
+        "build_parser",
+        stop_after_environment_loading,
+    )
+
+    with pytest.raises(RuntimeError, match="Parser was reached"):
+        entrypoint.main([])

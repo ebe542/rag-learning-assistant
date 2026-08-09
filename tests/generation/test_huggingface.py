@@ -9,12 +9,23 @@ from rag_learning_assistant.generation.huggingface import (
 )
 
 
+class RecordingGenerationConfig:
+    def __init__(self) -> None:
+        self.max_length: int | None = 20
+        self.max_new_tokens: int | None = None
+        self.do_sample = True
+        self.temperature: float | None = 0.7
+        self.top_p: float | None = 0.8
+        self.top_k: int | None = 20
+
+
 class StaticPipeline:
     def __init__(
         self,
         output: list[dict[str, object]],
     ) -> None:
         self.output = output
+        self.generation_config = RecordingGenerationConfig()
 
     def __call__(
         self,
@@ -28,6 +39,7 @@ class RecordingPipeline:
     def __init__(self, response_text: str) -> None:
         self.response_text = response_text
         self.calls: list[tuple[list[dict[str, str]], dict[str, Any]]] = []
+        self.generation_config = RecordingGenerationConfig()
 
     def __call__(
         self,
@@ -78,13 +90,17 @@ def test_generate_uses_chat_messages_and_parses_response() -> None:
         "content": "Question and retrieved contexts",
     }
     assert options == {
-        "max_new_tokens": 256,
-        "do_sample": False,
         "clean_up_tokenization_spaces": False,
         "tokenizer_encode_kwargs": {
             "enable_thinking": False,
         },
     }
+    assert pipeline.generation_config.max_length is None
+    assert pipeline.generation_config.max_new_tokens == 256
+    assert pipeline.generation_config.do_sample is False
+    assert pipeline.generation_config.temperature == 1.0
+    assert pipeline.generation_config.top_p == 1.0
+    assert pipeline.generation_config.top_k == 50
 
 
 @pytest.mark.parametrize("max_new_tokens", [0, -1])
