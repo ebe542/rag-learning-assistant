@@ -19,3 +19,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0011: Summarize complete documents with map-reduce](0011-document-wide-summarization.md)
 - [0012: Make summary generation limits configurable](0012-configure-summary-generation.md)
 - [0013: Version generation prompts explicitly](0013-version-prompts.md)
+- [0014: Identify document generation configurations](0014-identify-generation-runs.md)

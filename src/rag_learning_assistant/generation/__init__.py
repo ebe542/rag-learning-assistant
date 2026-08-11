@@ -4,6 +4,9 @@ from rag_learning_assistant.generation.generator import TextGenerator
 from rag_learning_assistant.generation.huggingface import (
     HuggingFaceTextGenerator,
 )
+from rag_learning_assistant.generation.identity import (
+    GenerationIdentity,
+)
 from rag_learning_assistant.generation.models import (
     Citation,
     GenerationResult,
@@ -16,6 +19,7 @@ from rag_learning_assistant.generation.prompts import (
 
 __all__ = [
     "Citation",
+    "GenerationIdentity",
     "GenerationResult",
     "GroundedAnswer",
     "HuggingFaceTextGenerator",
