@@ -302,7 +302,7 @@ Run it with a focused question against any locally indexed documents:
 rag-learn ask local-data/indexes/learning "What are Python functions?" --limit 3
 ```
 
-The stable contract is a successful JSON response containing `question`, `answer`, and `citations`; every cited item must include its context number, source, page number, chunk index, and excerpt.
+The stable contract is a successful JSON response containing `question`, `answer`, `citations`, and `prompts`; every cited item must include its context number, source, page number, chunk index, and excerpt, while every prompt reference contains its name, version, and SHA-256 fingerprint.
 The output should contain no Hugging Face or Transformers configuration warnings, and its factual claims must be supported by the returned excerpts.
 Exact wording and local document content are deliberately not asserted or committed.
 

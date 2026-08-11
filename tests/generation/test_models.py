@@ -4,6 +4,7 @@ from rag_learning_assistant.generation import (
     Citation,
     GenerationResult,
     GroundedAnswer,
+    PromptTemplate,
 )
 
 
@@ -165,3 +166,36 @@ def test_citation_requires_positive_number() -> None:
             chunk_index=15,
             excerpt="A class defines objects.",
         )
+
+
+def test_generation_result_records_used_prompts() -> None:
+    prompt = PromptTemplate(
+        name="generation.system-json",
+        version=1,
+        text="Return valid JSON.",
+    )
+
+    result = GenerationResult(
+        text="A grounded answer.",
+        citation_numbers=(1,),
+        prompt_references=(prompt.reference,),
+    )
+
+    assert result.prompt_references == (prompt.reference,)
+
+
+def test_grounded_answer_records_used_prompts() -> None:
+    prompt = PromptTemplate(
+        name="question-answering.grounded-answer",
+        version=1,
+        text="Answer only from contexts.",
+    )
+
+    answer = GroundedAnswer(
+        question="What is Python?",
+        text="Python is a programming language.",
+        citations=(),
+        prompt_references=(prompt.reference,),
+    )
+
+    assert answer.prompt_references == (prompt.reference,)

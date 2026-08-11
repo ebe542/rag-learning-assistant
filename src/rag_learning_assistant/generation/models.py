@@ -2,6 +2,10 @@
 
 from dataclasses import dataclass
 
+from rag_learning_assistant.generation.prompts import (
+    PromptReference,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Citation:
@@ -37,6 +41,7 @@ class GroundedAnswer:
     question: str
     text: str
     citations: tuple[Citation, ...]
+    prompt_references: tuple[PromptReference, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.question.strip():
@@ -52,6 +57,7 @@ class GenerationResult:
 
     text: str
     citation_numbers: tuple[int, ...]
+    prompt_references: tuple[PromptReference, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.text.strip():

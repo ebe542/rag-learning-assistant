@@ -3,7 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from rag_learning_assistant.generation import Citation, GroundedAnswer
+from rag_learning_assistant.generation import (
+    Citation,
+    GroundedAnswer,
+    PromptTemplate,
+)
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_RESULT_LIMIT,
@@ -27,6 +31,11 @@ def test_run_ask_outputs_grounded_answer_as_json(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     question = "Was ist eine Python-Klasse?"
+    prompt = PromptTemplate(
+        name="question-answering.grounded-answer",
+        version=1,
+        text="Answer only from contexts.",
+    )
     answerer = RecordingQuestionAnsweringService(
         GroundedAnswer(
             question=question,
@@ -40,6 +49,7 @@ def test_run_ask_outputs_grounded_answer_as_json(
                     excerpt="A class defines the structure and behavior of objects.",
                 ),
             ),
+            prompt_references=(prompt.reference,),
         )
     )
     monkeypatch.setattr(
@@ -67,6 +77,13 @@ def test_run_ask_outputs_grounded_answer_as_json(
                 "page_number": 42,
                 "chunk_index": 15,
                 "excerpt": "A class defines the structure and behavior of objects.",
+            }
+        ],
+        "prompts": [
+            {
+                "name": prompt.name,
+                "version": prompt.version,
+                "fingerprint": prompt.fingerprint,
             }
         ],
     }

@@ -1,6 +1,7 @@
 import pytest
 
-from rag_learning_assistant.application import (
+from rag_learning_assistant.application.question_answering import (
+    QUESTION_ANSWERING_PROMPT,
     QuestionAnsweringService,
 )
 from rag_learning_assistant.chunking import Chunk
@@ -8,6 +9,7 @@ from rag_learning_assistant.generation import (
     Citation,
     GenerationResult,
     GroundedAnswer,
+    PromptTemplate,
 )
 from rag_learning_assistant.retrieval import SearchResult
 
@@ -56,10 +58,16 @@ def test_answer_searches_builds_context_and_maps_used_citations() -> None:
             SearchResult(chunk=second_chunk, score=0.79),
         ]
     )
+    technical_prompt = PromptTemplate(
+        name="generation.system-json",
+        version=1,
+        text="Return valid JSON.",
+    )
     generator = RecordingGenerator(
         GenerationResult(
             text="A class defines object structure and behavior.",
             citation_numbers=(2,),
+            prompt_references=(technical_prompt.reference,),
         )
     )
     service = QuestionAnsweringService(
@@ -80,6 +88,10 @@ def test_answer_searches_builds_context_and_maps_used_citations() -> None:
                 chunk_index=15,
                 excerpt=("A class defines the structure and behavior of objects."),
             ),
+        ),
+        prompt_references=(
+            QUESTION_ANSWERING_PROMPT.reference,
+            technical_prompt.reference,
         ),
     )
     assert search.calls == [(question, 2)]
@@ -269,3 +281,12 @@ def test_prompt_forbids_prior_knowledge_and_unsupported_claims() -> None:
     assert "Every factual claim must be directly supported by at least one context." in prompt
     assert "Omit any claim that is not explicitly supported." in prompt
     assert "If the contexts are insufficient, state that limitation." in prompt
+
+
+def test_question_answering_prompt_has_explicit_version() -> None:
+    assert isinstance(
+        QUESTION_ANSWERING_PROMPT,
+        PromptTemplate,
+    )
+    assert QUESTION_ANSWERING_PROMPT.name == "question-answering.grounded-answer"
+    assert QUESTION_ANSWERING_PROMPT.version == 1

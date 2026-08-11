@@ -1,15 +1,20 @@
 """Hugging Face adapter for local chat-based text generation."""
 
+from dataclasses import replace
 from typing import Any, Protocol, cast
 
 from rag_learning_assistant.generation.models import (
     GenerationResult,
 )
+from rag_learning_assistant.generation.prompts import PromptTemplate
 from rag_learning_assistant.generation.response_parser import (
     parse_generation_response,
 )
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT = PromptTemplate(
+    name="generation.system-json",
+    version=1,
+    text="""
 Return only valid JSON with exactly these fields:
 {
   "text": "the grounded answer",
@@ -17,9 +22,13 @@ Return only valid JSON with exactly these fields:
 }
 Use citation_numbers only for contexts that directly support the answer.
 Do not wrap the JSON in Markdown code fences.
-""".strip()
+""".strip(),
+)
 
-JSON_REPAIR_PROMPT = """
+JSON_REPAIR_PROMPT = PromptTemplate(
+    name="generation.json-repair",
+    version=1,
+    text="""
 Your previous response did not match the required JSON format.
 Return the response again as valid JSON with exactly the fields "text" and
 "citation_numbers".
@@ -27,7 +36,8 @@ Correct only the JSON representation.
 Do not add or remove factual claims.
 Do not add or remove citation numbers.
 Do not wrap the JSON in Markdown code fences.
-""".strip()
+""".strip(),
+)
 
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
@@ -87,7 +97,7 @@ class HuggingFaceTextGenerator:
         messages = [
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT,
+                "content": SYSTEM_PROMPT.text,
             },
             {
                 "role": "user",
@@ -97,7 +107,11 @@ class HuggingFaceTextGenerator:
         raw_response = self._generate_raw_response(messages)
 
         try:
-            return parse_generation_response(raw_response)
+            result = parse_generation_response(raw_response)
+            return replace(
+                result,
+                prompt_references=(SYSTEM_PROMPT.reference,),
+            )
         except ValueError:
             # A small local model can produce grounded content but malformed JSON.
             # Give it exactly one format-repair attempt without permitting factual
@@ -110,11 +124,19 @@ class HuggingFaceTextGenerator:
                 },
                 {
                     "role": "user",
-                    "content": JSON_REPAIR_PROMPT,
+                    "content": JSON_REPAIR_PROMPT.text,
                 },
             ]
             repaired_response = self._generate_raw_response(repair_messages)
-            return parse_generation_response(repaired_response)
+        result = parse_generation_response(repaired_response)
+
+        return replace(
+            result,
+            prompt_references=(
+                SYSTEM_PROMPT.reference,
+                JSON_REPAIR_PROMPT.reference,
+            ),
+        )
 
     def _generate_raw_response(
         self,

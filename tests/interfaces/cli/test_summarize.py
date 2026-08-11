@@ -8,7 +8,7 @@ from rag_learning_assistant.application import (
     DocumentNotFoundError,
     DocumentSummary,
 )
-from rag_learning_assistant.generation import Citation
+from rag_learning_assistant.generation import Citation, PromptTemplate
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_SUMMARY_MAX_BATCH_CHARS,
@@ -100,6 +100,11 @@ def test_run_summarize_outputs_grounded_summary_as_json(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    prompt = PromptTemplate(
+        name="summarization.map",
+        version=1,
+        text="Summarize supplied contexts.",
+    )
     service = RecordingSummarizationService(
         DocumentSummary(
             document_id=document_id,
@@ -114,6 +119,7 @@ def test_run_summarize_outputs_grounded_summary_as_json(
                     excerpt="Python programs consist of instructions.",
                 ),
             ),
+            prompt_references=(prompt.reference,),
         )
     )
 
@@ -160,6 +166,13 @@ def test_run_summarize_outputs_grounded_summary_as_json(
                 "page_number": 4,
                 "chunk_index": 7,
                 "excerpt": "Python programs consist of instructions.",
+            }
+        ],
+        "prompts": [
+            {
+                "name": prompt.name,
+                "version": prompt.version,
+                "fingerprint": prompt.fingerprint,
             }
         ],
     }

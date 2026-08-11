@@ -123,7 +123,7 @@ Ask a source-grounded question using the retrieved passages and local generator:
 rag-learn ask local-data/indexes/learning "What are Python functions?" --limit 3
 ```
 
-The command emits JSON containing the answer and trusted citations with context number, source, page, chunk index, and excerpt.
+The command emits JSON containing the answer, trusted citations with context number, source, page, chunk index, and excerpt, and compact references to the exact prompt versions used.
 Grounding instructions require every factual claim to be supported by retrieved context and forbid the model from using prior knowledge.
 The command is intended for focused questions; document-wide summaries require a separate summarization workflow because a small top-k result cannot represent an entire library reliably.
 

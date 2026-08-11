@@ -4,11 +4,13 @@ import pytest
 
 from rag_learning_assistant.application.library import DocumentNotFoundError
 from rag_learning_assistant.application.summarization import (
+    SUMMARY_MAP_PROMPT,
+    SUMMARY_REDUCE_PROMPT,
     DocumentSummarizationService,
     DocumentSummary,
 )
 from rag_learning_assistant.chunking import Chunk
-from rag_learning_assistant.generation import Citation, GenerationResult
+from rag_learning_assistant.generation import Citation, GenerationResult, PromptTemplate
 from rag_learning_assistant.library import IndexedDocument
 
 
@@ -192,6 +194,7 @@ def test_summarize_reads_complete_document_and_maps_citations() -> None:
                 excerpt="Practice and repetition build programming skills.",
             ),
         ),
+        prompt_references=(SUMMARY_MAP_PROMPT.reference,),
     )
     assert documents.requested_ids == [document_id]
     assert chunk_reader.requested_ids == [document_id]
@@ -275,19 +278,35 @@ def test_summarize_batches_long_documents_with_global_context_numbers() -> None:
             document_id=document_id,
         ),
     ]
+    technical_prompt = PromptTemplate(
+        name="generation.system-json",
+        version=1,
+        text="Return valid JSON.",
+    )
+    repair_prompt = PromptTemplate(
+        name="generation.json-repair",
+        version=1,
+        text="Repair invalid JSON.",
+    )
     generator = SequentialSummaryGenerator(
         [
             GenerationResult(
                 text="First section summary.",
                 citation_numbers=(1,),
+                prompt_references=(technical_prompt.reference,),
             ),
             GenerationResult(
                 text="Second section summary.",
                 citation_numbers=(2, 3),
+                prompt_references=(
+                    technical_prompt.reference,
+                    repair_prompt.reference,
+                ),
             ),
             GenerationResult(
                 text="Complete document summary.",
                 citation_numbers=(1, 3),
+                prompt_references=(technical_prompt.reference,),
             ),
         ]
     )
@@ -301,6 +320,12 @@ def test_summarize_batches_long_documents_with_global_context_numbers() -> None:
     summary = service.summarize(document_id)
 
     assert summary.text == "Complete document summary."
+    assert summary.prompt_references == (
+        SUMMARY_MAP_PROMPT.reference,
+        technical_prompt.reference,
+        repair_prompt.reference,
+        SUMMARY_REDUCE_PROMPT.reference,
+    )
     assert [citation.number for citation in summary.citations] == [1, 3]
     assert len(generator.prompts) == 3
 
@@ -516,3 +541,38 @@ def test_summarize_reports_map_and_reduce_progress() -> None:
         ("map", 2, 2),
         ("reduce", 1, 1),
     ]
+
+
+def test_summarization_prompts_have_explicit_versions() -> None:
+    assert isinstance(SUMMARY_MAP_PROMPT, PromptTemplate)
+    assert SUMMARY_MAP_PROMPT.name == "summarization.map"
+    assert SUMMARY_MAP_PROMPT.version == 1
+
+    assert isinstance(SUMMARY_REDUCE_PROMPT, PromptTemplate)
+    assert SUMMARY_REDUCE_PROMPT.name == "summarization.reduce"
+    assert SUMMARY_REDUCE_PROMPT.version == 1
+
+
+def test_document_summary_records_used_prompts() -> None:
+    prompt = PromptTemplate(
+        name="summarization.map",
+        version=1,
+        text="Summarize supplied contexts.",
+    )
+    citation = Citation(
+        number=1,
+        source="course.pdf",
+        page_number=1,
+        chunk_index=0,
+        excerpt="Course content.",
+    )
+
+    summary = DocumentSummary(
+        document_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        source="course.pdf",
+        text="A grounded summary.",
+        citations=(citation,),
+        prompt_references=(prompt.reference,),
+    )
+
+    assert summary.prompt_references == (prompt.reference,)

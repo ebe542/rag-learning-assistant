@@ -17,7 +17,10 @@ from rag_learning_assistant.application import (
     QuestionAnsweringService,
 )
 from rag_learning_assistant.chunking import TextChunker
-from rag_learning_assistant.generation import HuggingFaceTextGenerator
+from rag_learning_assistant.generation import (
+    HuggingFaceTextGenerator,
+    PromptReference,
+)
 from rag_learning_assistant.ingestion import Document, PdfExtractor
 from rag_learning_assistant.library import SqliteDocumentRepository
 from rag_learning_assistant.retrieval import (
@@ -194,6 +197,7 @@ def run_summarize(
             }
             for citation in summary.citations
         ],
+        "prompts": _serialize_prompt_references(summary.prompt_references),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
@@ -306,9 +310,25 @@ def run_ask(
             }
             for citation in answer.citations
         ],
+        "prompts": _serialize_prompt_references(answer.prompt_references),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
+
+
+def _serialize_prompt_references(
+    references: Sequence[PromptReference],
+) -> list[dict[str, object]]:
+    """Convert prompt identities without exposing their full text."""
+
+    return [
+        {
+            "name": reference.name,
+            "version": reference.version,
+            "fingerprint": reference.fingerprint,
+        }
+        for reference in references
+    ]
 
 
 def run_replace(

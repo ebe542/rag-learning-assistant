@@ -4,7 +4,10 @@ from typing import Any
 
 import pytest
 
+from rag_learning_assistant.generation import PromptTemplate
 from rag_learning_assistant.generation.huggingface import (
+    JSON_REPAIR_PROMPT,
+    SYSTEM_PROMPT,
     HuggingFaceTextGenerator,
 )
 
@@ -128,6 +131,7 @@ def test_generate_uses_chat_messages_and_parses_response() -> None:
     assert pipeline.generation_config.temperature == 1.0
     assert pipeline.generation_config.top_p == 1.0
     assert pipeline.generation_config.top_k == 50
+    assert result.prompt_references == (SYSTEM_PROMPT.reference,)
 
 
 @pytest.mark.parametrize("max_new_tokens", [0, -1])
@@ -315,3 +319,13 @@ def test_generate_stops_after_one_failed_json_repair() -> None:
         generator.generate("Question and contexts")
 
     assert len(pipeline.calls) == 2
+
+
+def test_huggingface_prompts_have_explicit_versions() -> None:
+    assert isinstance(SYSTEM_PROMPT, PromptTemplate)
+    assert SYSTEM_PROMPT.name == "generation.system-json"
+    assert SYSTEM_PROMPT.version == 1
+
+    assert isinstance(JSON_REPAIR_PROMPT, PromptTemplate)
+    assert JSON_REPAIR_PROMPT.name == "generation.json-repair"
+    assert JSON_REPAIR_PROMPT.version == 1
