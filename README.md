@@ -127,6 +127,36 @@ The command emits JSON containing the answer, trusted citations with context num
 Grounding instructions require every factual claim to be supported by retrieved context and forbid the model from using prior knowledge.
 The command is intended for focused questions; document-wide summaries require a separate summarization workflow because a small top-k result cannot represent an entire library reliably.
 
+Summarize a complete indexed document using the UUID shown by `list`:
+
+```bash
+rag-learn summarize \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678
+```
+
+Completed map batches are cached in the library's `metadata.sqlite3` and reused
+after an interrupted run when the document and generation configuration remain
+unchanged.
+
+Measure real local-model generation and cache behavior manually:
+
+```bash
+python scripts/benchmark_summarization.py \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  --max-new-tokens 128 \
+  --max-batch-chars 12000 \
+  --ignore-cache
+```
+
+The benchmark reports each map and reduce call with input and output character
+counts and elapsed time, plus cache counters, total runtime, and peak GPU memory.
+The first generation measurement includes lazy model loading. Omit
+`--ignore-cache` to measure normal resume behavior; using it bypasses cache reads
+and writes without deleting existing entries. This GPU benchmark is intentionally
+excluded from the automated test suite and CI.
+
 Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
 SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.
 Adding identical file content again is rejected before PDF extraction or embedding generation.

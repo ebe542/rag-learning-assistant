@@ -16,13 +16,23 @@ from rag_learning_assistant.application import (
     LibraryService,
     QuestionAnsweringService,
 )
+from rag_learning_assistant.application.summarization import (
+    SUMMARY_MAP_PROMPT,
+    SUMMARY_REDUCE_PROMPT,
+)
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.generation import (
+    GenerationIdentity,
     HuggingFaceTextGenerator,
     PromptReference,
 )
+from rag_learning_assistant.generation.huggingface import (
+    JSON_REPAIR_PROMPT,
+    SYSTEM_PROMPT,
+)
+from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
-from rag_learning_assistant.library import SqliteDocumentRepository
+from rag_learning_assistant.library import IndexedDocument, SqliteDocumentRepository
 from rag_learning_assistant.retrieval import (
     FaissVectorStore,
     RetrievalService,
@@ -127,16 +137,37 @@ def build_document_summarization_service(
         model_name=embedder.model_name,
         model_revision=embedder.model_revision,
     )
-    repository = SqliteDocumentRepository(index_directory / "metadata.sqlite3")
+    database_path = index_directory / "metadata.sqlite3"
+    repository = SqliteDocumentRepository(database_path)
+    generator = HuggingFaceTextGenerator(
+        max_new_tokens=max_new_tokens,
+    )
+
+    def build_identity(document: IndexedDocument) -> GenerationIdentity:
+        # Every input that can change a partial summary belongs in the cache key.
+        # Including the repair prompt also makes repaired responses reproducible.
+        return GenerationIdentity(
+            model_name=generator.model_name,
+            model_revision=generator.model_revision,
+            prompt_references=(
+                SUMMARY_MAP_PROMPT.reference,
+                SUMMARY_REDUCE_PROMPT.reference,
+                SYSTEM_PROMPT.reference,
+                JSON_REPAIR_PROMPT.reference,
+            ),
+            max_new_tokens=generator.max_new_tokens,
+            max_batch_chars=max_batch_chars,
+            document_content_sha256=document.content_sha256,
+        )
 
     return DocumentSummarizationService(
         documents=repository,
         chunks=store,
-        generator=HuggingFaceTextGenerator(
-            max_new_tokens=max_new_tokens,
-        ),
+        generator=generator,
         max_batch_chars=max_batch_chars,
         progress=write_summarization_progress,
+        cache=SqliteSummaryCache(database_path),
+        identity_factory=build_identity,
     )
 
 

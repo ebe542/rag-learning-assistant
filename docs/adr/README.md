@@ -20,3 +20,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0012: Make summary generation limits configurable](0012-configure-summary-generation.md)
 - [0013: Version generation prompts explicitly](0013-version-prompts.md)
 - [0014: Identify document generation configurations](0014-identify-generation-runs.md)
+- [0015: Resume interrupted document summaries](0015-resume-document-summaries.md)

@@ -337,8 +337,10 @@ def test_summarize_batches_long_documents_with_global_context_numbers() -> None:
     reduction_prompt = generator.prompts[2]
     assert "First section summary." in reduction_prompt
     assert "Second section summary." in reduction_prompt
-    assert "original context numbers: 1" in reduction_prompt
-    assert "original context numbers: 2, 3" in reduction_prompt
+    assert "Allowed citation_numbers for the final JSON: 1, 2, 3" in reduction_prompt
+    assert "allowed citation_numbers: 1" in reduction_prompt
+    assert "allowed citation_numbers: 2, 3" in reduction_prompt
+    assert '<section number="1">' not in reduction_prompt
 
 
 def test_reduction_rejects_citation_not_supported_by_partial_summaries() -> None:
@@ -550,7 +552,7 @@ def test_summarization_prompts_have_explicit_versions() -> None:
 
     assert isinstance(SUMMARY_REDUCE_PROMPT, PromptTemplate)
     assert SUMMARY_REDUCE_PROMPT.name == "summarization.reduce"
-    assert SUMMARY_REDUCE_PROMPT.version == 1
+    assert SUMMARY_REDUCE_PROMPT.version == 2
 
 
 def test_document_summary_records_used_prompts() -> None:

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -8,13 +9,19 @@ from rag_learning_assistant.application import (
     DocumentNotFoundError,
     DocumentSummary,
 )
-from rag_learning_assistant.generation import Citation, PromptTemplate
+from rag_learning_assistant.generation import (
+    Citation,
+    GenerationResult,
+    PromptTemplate,
+    SqliteSummaryCache,
+)
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_SUMMARY_MAX_BATCH_CHARS,
     DEFAULT_SUMMARY_MAX_NEW_TOKENS,
     build_parser,
 )
+from rag_learning_assistant.library import IndexedDocument
 
 
 class RecordingSummarizationService:
@@ -25,6 +32,68 @@ class RecordingSummarizationService:
     def summarize(self, document_id: UUID) -> DocumentSummary:
         self.requested_ids.append(document_id)
         return self.summary
+
+
+class StubGenerator:
+    """Expose stable model metadata without loading a real local model."""
+
+    model_name = "example/summary-model"
+    model_revision = "revision-1"
+
+    def __init__(self, max_new_tokens: int) -> None:
+        self.max_new_tokens = max_new_tokens
+
+    def generate(self, prompt: str) -> GenerationResult:
+        raise AssertionError(f"Generation is not expected while wiring the service: {prompt}")
+
+
+def test_summary_builder_configures_persistent_cache_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        commands,
+        "SentenceTransformerEmbedder",
+        lambda: SimpleNamespace(model_name="example/embedder", model_revision="revision-2"),
+    )
+    monkeypatch.setattr(commands, "FaissVectorStore", lambda *args, **kwargs: object())
+    monkeypatch.setattr(
+        commands,
+        "SqliteDocumentRepository",
+        lambda database_path: object(),
+    )
+    monkeypatch.setattr(commands, "HuggingFaceTextGenerator", StubGenerator)
+
+    service = commands.build_document_summarization_service(
+        index_directory=tmp_path,
+        max_new_tokens=320,
+        max_batch_chars=36_000,
+    )
+
+    assert isinstance(service.cache, SqliteSummaryCache)
+    assert service.cache.database_path == tmp_path / "metadata.sqlite3"
+    assert service.identity_factory is not None
+
+    document = IndexedDocument(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=10,
+        chunk_count=20,
+    )
+    identity = service.identity_factory(document)
+
+    assert identity.model_name == StubGenerator.model_name
+    assert identity.model_revision == StubGenerator.model_revision
+    assert identity.max_new_tokens == 320
+    assert identity.max_batch_chars == 36_000
+    assert identity.document_content_sha256 == document.content_sha256
+    assert {reference.name for reference in identity.prompt_references} == {
+        "generation.json-repair",
+        "generation.system-json",
+        "summarization.map",
+        "summarization.reduce",
+    }
 
 
 def test_parser_accepts_summarize_command() -> None:
