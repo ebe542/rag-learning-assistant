@@ -195,6 +195,22 @@ python scripts/check_milestone.py
 The milestone check verifies formatting, lint rules, the complete test suite,
 at least 90% coverage, unclosed resources, and invalid Git whitespace.
 
+Before pushing a milestone, reproduce one GitHub CI job in a clean environment:
+
+```bash
+python scripts/check_ci_environment.py
+```
+
+This slower check creates a disposable virtual environment, installs exactly
+the `dev,storage` extras used by CI, verifies that tooling remains importable
+without the optional Torch generation stack, and runs the shared milestone
+check. It uses the active Python version by default. To check another installed
+matrix version, select its interpreter explicitly, for example:
+
+```bash
+python scripts/check_ci_environment.py --python python3.12
+```
+
 Contributions are welcome.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md).
 For architecture and extension guidance, see the [development guide](docs/development.md) and [architecture decisions](docs/adr/README.md).
