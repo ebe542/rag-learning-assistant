@@ -363,6 +363,8 @@ Changing the embedding model or revision requires rebuilding existing vectors.
 Long-lived decisions are recorded in [Architecture Decision Records](adr/README.md).
 ADRs explain context and consequences; code comments should explain only non-obvious local decisions.
 Tests remain the executable specification of behavior.
+Hardware-dependent measurements and the current local baseline are recorded in
+the [summarization benchmark](summarization-benchmark.md), separately from ADRs.
 
 ## Near-term roadmap
 

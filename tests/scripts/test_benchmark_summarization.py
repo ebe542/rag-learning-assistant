@@ -1,3 +1,5 @@
+import pytest
+
 from rag_learning_assistant.application.summarization import SUMMARY_REDUCE_PROMPT
 from rag_learning_assistant.generation import GenerationResult
 from scripts import benchmark_summarization
@@ -20,6 +22,11 @@ class EmptyCache:
         return None
 
 
+class FailingGenerator:
+    def generate(self, prompt: str) -> GenerationResult:
+        raise ValueError("Invalid model response")
+
+
 def test_timed_generator_records_map_and_reduce_calls(monkeypatch) -> None:
     times = iter((10.0, 12.5, 20.0, 21.0))
     monkeypatch.setattr(benchmark_summarization.torch.cuda, "synchronize", lambda: None)
@@ -36,6 +43,31 @@ def test_timed_generator_records_map_and_reduce_calls(monkeypatch) -> None:
     assert [measurement.elapsed_seconds for measurement in generator.measurements] == [
         2.5,
         1.0,
+    ]
+    assert [measurement.status for measurement in generator.measurements] == [
+        "passed",
+        "passed",
+    ]
+
+
+def test_timed_generator_records_failed_calls(monkeypatch) -> None:
+    times = iter((10.0, 14.0))
+    monkeypatch.setattr(benchmark_summarization.torch.cuda, "synchronize", lambda: None)
+    monkeypatch.setattr(benchmark_summarization.time, "perf_counter", lambda: next(times))
+    generator = benchmark_summarization.TimedGenerator(FailingGenerator())
+
+    with pytest.raises(ValueError, match="Invalid model response"):
+        generator.generate("Map prompt")
+
+    assert generator.measurements == [
+        benchmark_summarization.GenerationMeasurement(
+            phase="map",
+            status="failed",
+            input_characters=10,
+            elapsed_seconds=4.0,
+            output_characters=0,
+            error="Invalid model response",
+        )
     ]
 
 

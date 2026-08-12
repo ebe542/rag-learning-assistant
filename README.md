@@ -143,10 +143,10 @@ Measure real local-model generation and cache behavior manually:
 
 ```bash
 python scripts/benchmark_summarization.py \
-  local-data/indexes/learning \
-  12345678-1234-5678-1234-567812345678 \
-  --max-new-tokens 128 \
-  --max-batch-chars 12000 \
+  local-data/indexes/summarization-benchmark \
+  DOCUMENT_UUID \
+  --max-new-tokens 192 \
+  --max-batch-chars 8000 \
   --ignore-cache
 ```
 
@@ -156,6 +156,8 @@ The first generation measurement includes lazy model loading. Omit
 `--ignore-cache` to measure normal resume behavior; using it bypasses cache reads
 and writes without deleting existing entries. This GPU benchmark is intentionally
 excluded from the automated test suite and CI.
+The reproducible fixture, recorded RTX 3060 Ti measurements, and their limitations are documented in the
+[summarization benchmark](docs/summarization-benchmark.md).
 
 Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
 SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.

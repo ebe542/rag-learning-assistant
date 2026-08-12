@@ -31,9 +31,11 @@ class GenerationMeasurement:
     """Measurements for one real local-model invocation."""
 
     phase: str
+    status: str
     input_characters: int
     elapsed_seconds: float
     output_characters: int
+    error: str | None = None
 
 
 class TimedGenerator:
@@ -47,13 +49,32 @@ class TimedGenerator:
         # Synchronizing prevents asynchronous CUDA work from escaping the timer.
         torch.cuda.synchronize()
         started_at = time.perf_counter()
-        result = self.generator.generate(prompt)
-        torch.cuda.synchronize()
-
         phase = "reduce" if prompt.startswith(SUMMARY_REDUCE_PROMPT.text) else "map"
+
+        try:
+            result = self.generator.generate(prompt)
+        except Exception as exc:
+            # The wrapped adapter may perform its JSON repair internally. Record
+            # the complete logical call even when both responses remain invalid.
+            with suppress(Exception):
+                torch.cuda.synchronize()
+            self.measurements.append(
+                GenerationMeasurement(
+                    phase=phase,
+                    status="failed",
+                    input_characters=len(prompt),
+                    elapsed_seconds=time.perf_counter() - started_at,
+                    output_characters=0,
+                    error=str(exc),
+                )
+            )
+            raise
+
+        torch.cuda.synchronize()
         self.measurements.append(
             GenerationMeasurement(
                 phase=phase,
+                status="passed",
                 input_characters=len(prompt),
                 elapsed_seconds=time.perf_counter() - started_at,
                 output_characters=len(result.text),
