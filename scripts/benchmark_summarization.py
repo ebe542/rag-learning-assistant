@@ -6,10 +6,11 @@ import sys
 import time
 from contextlib import suppress
 from dataclasses import asdict, dataclass
+from importlib import import_module
 from pathlib import Path
+from typing import Protocol, cast
 from uuid import UUID
 
-import torch
 from dotenv import load_dotenv
 
 from rag_learning_assistant.application.summarization import SUMMARY_REDUCE_PROMPT
@@ -39,11 +40,39 @@ class GenerationMeasurement:
     error: str | None = None
 
 
+class CudaRuntime(Protocol):
+    """CUDA operations needed by the benchmark measurement boundary."""
+
+    def synchronize(self) -> None: ...
+
+    def is_available(self) -> bool: ...
+
+    def reset_peak_memory_stats(self) -> None: ...
+
+    def get_device_name(self) -> str: ...
+
+    def max_memory_allocated(self) -> int: ...
+
+
+def load_cuda_runtime() -> CudaRuntime:
+    """Load optional Torch only when the manual GPU benchmark is executed."""
+
+    try:
+        torch = import_module("torch")
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Benchmark requires the optional generation dependencies; "
+            "install the project with the generation extra."
+        ) from exc
+    return cast(CudaRuntime, torch.cuda)
+
+
 class TimedGenerator:
     """Measure generation without changing the wrapped adapter's behavior."""
 
-    def __init__(self, generator: TextGenerator) -> None:
+    def __init__(self, generator: TextGenerator, cuda: CudaRuntime) -> None:
         self.generator = generator
+        self.cuda = cuda
         self.measurements: list[GenerationMeasurement] = []
 
     def generate(
@@ -53,7 +82,7 @@ class TimedGenerator:
         max_new_tokens: int | None = None,
     ) -> GenerationResult:
         # Synchronizing prevents asynchronous CUDA work from escaping the timer.
-        torch.cuda.synchronize()
+        self.cuda.synchronize()
         started_at = time.perf_counter()
         phase = "reduce" if prompt.startswith(SUMMARY_REDUCE_PROMPT.text) else "map"
 
@@ -66,7 +95,7 @@ class TimedGenerator:
             # The wrapped adapter may perform its JSON repair internally. Record
             # the complete logical call even when both responses remain invalid.
             with suppress(Exception):
-                torch.cuda.synchronize()
+                self.cuda.synchronize()
             self.measurements.append(
                 GenerationMeasurement(
                     phase=phase,
@@ -79,7 +108,7 @@ class TimedGenerator:
             )
             raise
 
-        torch.cuda.synchronize()
+        self.cuda.synchronize()
         self.measurements.append(
             GenerationMeasurement(
                 phase=phase,
@@ -163,7 +192,13 @@ def main() -> int:
         print(f"Benchmark failed: {exc}", file=sys.stderr)
         return 1
 
-    if not torch.cuda.is_available():
+    try:
+        cuda = load_cuda_runtime()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if not cuda.is_available():
         print("Benchmark requires a CUDA-capable GPU.", file=sys.stderr)
         return 1
 
@@ -173,7 +208,7 @@ def main() -> int:
         max_reduce_new_tokens=args.max_reduce_new_tokens,
         max_batch_chars=args.max_batch_chars,
     )
-    timed_generator = TimedGenerator(service.generator)
+    timed_generator = TimedGenerator(service.generator, cuda)
     service.generator = timed_generator
 
     measured_cache: MeasuredSummaryCache | None = None
@@ -186,12 +221,12 @@ def main() -> int:
         measured_cache = MeasuredSummaryCache(service.cache)
         service.cache = measured_cache
 
-    torch.cuda.reset_peak_memory_stats()
+    cuda.reset_peak_memory_stats()
     started_at = time.perf_counter()
 
     try:
         summary = service.summarize(args.document_id)
-        torch.cuda.synchronize()
+        cuda.synchronize()
     except KeyboardInterrupt:
         print("Summarization benchmark cancelled by user.", file=sys.stderr)
         return 130
@@ -199,7 +234,7 @@ def main() -> int:
         # Preserve completed measurements when grounding validation fails. This
         # makes a multi-minute failed run useful for performance comparison.
         with suppress(Exception):
-            torch.cuda.synchronize()
+            cuda.synchronize()
         measurements = timed_generator.measurements
         elapsed_seconds = time.perf_counter() - started_at
         print(
@@ -225,8 +260,8 @@ def main() -> int:
                         "elapsed_seconds": elapsed_seconds,
                     },
                     "gpu": {
-                        "name": torch.cuda.get_device_name(),
-                        "peak_memory_mb": torch.cuda.max_memory_allocated() / 1024**2,
+                        "name": cuda.get_device_name(),
+                        "peak_memory_mb": cuda.max_memory_allocated() / 1024**2,
                     },
                 },
                 ensure_ascii=False,
@@ -264,8 +299,8 @@ def main() -> int:
             "citation_count": len(summary.citations),
         },
         "gpu": {
-            "name": torch.cuda.get_device_name(),
-            "peak_memory_mb": torch.cuda.max_memory_allocated() / 1024**2,
+            "name": cuda.get_device_name(),
+            "peak_memory_mb": cuda.max_memory_allocated() / 1024**2,
         },
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))

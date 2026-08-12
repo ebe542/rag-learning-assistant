@@ -37,11 +37,29 @@ class FailingGenerator:
         raise ValueError("Invalid model response")
 
 
+class RecordingCuda:
+    """Keep timing tests independent from the optional Torch installation."""
+
+    def synchronize(self) -> None:
+        return None
+
+    def is_available(self) -> bool:
+        return True
+
+    def reset_peak_memory_stats(self) -> None:
+        return None
+
+    def get_device_name(self) -> str:
+        return "Test GPU"
+
+    def max_memory_allocated(self) -> int:
+        return 0
+
+
 def test_timed_generator_records_map_and_reduce_calls(monkeypatch) -> None:
     times = iter((10.0, 12.5, 20.0, 21.0))
-    monkeypatch.setattr(benchmark_summarization.torch.cuda, "synchronize", lambda: None)
     monkeypatch.setattr(benchmark_summarization.time, "perf_counter", lambda: next(times))
-    generator = benchmark_summarization.TimedGenerator(StaticGenerator())
+    generator = benchmark_summarization.TimedGenerator(StaticGenerator(), RecordingCuda())
 
     generator.generate("Map prompt")
     generator.generate(f"{SUMMARY_REDUCE_PROMPT.text}\n\nSections")
@@ -62,9 +80,8 @@ def test_timed_generator_records_map_and_reduce_calls(monkeypatch) -> None:
 
 def test_timed_generator_records_failed_calls(monkeypatch) -> None:
     times = iter((10.0, 14.0))
-    monkeypatch.setattr(benchmark_summarization.torch.cuda, "synchronize", lambda: None)
     monkeypatch.setattr(benchmark_summarization.time, "perf_counter", lambda: next(times))
-    generator = benchmark_summarization.TimedGenerator(FailingGenerator())
+    generator = benchmark_summarization.TimedGenerator(FailingGenerator(), RecordingCuda())
 
     with pytest.raises(ValueError, match="Invalid model response"):
         generator.generate("Map prompt")
