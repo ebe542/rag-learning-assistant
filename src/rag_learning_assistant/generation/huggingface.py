@@ -13,23 +13,26 @@ from rag_learning_assistant.generation.response_parser import (
 
 SYSTEM_PROMPT = PromptTemplate(
     name="generation.system-json",
-    version=1,
+    version=2,
     text="""
-Return only valid JSON with exactly these fields:
-{
-  "text": "the grounded answer",
-  "citation_numbers": [1, 2]
-}
-Use citation_numbers only for contexts that directly support the answer.
-Do not wrap the JSON in Markdown code fences.
+Return only one valid JSON object with exactly these fields:
+- "text": a string containing the actual answer requested by the user
+- "citation_numbers": an array of integers identifying only contexts that
+  directly support the answer
+
+Never return placeholder text.
+Never copy field descriptions into the response.
+Do not wrap the JSON object in Markdown code fences.
 """.strip(),
 )
 
 JSON_REPAIR_PROMPT = PromptTemplate(
     name="generation.json-repair",
-    version=1,
+    version=2,
     text="""
 Your previous response did not match the required JSON format.
+Preserve the actual answer content from the previous response.
+Never replace it with placeholder text or a schema example.
 Return the response again as valid JSON with exactly the fields "text" and
 "citation_numbers".
 Correct only the JSON representation.
@@ -91,8 +94,18 @@ class HuggingFaceTextGenerator:
         self._pipeline = pipeline
         self.max_new_tokens = max_new_tokens
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         """Generate and parse one grounded answer."""
+
+        effective_max_new_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
+
+        if effective_max_new_tokens < 1:
+            raise ValueError("max_new_tokens must be positive")
 
         messages = [
             {
@@ -104,7 +117,10 @@ class HuggingFaceTextGenerator:
                 "content": prompt,
             },
         ]
-        raw_response = self._generate_raw_response(messages)
+        raw_response = self._generate_raw_response(
+            messages,
+            max_new_tokens=effective_max_new_tokens,
+        )
 
         try:
             result = parse_generation_response(raw_response)
@@ -127,7 +143,10 @@ class HuggingFaceTextGenerator:
                     "content": JSON_REPAIR_PROMPT.text,
                 },
             ]
-            repaired_response = self._generate_raw_response(repair_messages)
+            repaired_response = self._generate_raw_response(
+                repair_messages,
+                max_new_tokens=effective_max_new_tokens,
+            )
         result = parse_generation_response(repaired_response)
 
         return replace(
@@ -141,10 +160,12 @@ class HuggingFaceTextGenerator:
     def _generate_raw_response(
         self,
         messages: list[dict[str, str]],
+        *,
+        max_new_tokens: int,
     ) -> str:
         """Generate and extract one raw assistant response."""
 
-        outputs = self._get_pipeline()(
+        outputs = self._get_pipeline(max_new_tokens=max_new_tokens)(
             messages,
             clean_up_tokenization_spaces=False,
             # Qwen3 enables reasoning by default. Disabling it prevents
@@ -158,7 +179,11 @@ class HuggingFaceTextGenerator:
         # the newly generated assistant response, not part of the input prompt.
         return self._extract_response(outputs)
 
-    def _get_pipeline(self) -> ChatPipeline:
+    def _get_pipeline(
+        self,
+        *,
+        max_new_tokens: int,
+    ) -> ChatPipeline:
         """Load and configure the local model once."""
 
         if self._pipeline is None:
@@ -167,7 +192,7 @@ class HuggingFaceTextGenerator:
         # Transformers 5 expects generation settings in one place. Clearing
         # max_length avoids competing limits when max_new_tokens is configured.
         self._pipeline.generation_config.max_length = None
-        self._pipeline.generation_config.max_new_tokens = self.max_new_tokens
+        self._pipeline.generation_config.max_new_tokens = max_new_tokens
         self._pipeline.generation_config.do_sample = False
 
         # Sampling controls are meaningless during deterministic greedy

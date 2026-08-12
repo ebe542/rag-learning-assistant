@@ -6,7 +6,12 @@ from scripts import benchmark_summarization
 
 
 class StaticGenerator:
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         return GenerationResult(text="Summary", citation_numbers=(1,))
 
 
@@ -23,7 +28,12 @@ class EmptyCache:
 
 
 class FailingGenerator:
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         raise ValueError("Invalid model response")
 
 
@@ -79,3 +89,22 @@ def test_measured_cache_counts_misses_and_writes() -> None:
     assert cache.hits == 0
     assert cache.misses == 1
     assert cache.writes == 0
+
+
+def test_parser_accepts_separate_map_and_reduce_token_limits() -> None:
+    args = benchmark_summarization.build_parser().parse_args(
+        [
+            "local-data/indexes/summarization-benchmark",
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "--max-map-new-tokens",
+            "128",
+            "--max-reduce-new-tokens",
+            "256",
+            "--max-batch-chars",
+            "8000",
+        ]
+    )
+
+    assert args.max_map_new_tokens == 128
+    assert args.max_reduce_new_tokens == 256
+    assert args.max_batch_chars == 8000

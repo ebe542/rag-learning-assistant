@@ -46,6 +46,7 @@ packages = ["src/rag_learning_assistant"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config --import-mode=importlib"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]

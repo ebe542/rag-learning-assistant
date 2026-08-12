@@ -13,7 +13,8 @@ from dotenv import load_dotenv
 from rag_learning_assistant.interfaces.cli.commands import run_summarize
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_SUMMARY_MAX_BATCH_CHARS,
-    DEFAULT_SUMMARY_MAX_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
     positive_int,
     validate_existing_index_directory,
 )
@@ -38,12 +39,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="UUID of the document to summarize",
     )
     parser.add_argument(
-        "--max-new-tokens",
+        "--max-map-new-tokens",
         type=positive_int,
-        default=DEFAULT_SUMMARY_MAX_NEW_TOKENS,
+        default=DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
         help=(
-            "Maximum number of generated summary tokens "
-            f"(default: {DEFAULT_SUMMARY_MAX_NEW_TOKENS})"
+            "Maximum tokens generated for each partial summary "
+            f"(default: {DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS})"
+        ),
+    )
+    parser.add_argument(
+        "--max-reduce-new-tokens",
+        type=positive_int,
+        default=DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
+        help=(
+            "Maximum tokens generated for the final summary "
+            f"(default: {DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS})"
         ),
     )
     parser.add_argument(
@@ -94,7 +104,8 @@ def main() -> int:
         exit_code = run_summarize(
             index_directory=args.index_dir,
             document_id=args.document_id,
-            max_new_tokens=args.max_new_tokens,
+            max_map_new_tokens=args.max_map_new_tokens,
+            max_reduce_new_tokens=args.max_reduce_new_tokens,
             max_batch_chars=args.max_batch_chars,
         )
     except KeyboardInterrupt:

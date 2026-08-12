@@ -20,7 +20,8 @@ from rag_learning_assistant.interfaces.cli.commands import (
 )
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_SUMMARY_MAX_BATCH_CHARS,
-    DEFAULT_SUMMARY_MAX_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
     positive_int,
     validate_existing_index_directory,
 )
@@ -45,14 +46,22 @@ class TimedGenerator:
         self.generator = generator
         self.measurements: list[GenerationMeasurement] = []
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         # Synchronizing prevents asynchronous CUDA work from escaping the timer.
         torch.cuda.synchronize()
         started_at = time.perf_counter()
         phase = "reduce" if prompt.startswith(SUMMARY_REDUCE_PROMPT.text) else "map"
 
         try:
-            result = self.generator.generate(prompt)
+            result = self.generator.generate(
+                prompt,
+                max_new_tokens=max_new_tokens,
+            )
         except Exception as exc:
             # The wrapped adapter may perform its JSON repair internally. Record
             # the complete logical call even when both responses remain invalid.
@@ -118,9 +127,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("index_dir", type=Path)
     parser.add_argument("document_id", type=UUID)
     parser.add_argument(
-        "--max-new-tokens",
+        "--max-map-new-tokens",
         type=positive_int,
-        default=DEFAULT_SUMMARY_MAX_NEW_TOKENS,
+        default=DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
+    )
+    parser.add_argument(
+        "--max-reduce-new-tokens",
+        type=positive_int,
+        default=DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
     )
     parser.add_argument(
         "--max-batch-chars",
@@ -155,7 +169,8 @@ def main() -> int:
 
     service = build_document_summarization_service(
         index_directory=args.index_dir,
-        max_new_tokens=args.max_new_tokens,
+        max_map_new_tokens=args.max_map_new_tokens,
+        max_reduce_new_tokens=args.max_reduce_new_tokens,
         max_batch_chars=args.max_batch_chars,
     )
     timed_generator = TimedGenerator(service.generator)
@@ -193,7 +208,8 @@ def main() -> int:
                     "status": "failed",
                     "error": str(exc),
                     "configuration": {
-                        "max_new_tokens": args.max_new_tokens,
+                        "max_map_new_tokens": args.max_map_new_tokens,
+                        "max_reduce_new_tokens": args.max_reduce_new_tokens,
                         "max_batch_chars": args.max_batch_chars,
                         "cache_enabled": not args.ignore_cache,
                     },
@@ -229,7 +245,8 @@ def main() -> int:
         "document_id": str(summary.document_id),
         "source": summary.source,
         "configuration": {
-            "max_new_tokens": args.max_new_tokens,
+            "max_map_new_tokens": args.max_map_new_tokens,
+            "max_reduce_new_tokens": args.max_reduce_new_tokens,
             "max_batch_chars": args.max_batch_chars,
             "cache_enabled": not args.ignore_cache,
         },

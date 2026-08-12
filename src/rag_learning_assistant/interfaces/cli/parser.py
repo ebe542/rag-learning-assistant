@@ -7,7 +7,8 @@ from uuid import UUID
 DEFAULT_MAX_CHARS = 1000
 DEFAULT_OVERLAP_CHARS = 150
 DEFAULT_RESULT_LIMIT = 5
-DEFAULT_SUMMARY_MAX_NEW_TOKENS = 256
+DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS = 192
+DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS = 384
 DEFAULT_SUMMARY_MAX_BATCH_CHARS = 12_000
 
 
@@ -239,12 +240,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="UUID of the document to summarize",
     )
     summarize_parser.add_argument(
-        "--max-new-tokens",
+        "--max-map-new-tokens",
         type=positive_int,
-        default=DEFAULT_SUMMARY_MAX_NEW_TOKENS,
+        default=DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
         help=(
-            "Maximum number of tokens generated for the summary "
-            f"(default: {DEFAULT_SUMMARY_MAX_NEW_TOKENS})"
+            "Maximum tokens generated for each partial summary "
+            f"(default: {DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS})"
+        ),
+    )
+    summarize_parser.add_argument(
+        "--max-reduce-new-tokens",
+        type=positive_int,
+        default=DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
+        help=(
+            "Maximum tokens generated for the final summary "
+            f"(default: {DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS})"
         ),
     )
     summarize_parser.add_argument(

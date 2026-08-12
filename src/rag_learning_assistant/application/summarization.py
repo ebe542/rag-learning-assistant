@@ -22,9 +22,11 @@ from rag_learning_assistant.library import IndexedDocument
 
 SUMMARY_MAP_PROMPT = PromptTemplate(
     name="summarization.map",
-    version=1,
+    version=2,
     text=(
         "Summarize the document using only the provided contexts. "
+        "Use at most 80 words. "
+        "Include only the most important supported claims. "
         "Do not use facts from prior knowledge. "
         "Every factual claim must be directly supported by at least one context. "
         "Omit any claim that is not explicitly supported. "
@@ -36,10 +38,13 @@ SUMMARY_MAP_PROMPT = PromptTemplate(
 
 SUMMARY_REDUCE_PROMPT = PromptTemplate(
     name="summarization.reduce",
-    version=2,
+    version=4,
     text=(
         "Create one concise document-wide summary using only the "
         "provided section summaries. "
+        "Use information from every section summary. "
+        "Include every allowed citation number from every section summary. "
+        "Do not omit citation numbers supplied by a section summary. "
         "Do not use prior knowledge. "
         "Every factual claim must be supported by the original context "
         "numbers listed for a section. "
@@ -105,12 +110,19 @@ class DocumentSummarizationService:
         chunks: DocumentChunkReader,
         generator: TextGenerator,
         max_batch_chars: int = 12_000,
+        max_map_new_tokens: int = 192,
+        max_reduce_new_tokens: int = 384,
         progress: Callable[[str, int, int], None] | None = None,
         cache: SummaryBatchCache | None = None,
         identity_factory: Callable[[IndexedDocument], GenerationIdentity] | None = None,
     ) -> None:
         if max_batch_chars < 1:
             raise ValueError("max_batch_chars must be positive")
+        if max_map_new_tokens < 1:
+            raise ValueError("max_map_new_tokens must be positive")
+
+        if max_reduce_new_tokens < 1:
+            raise ValueError("max_reduce_new_tokens must be positive")
 
         if (cache is None) != (identity_factory is None):
             raise ValueError("Summary cache and identity factory must be configured together")
@@ -119,6 +131,8 @@ class DocumentSummarizationService:
         self.chunks = chunks
         self.generator = generator
         self.max_batch_chars = max_batch_chars
+        self.max_map_new_tokens = max_map_new_tokens
+        self.max_reduce_new_tokens = max_reduce_new_tokens
         self.progress = progress
         self.cache = cache
         self.identity_factory = identity_factory
@@ -148,6 +162,12 @@ class DocumentSummarizationService:
         if identity is not None:
             if identity.document_content_sha256 != document.content_sha256:
                 raise ValueError("Generation identity does not match document content")
+
+            if identity.max_map_new_tokens != self.max_map_new_tokens:
+                raise ValueError("Generation identity does not match Map token configuration")
+
+            if identity.max_reduce_new_tokens != self.max_reduce_new_tokens:
+                raise ValueError("Generation identity does not match Reduce token configuration")
 
             if identity.max_batch_chars != self.max_batch_chars:
                 raise ValueError("Generation identity does not match batch configuration")
@@ -192,7 +212,10 @@ class DocumentSummarizationService:
                     batch,
                     start_number=first_context_number,
                 )
-                generation = self.generator.generate(prompt)
+                generation = self.generator.generate(
+                    prompt,
+                    max_new_tokens=self.max_map_new_tokens,
+                )
 
             # A map result may only cite contexts from its own batch. Validate
             # cached and newly generated data identically before using it.
@@ -228,7 +251,10 @@ class DocumentSummarizationService:
                 self.progress("reduce", 1, 1)
 
             prompt_references.append(SUMMARY_REDUCE_PROMPT.reference)
-            reduction = self.generator.generate(self._build_reduction_prompt(partial_summaries))
+            reduction = self.generator.generate(
+                self._build_reduction_prompt(partial_summaries),
+                max_new_tokens=self.max_reduce_new_tokens,
+            )
             prompt_references.extend(reduction.prompt_references)
 
             # The reduction may only cite original contexts that supported at least
@@ -240,6 +266,22 @@ class DocumentSummarizationService:
                     raise ValueError(
                         f"Citation number {citation_number} is not supported by a section summary"
                     )
+
+            reduction_numbers = set(reduction.citation_numbers)
+
+            # A document-wide reduction must not silently copy only one partial summary.
+            # Requiring evidence from every section preserves document-wide coverage.
+            if any(
+                reduction_numbers.isdisjoint(citation_numbers)
+                for _, citation_numbers in partial_summaries
+            ):
+                raise ValueError("Reduction must be supported by every section summary")
+
+            # The current result format has one global citation list instead of
+            # claim-level citations. Keeping the complete Map citation union is
+            # conservative, but prevents Reduce from silently dropping evidence.
+            if supported_numbers - reduction_numbers:
+                raise ValueError("Reduction must preserve all section citations")
 
             final_text = reduction.text
             final_citation_numbers = reduction.citation_numbers

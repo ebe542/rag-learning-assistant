@@ -22,7 +22,7 @@ Run the benchmark from the repository root:
 
 ```bash
 rag-learn index benchmarks/fixtures/summarization-document.pdf --index-dir local-data/indexes/summarization-benchmark
-python scripts/benchmark_summarization.py local-data/indexes/summarization-benchmark <DOCUMENT_UUID> --max-new-tokens 192 --max-batch-chars 8000 --ignore-cache
+python scripts/benchmark_summarization.py local-data/indexes/summarization-benchmark <DOCUMENT_UUID> --max-map-new-tokens 192 --max-reduce-new-tokens 384 --max-batch-chars 8000 --ignore-cache
 ```
 
 `--ignore-cache` bypasses cache reads and writes for that invocation without deleting existing entries. Omit it when measuring normal resume behavior.
@@ -42,6 +42,19 @@ Neither measured configuration completed its first Map batch. The model exhauste
 
 The `8,000 / 192` failure used less peak allocated GPU memory and ended sooner than `12,000 / 192`, but one run per configuration is insufficient to attribute those differences solely to batch size. The failure demonstrates that input batching and output control are separate concerns.
 
-The next optimization should give the Map prompt an explicit concise-output contract and configure Map and Reduce token limits separately. A successful comparison can then repeat both character budgets against this unchanged fixture. Token-based input batching would also be more representative of model cost than character-based batching.
+The subsequent implementation gave the Map prompt an explicit concise-output contract and introduced separate Map and Reduce token limits. The failed measurements above remain the evidence that motivated that change. A successful comparison can now repeat both character budgets against this unchanged fixture. Token-based input batching would also be more representative of model cost than character-based batching.
+
+A later smoke run with the concise Map prompt showed that 128 Map tokens still
+produced truncated JSON, while 192 Map tokens completed both partial summaries.
+The first successful Reduce response copied schema placeholder text; removing the
+copyable placeholder from the system prompt fixed that failure mode. A subsequent
+response summarized only the first partial summary, so the application now requires
+at least one supporting citation from every Map result and the Reduce prompt
+explicitly requires document-wide coverage. Once validation was strengthened to
+preserve the complete Map citation union, a 256-token Reduce run ended with
+truncated JSON. Increasing only the Reduce budget to 384 produced valid JSON, a
+document-wide synthesis, and all citations 1 through 20. This smoke result
+supports the new default, but it is not a timing baseline because the captured
+output did not include elapsed-time or per-call measurements.
 
 Because these are single measurements and the first call includes initialization, no speedup is claimed. Future comparisons should record multiple successful runs, generated token counts, runtime versions, and summary-quality observations.

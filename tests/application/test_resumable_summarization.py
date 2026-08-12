@@ -47,7 +47,12 @@ class SequentialGenerator:
         self.results = results
         self.prompts: list[str] = []
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         self.prompts.append(prompt)
         return self.results[len(self.prompts) - 1]
 
@@ -130,7 +135,8 @@ def test_summarize_reuses_cached_map_batch() -> None:
         model_name="Qwen/Qwen3-1.7B",
         model_revision="c" * 40,
         prompt_references=(prompt.reference,),
-        max_new_tokens=512,
+        max_map_new_tokens=192,
+        max_reduce_new_tokens=256,
         max_batch_chars=10,
         document_content_sha256=document.content_sha256,
     )
@@ -153,7 +159,7 @@ def test_summarize_reuses_cached_map_batch() -> None:
             ),
             GenerationResult(
                 text="Complete summary.",
-                citation_numbers=(1, 3),
+                citation_numbers=(1, 2, 3),
             ),
         ]
     )
@@ -162,6 +168,7 @@ def test_summarize_reuses_cached_map_batch() -> None:
         chunks=StaticChunkReader(chunks),
         generator=generator,
         max_batch_chars=10,
+        max_reduce_new_tokens=256,
         cache=cache,
         identity_factory=lambda indexed_document: identity,
     )

@@ -62,7 +62,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return commands.run_summarize(
                 index_directory=args.index_dir,
                 document_id=args.document_id,
-                max_new_tokens=args.max_new_tokens,
+                max_map_new_tokens=args.max_map_new_tokens,
+                max_reduce_new_tokens=args.max_reduce_new_tokens,
                 max_batch_chars=args.max_batch_chars,
             )
         except DocumentNotFoundError as exc:

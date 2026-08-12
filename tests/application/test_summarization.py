@@ -39,7 +39,14 @@ class RecordingSummaryGenerator:
         self.result = result
         self.prompts: list[str] = []
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
+        # These behavior tests record prompts; accepting the optional limit keeps
+        # their fake aligned with the production generator contract.
         self.prompts.append(prompt)
         return self.result
 
@@ -49,7 +56,12 @@ class SequentialSummaryGenerator:
         self.results = list(results)
         self.prompts: list[str] = []
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         self.prompts.append(prompt)
         return self.results[len(self.prompts) - 1]
 
@@ -305,7 +317,7 @@ def test_summarize_batches_long_documents_with_global_context_numbers() -> None:
             ),
             GenerationResult(
                 text="Complete document summary.",
-                citation_numbers=(1, 3),
+                citation_numbers=(1, 2, 3),
                 prompt_references=(technical_prompt.reference,),
             ),
         ]
@@ -326,7 +338,7 @@ def test_summarize_batches_long_documents_with_global_context_numbers() -> None:
         repair_prompt.reference,
         SUMMARY_REDUCE_PROMPT.reference,
     )
-    assert [citation.number for citation in summary.citations] == [1, 3]
+    assert [citation.number for citation in summary.citations] == [1, 2, 3]
     assert len(generator.prompts) == 3
 
     assert '<context number="1">' in generator.prompts[0]
@@ -548,11 +560,11 @@ def test_summarize_reports_map_and_reduce_progress() -> None:
 def test_summarization_prompts_have_explicit_versions() -> None:
     assert isinstance(SUMMARY_MAP_PROMPT, PromptTemplate)
     assert SUMMARY_MAP_PROMPT.name == "summarization.map"
-    assert SUMMARY_MAP_PROMPT.version == 1
+    assert SUMMARY_MAP_PROMPT.version == 2
 
     assert isinstance(SUMMARY_REDUCE_PROMPT, PromptTemplate)
     assert SUMMARY_REDUCE_PROMPT.name == "summarization.reduce"
-    assert SUMMARY_REDUCE_PROMPT.version == 2
+    assert SUMMARY_REDUCE_PROMPT.version == 4
 
 
 def test_document_summary_records_used_prompts() -> None:
@@ -578,3 +590,67 @@ def test_document_summary_records_used_prompts() -> None:
     )
 
     assert summary.prompt_references == (prompt.reference,)
+
+
+def test_reduction_must_preserve_all_partial_summary_citations() -> None:
+    document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    document = IndexedDocument(
+        id=document_id,
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=2,
+        chunk_count=3,
+    )
+    chunks = [
+        Chunk(
+            text="First fact is long.",
+            source="course.pdf",
+            page_number=1,
+            index=0,
+            document_id=document_id,
+        ),
+        Chunk(
+            text="Second.",
+            source="course.pdf",
+            page_number=2,
+            index=1,
+            document_id=document_id,
+        ),
+        Chunk(
+            text="Third.",
+            source="course.pdf",
+            page_number=2,
+            index=2,
+            document_id=document_id,
+        ),
+    ]
+    generator = SequentialSummaryGenerator(
+        [
+            GenerationResult(
+                text="First partial summary.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="Second partial summary.",
+                citation_numbers=(2, 3),
+            ),
+            GenerationResult(
+                text="Final summary.",
+                citation_numbers=(1, 3),
+            ),
+        ]
+    )
+    service = DocumentSummarizationService(
+        documents=RecordingDocumentLookup(document),
+        chunks=RecordingChunkReader(chunks),
+        generator=generator,
+        max_batch_chars=20,
+        max_map_new_tokens=192,
+        max_reduce_new_tokens=256,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Reduction must preserve all section citations",
+    ):
+        service.summarize(document_id)

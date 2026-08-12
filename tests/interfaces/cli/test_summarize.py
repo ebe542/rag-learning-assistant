@@ -18,7 +18,8 @@ from rag_learning_assistant.generation import (
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_SUMMARY_MAX_BATCH_CHARS,
-    DEFAULT_SUMMARY_MAX_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
     build_parser,
 )
 from rag_learning_assistant.library import IndexedDocument
@@ -43,7 +44,12 @@ class StubGenerator:
     def __init__(self, max_new_tokens: int) -> None:
         self.max_new_tokens = max_new_tokens
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         raise AssertionError(f"Generation is not expected while wiring the service: {prompt}")
 
 
@@ -66,7 +72,8 @@ def test_summary_builder_configures_persistent_cache_identity(
 
     service = commands.build_document_summarization_service(
         index_directory=tmp_path,
-        max_new_tokens=320,
+        max_map_new_tokens=160,
+        max_reduce_new_tokens=320,
         max_batch_chars=36_000,
     )
 
@@ -85,7 +92,8 @@ def test_summary_builder_configures_persistent_cache_identity(
 
     assert identity.model_name == StubGenerator.model_name
     assert identity.model_revision == StubGenerator.model_revision
-    assert identity.max_new_tokens == 320
+    assert identity.max_map_new_tokens == 160
+    assert identity.max_reduce_new_tokens == 320
     assert identity.max_batch_chars == 36_000
     assert identity.document_content_sha256 == document.content_sha256
     assert {reference.name for reference in identity.prompt_references} == {
@@ -122,15 +130,24 @@ def test_entrypoint_dispatches_summarize_command(
     (index_directory / "metadata.sqlite3").touch()
 
     document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-    calls: list[tuple[Path, UUID, int, int]] = []
+    calls: list[tuple[Path, UUID, int, int, int]] = []
 
     def fake_run_summarize(
         index_directory: Path,
         document_id: UUID,
-        max_new_tokens: int,
+        max_map_new_tokens: int,
+        max_reduce_new_tokens: int,
         max_batch_chars: int,
     ) -> int:
-        calls.append((index_directory, document_id, max_new_tokens, max_batch_chars))
+        calls.append(
+            (
+                index_directory,
+                document_id,
+                max_map_new_tokens,
+                max_reduce_new_tokens,
+                max_batch_chars,
+            )
+        )
         return 0
 
     # raising=False allows this red test to exist before run_summarize does.
@@ -145,7 +162,9 @@ def test_entrypoint_dispatches_summarize_command(
             "summarize",
             str(index_directory),
             str(document_id),
-            "--max-new-tokens",
+            "--max-map-new-tokens",
+            "160",
+            "--max-reduce-new-tokens",
             "320",
             "--max-batch-chars",
             "36000",
@@ -157,6 +176,7 @@ def test_entrypoint_dispatches_summarize_command(
         (
             index_directory,
             document_id,
+            160,
             320,
             36_000,
         )
@@ -192,17 +212,19 @@ def test_run_summarize_outputs_grounded_summary_as_json(
         )
     )
 
-    builder_calls: list[tuple[Path, int, int]] = []
+    builder_calls: list[tuple[Path, int, int, int]] = []
 
     def fake_build_document_summarization_service(
         index_directory: Path,
-        max_new_tokens: int,
+        max_map_new_tokens: int,
+        max_reduce_new_tokens: int,
         max_batch_chars: int,
     ) -> RecordingSummarizationService:
         builder_calls.append(
             (
                 index_directory,
-                max_new_tokens,
+                max_map_new_tokens,
+                max_reduce_new_tokens,
                 max_batch_chars,
             )
         )
@@ -217,12 +239,13 @@ def test_run_summarize_outputs_grounded_summary_as_json(
     exit_code = commands.run_summarize(
         index_directory=tmp_path,
         document_id=document_id,
-        max_new_tokens=320,
+        max_map_new_tokens=160,
+        max_reduce_new_tokens=320,
         max_batch_chars=36_000,
     )
 
     assert exit_code == 0
-    assert builder_calls == [(tmp_path, 320, 36_000)]
+    assert builder_calls == [(tmp_path, 160, 320, 36_000)]
     assert service.requested_ids == [document_id]
     assert json.loads(capsys.readouterr().out) == {
         "document_id": str(document_id),
@@ -293,11 +316,13 @@ def test_entrypoint_reports_unknown_document_as_cli_error(
     def fail_with_unknown_document(
         index_directory: Path,
         document_id: UUID,
-        max_new_tokens: int,
+        max_map_new_tokens: int,
+        max_reduce_new_tokens: int,
         max_batch_chars: int,
     ) -> int:
         assert index_directory == tmp_path / "library"
-        assert max_new_tokens == DEFAULT_SUMMARY_MAX_NEW_TOKENS
+        assert max_map_new_tokens == DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS
+        assert max_reduce_new_tokens == DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS
         assert max_batch_chars == DEFAULT_SUMMARY_MAX_BATCH_CHARS
 
         raise DocumentNotFoundError(f"Document does not exist: {document_id}")
@@ -321,21 +346,24 @@ def test_entrypoint_reports_unknown_document_as_cli_error(
     assert f"Document does not exist: {document_id}" in capsys.readouterr().err
 
 
-def test_parser_accepts_summary_token_limit() -> None:
+def test_parser_accepts_summary_token_limits() -> None:
     args = build_parser().parse_args(
         [
             "summarize",
             "local-data/indexes/learning",
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "--max-new-tokens",
+            "--max-map-new-tokens",
+            "128",
+            "--max-reduce-new-tokens",
             "256",
         ]
     )
 
-    assert args.max_new_tokens == 256
+    assert args.max_map_new_tokens == 128
+    assert args.max_reduce_new_tokens == 256
 
 
-def test_parser_uses_default_summary_token_limit() -> None:
+def test_parser_uses_default_summary_token_limits() -> None:
     args = build_parser().parse_args(
         [
             "summarize",
@@ -344,12 +372,18 @@ def test_parser_uses_default_summary_token_limit() -> None:
         ]
     )
 
-    assert args.max_new_tokens == DEFAULT_SUMMARY_MAX_NEW_TOKENS
+    assert args.max_map_new_tokens == DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS
+    assert args.max_reduce_new_tokens == DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS
 
 
-@pytest.mark.parametrize("max_new_tokens", ["0", "-1"])
-def test_parser_rejects_non_positive_summary_token_limit(
-    max_new_tokens: str,
+@pytest.mark.parametrize(
+    "option",
+    ["--max-map-new-tokens", "--max-reduce-new-tokens"],
+)
+@pytest.mark.parametrize("token_limit", ["0", "-1"])
+def test_parser_rejects_non_positive_summary_token_limits(
+    option: str,
+    token_limit: str,
 ) -> None:
     with pytest.raises(SystemExit):
         build_parser().parse_args(
@@ -357,8 +391,8 @@ def test_parser_rejects_non_positive_summary_token_limit(
                 "summarize",
                 "local-data/indexes/learning",
                 "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                "--max-new-tokens",
-                max_new_tokens,
+                option,
+                token_limit,
             ]
         )
 

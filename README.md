@@ -145,7 +145,8 @@ Measure real local-model generation and cache behavior manually:
 python scripts/benchmark_summarization.py \
   local-data/indexes/summarization-benchmark \
   DOCUMENT_UUID \
-  --max-new-tokens 192 \
+  --max-map-new-tokens 192 \
+  --max-reduce-new-tokens 384 \
   --max-batch-chars 8000 \
   --ignore-cache
 ```

@@ -33,7 +33,12 @@ class RecordingGenerator:
         self.result = result
         self.prompts: list[str] = []
 
-    def generate(self, prompt: str) -> GenerationResult:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> GenerationResult:
         self.prompts.append(prompt)
         return self.result
 

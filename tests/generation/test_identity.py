@@ -20,7 +20,8 @@ def test_generation_identity_is_stable_for_equal_configuration() -> None:
         "model_name": "Qwen/Qwen3-1.7B",
         "model_revision": "a" * 40,
         "prompt_references": (prompt.reference,),
-        "max_new_tokens": 512,
+        "max_map_new_tokens": 128,
+        "max_reduce_new_tokens": 256,
         "max_batch_chars": 12_000,
         "document_content_sha256": "b" * 64,
     }
@@ -31,7 +32,7 @@ def test_generation_identity_is_stable_for_equal_configuration() -> None:
     assert first == second
     assert first.fingerprint == second.fingerprint
     assert len(first.fingerprint) == 64
-    assert first.fingerprint == ("768bf5274c9d07b87a068bb0814bc74b1f2ba21d0546468439c2264a1cde3f84")
+    assert first.fingerprint == ("3f98bae5f6999621812171c7a097b62d394a4daa0de3150480b455089b71ff80")
 
 
 @pytest.mark.parametrize(
@@ -39,7 +40,8 @@ def test_generation_identity_is_stable_for_equal_configuration() -> None:
     [
         ("model_name", "Qwen/Qwen3-4B"),
         ("model_revision", "c" * 40),
-        ("max_new_tokens", 256),
+        ("max_map_new_tokens", 96),
+        ("max_reduce_new_tokens", 512),
         ("max_batch_chars", 24_000),
         ("document_content_sha256", "d" * 64),
     ],
@@ -57,7 +59,8 @@ def test_generation_identity_changes_with_configuration(
         model_name="Qwen/Qwen3-1.7B",
         model_revision="a" * 40,
         prompt_references=(prompt.reference,),
-        max_new_tokens=512,
+        max_map_new_tokens=128,
+        max_reduce_new_tokens=256,
         max_batch_chars=12_000,
         document_content_sha256="b" * 64,
     )
@@ -85,7 +88,8 @@ def test_generation_identity_changes_with_prompt_reference() -> None:
         model_name="Qwen/Qwen3-1.7B",
         model_revision="a" * 40,
         prompt_references=(first_prompt.reference,),
-        max_new_tokens=512,
+        max_map_new_tokens=128,
+        max_reduce_new_tokens=256,
         max_batch_chars=12_000,
         document_content_sha256="b" * 64,
     )
@@ -111,7 +115,8 @@ def test_generation_identity_rejects_blank_model_fields(
         model_name="Qwen/Qwen3-1.7B",
         model_revision="a" * 40,
         prompt_references=(prompt.reference,),
-        max_new_tokens=512,
+        max_map_new_tokens=128,
+        max_reduce_new_tokens=256,
         max_batch_chars=12_000,
         document_content_sha256="b" * 64,
     )
@@ -133,7 +138,8 @@ def test_generation_identity_requires_prompt_references() -> None:
         model_name="Qwen/Qwen3-1.7B",
         model_revision="a" * 40,
         prompt_references=(prompt.reference,),
-        max_new_tokens=512,
+        max_map_new_tokens=128,
+        max_reduce_new_tokens=256,
         max_batch_chars=12_000,
         document_content_sha256="b" * 64,
     )
@@ -147,7 +153,11 @@ def test_generation_identity_requires_prompt_references() -> None:
 
 @pytest.mark.parametrize(
     "field",
-    ["max_new_tokens", "max_batch_chars"],
+    [
+        "max_map_new_tokens",
+        "max_reduce_new_tokens",
+        "max_batch_chars",
+    ],
 )
 def test_generation_identity_requires_positive_limits(
     field: str,
@@ -161,7 +171,8 @@ def test_generation_identity_requires_positive_limits(
         model_name="Qwen/Qwen3-1.7B",
         model_revision="a" * 40,
         prompt_references=(prompt.reference,),
-        max_new_tokens=512,
+        max_map_new_tokens=128,
+        max_reduce_new_tokens=256,
         max_batch_chars=12_000,
         document_content_sha256="b" * 64,
     )
@@ -199,7 +210,8 @@ def test_generation_identity_requires_document_sha256(
             model_name="Qwen/Qwen3-1.7B",
             model_revision="a" * 40,
             prompt_references=(prompt.reference,),
-            max_new_tokens=512,
+            max_map_new_tokens=128,
+            max_reduce_new_tokens=256,
             max_batch_chars=12_000,
             document_content_sha256=content_hash,
         )
@@ -223,7 +235,8 @@ def test_generation_identity_rejects_duplicate_prompts() -> None:
                 prompt.reference,
                 prompt.reference,
             ),
-            max_new_tokens=512,
+            max_map_new_tokens=128,
+            max_reduce_new_tokens=256,
             max_batch_chars=12_000,
             document_content_sha256="b" * 64,
         )

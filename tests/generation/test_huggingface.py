@@ -324,8 +324,17 @@ def test_generate_stops_after_one_failed_json_repair() -> None:
 def test_huggingface_prompts_have_explicit_versions() -> None:
     assert isinstance(SYSTEM_PROMPT, PromptTemplate)
     assert SYSTEM_PROMPT.name == "generation.system-json"
-    assert SYSTEM_PROMPT.version == 1
+    assert SYSTEM_PROMPT.version == 2
 
     assert isinstance(JSON_REPAIR_PROMPT, PromptTemplate)
     assert JSON_REPAIR_PROMPT.name == "generation.json-repair"
-    assert JSON_REPAIR_PROMPT.version == 1
+    assert JSON_REPAIR_PROMPT.version == 2
+
+
+def test_system_prompt_does_not_contain_a_copyable_answer_placeholder() -> None:
+    assert SYSTEM_PROMPT.version == 2
+    assert '"the grounded answer"' not in SYSTEM_PROMPT.text
+    assert "Never return placeholder text." in SYSTEM_PROMPT.text
+
+    assert JSON_REPAIR_PROMPT.version == 2
+    assert "Never replace it with placeholder text" in JSON_REPAIR_PROMPT.text

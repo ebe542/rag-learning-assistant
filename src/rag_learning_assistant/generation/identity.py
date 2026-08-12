@@ -16,7 +16,8 @@ class GenerationIdentity:
     model_name: str
     model_revision: str
     prompt_references: tuple[PromptReference, ...]
-    max_new_tokens: int
+    max_map_new_tokens: int
+    max_reduce_new_tokens: int
     max_batch_chars: int
     document_content_sha256: str
 
@@ -27,7 +28,11 @@ class GenerationIdentity:
         if not self.prompt_references:
             raise ValueError("Generation identity requires at least one prompt")
 
-        if self.max_new_tokens < 1 or self.max_batch_chars < 1:
+        if (
+            self.max_map_new_tokens < 1
+            or self.max_reduce_new_tokens < 1
+            or self.max_batch_chars < 1
+        ):
             raise ValueError("Generation limits must be positive")
 
         is_document_sha256 = len(self.document_content_sha256) == 64 and all(
@@ -48,7 +53,8 @@ class GenerationIdentity:
         payload = {
             "document_content_sha256": self.document_content_sha256,
             "max_batch_chars": self.max_batch_chars,
-            "max_new_tokens": self.max_new_tokens,
+            "max_map_new_tokens": self.max_map_new_tokens,
+            "max_reduce_new_tokens": self.max_reduce_new_tokens,
             "model_name": self.model_name,
             "model_revision": self.model_revision,
             "prompt_references": [

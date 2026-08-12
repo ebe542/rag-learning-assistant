@@ -124,7 +124,8 @@ def write_summarization_progress(
 
 def build_document_summarization_service(
     index_directory: Path,
-    max_new_tokens: int,
+    max_map_new_tokens: int,
+    max_reduce_new_tokens: int,
     max_batch_chars: int,
 ) -> DocumentSummarizationService:
     """Build document-wide summarization for a persistent library."""
@@ -140,7 +141,7 @@ def build_document_summarization_service(
     database_path = index_directory / "metadata.sqlite3"
     repository = SqliteDocumentRepository(database_path)
     generator = HuggingFaceTextGenerator(
-        max_new_tokens=max_new_tokens,
+        max_new_tokens=max_reduce_new_tokens,
     )
 
     def build_identity(document: IndexedDocument) -> GenerationIdentity:
@@ -155,7 +156,8 @@ def build_document_summarization_service(
                 SYSTEM_PROMPT.reference,
                 JSON_REPAIR_PROMPT.reference,
             ),
-            max_new_tokens=generator.max_new_tokens,
+            max_map_new_tokens=max_map_new_tokens,
+            max_reduce_new_tokens=max_reduce_new_tokens,
             max_batch_chars=max_batch_chars,
             document_content_sha256=document.content_sha256,
         )
@@ -165,6 +167,8 @@ def build_document_summarization_service(
         chunks=store,
         generator=generator,
         max_batch_chars=max_batch_chars,
+        max_map_new_tokens=max_map_new_tokens,
+        max_reduce_new_tokens=max_reduce_new_tokens,
         progress=write_summarization_progress,
         cache=SqliteSummaryCache(database_path),
         identity_factory=build_identity,
@@ -200,14 +204,16 @@ def run_index(
 def run_summarize(
     index_directory: Path,
     document_id: UUID,
-    max_new_tokens: int,
+    max_map_new_tokens: int,
+    max_reduce_new_tokens: int,
     max_batch_chars: int,
 ) -> int:
     """Summarize one indexed document and write the result as JSON."""
 
     service = build_document_summarization_service(
         index_directory,
-        max_new_tokens,
+        max_map_new_tokens,
+        max_reduce_new_tokens,
         max_batch_chars,
     )
     summary = service.summarize(document_id)
