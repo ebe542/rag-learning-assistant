@@ -160,6 +160,20 @@ excluded from the automated test suite and CI.
 The reproducible fixture, recorded RTX 3060 Ti measurements, and their limitations are documented in the
 [summarization benchmark](docs/summarization-benchmark.md).
 
+Evaluate grounded question answering against the versioned benchmark cases:
+
+```bash
+python scripts/evaluate_grounded_generation.py \
+  local-data/indexes/summarization-benchmark \
+  --output local-data/evaluation/grounded-generation-baseline.json
+```
+
+The evaluation uses the production question-answering pipeline and reports exact
+source-page citation coverage plus deterministic recall for curated key concepts.
+Generated answer text is included for diagnosing failures. Accepted phrases make
+the check reproducible but do not replace human factual review or prove semantic
+equivalence.
+
 Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
 SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.
 Adding identical file content again is rejected before PDF extraction or embedding generation.

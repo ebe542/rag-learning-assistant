@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case_id": "project-purpose",
+      "question": "What is the purpose of the RAG Learning Assistant?",
+      "expected_citations": [
+        {
+          "source": "summarization-document.pdf",
+          "page_number": 1
+        }
+      ],
+      "expected_concepts": [
+        {
+          "name": "source-grounded-purpose",
+          "accepted_phrases": [
+            "source-grounded study system",
+            "source-grounded learning"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "embedding-dimensions",
+      "question": "How many dimensions do the embedding vectors contain?",
+      "expected_citations": [
+        {
+          "source": "summarization-document.pdf",
+          "page_number": 4
+        }
+      ],
+      "expected_concepts": [
+        {
+          "name": "vector-dimension",
+          "accepted_phrases": [
+            "384 dimensions",
+            "384-dimensional"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "persistent-storage",
+      "question": "Why does the library use both FAISS and SQLite?",
+      "expected_citations": [
+        {
+          "source": "summarization-document.pdf",
+          "page_number": 5
+        }
+      ],
+      "expected_concepts": [
+        {
+          "name": "faiss-vector-storage",
+          "accepted_phrases": [
+            "faiss stores vectors",
+            "faiss stores and searches vectors",
+            "vectors are stored in faiss"
+          ]
+        },
+        {
+          "name": "sqlite-metadata-storage",
+          "accepted_phrases": [
+            "sqlite stores structured metadata",
+            "sqlite stores metadata",
+            "metadata is stored in sqlite"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "grounded-generation",
+      "question": "How does the application keep generated answers grounded?",
+      "expected_citations": [
+        {
+          "source": "summarization-document.pdf",
+          "page_number": 7
+        }
+      ],
+      "expected_concepts": [
+        {
+          "name": "retrieved-evidence",
+          "accepted_phrases": [
+            "retrieved evidence",
+            "retrieved contexts",
+            "retrieved source passages",
+            "contexts as untrusted data"
+          ]
+        },
+        {
+          "name": "trusted-citation-reconstruction",
+          "accepted_phrases": [
+            "reconstructs source",
+            "reconstructs citations",
+            "trusted stored data"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "summary-resume",
+      "question": "How does the system resume an interrupted document summary?",
+      "expected_citations": [
+        {
+          "source": "summarization-document.pdf",
+          "page_number": 9
+        }
+      ],
+      "expected_concepts": [
+        {
+          "name": "cached-map-results",
+          "accepted_phrases": [
+            "cached map results",
+            "completed map batches",
+            "validated map result"
+          ]
+        },
+        {
+          "name": "resume-missing-work",
+          "accepted_phrases": [
+            "first missing result",
+            "continues with the first missing",
+            "skip completed"
+          ]
+        }
+      ]
+    }
+  ]
+}
