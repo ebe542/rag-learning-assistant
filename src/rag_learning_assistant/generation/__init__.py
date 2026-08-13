@@ -21,16 +21,24 @@ from rag_learning_assistant.generation.prompts import (
     PromptTemplate,
 )
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
+from rag_learning_assistant.generation.summary_repository import (
+    DocumentSummaryRepository,
+    PersistedDocumentSummary,
+    SqliteDocumentSummaryRepository,
+)
 
 __all__ = [
     "CachedSummaryBatch",
     "Citation",
+    "DocumentSummaryRepository",
     "GenerationIdentity",
     "GenerationResult",
     "GroundedAnswer",
     "HuggingFaceTextGenerator",
+    "PersistedDocumentSummary",
     "PromptReference",
     "PromptTemplate",
+    "SqliteDocumentSummaryRepository",
     "SqliteSummaryCache",
     "SummaryBatchCache",
     "TextGenerator",

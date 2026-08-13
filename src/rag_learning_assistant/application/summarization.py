@@ -9,7 +9,9 @@ from rag_learning_assistant.application.library import DocumentNotFoundError
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.generation import (
     Citation,
+    DocumentSummaryRepository,
     GenerationIdentity,
+    PersistedDocumentSummary,
     PromptReference,
     PromptTemplate,
     TextGenerator,
@@ -109,12 +111,13 @@ class DocumentSummarizationService:
         documents: SummaryDocumentLookup,
         chunks: DocumentChunkReader,
         generator: TextGenerator,
-        max_batch_chars: int = 12_000,
+        max_batch_chars: int = 8000,
         max_map_new_tokens: int = 192,
         max_reduce_new_tokens: int = 384,
         progress: Callable[[str, int, int], None] | None = None,
         cache: SummaryBatchCache | None = None,
         identity_factory: Callable[[IndexedDocument], GenerationIdentity] | None = None,
+        final_summaries: DocumentSummaryRepository | None = None,
     ) -> None:
         if max_batch_chars < 1:
             raise ValueError("max_batch_chars must be positive")
@@ -124,8 +127,9 @@ class DocumentSummarizationService:
         if max_reduce_new_tokens < 1:
             raise ValueError("max_reduce_new_tokens must be positive")
 
-        if (cache is None) != (identity_factory is None):
-            raise ValueError("Summary cache and identity factory must be configured together")
+        uses_generation_identity = cache is not None or final_summaries is not None
+        if uses_generation_identity != (identity_factory is not None):
+            raise ValueError("Summary persistence and identity factory must be configured together")
 
         self.documents = documents
         self.chunks = chunks
@@ -136,26 +140,20 @@ class DocumentSummarizationService:
         self.progress = progress
         self.cache = cache
         self.identity_factory = identity_factory
+        self.final_summaries = final_summaries
 
-    def summarize(self, document_id: UUID) -> DocumentSummary:
+    def summarize(
+        self,
+        document_id: UUID,
+        *,
+        force: bool = False,
+    ) -> DocumentSummary:
         """Summarize one registered document using all stored chunks."""
 
         document = self.documents.find_by_id(document_id)
 
         if document is None:
             raise DocumentNotFoundError(f"Document does not exist: {document_id}")
-
-        chunks = self.chunks.list_document_chunks(document_id)
-
-        # A document-wide summary is only trustworthy when persistent chunk
-        # storage still matches the catalog metadata created during indexing.
-        if len(chunks) != document.chunk_count:
-            raise RuntimeError("Stored chunk count does not match document metadata")
-
-        if not chunks:
-            # Without source chunks, the generator cannot produce a grounded summary
-            # or trustworthy citations.
-            raise ValueError("Document has no chunks to summarize")
 
         identity = self.identity_factory(document) if self.identity_factory is not None else None
 
@@ -172,6 +170,34 @@ class DocumentSummarizationService:
             if identity.max_batch_chars != self.max_batch_chars:
                 raise ValueError("Generation identity does not match batch configuration")
 
+        if not force and self.final_summaries is not None and identity is not None:
+            persisted = self.final_summaries.find(
+                document_id,
+                identity.fingerprint,
+            )
+            if persisted is not None:
+                # Metadata and generation identity were checked before this
+                # lookup, so an exact hit can safely skip chunks and model work.
+                return DocumentSummary(
+                    document_id=persisted.document_id,
+                    source=persisted.source,
+                    text=persisted.text,
+                    citations=persisted.citations,
+                    prompt_references=persisted.prompt_references,
+                )
+
+        chunks = self.chunks.list_document_chunks(document_id)
+
+        # A document-wide summary is only trustworthy when persistent chunk
+        # storage still matches the catalog metadata created during indexing.
+        if len(chunks) != document.chunk_count:
+            raise RuntimeError("Stored chunk count does not match document metadata")
+
+        if not chunks:
+            # Without source chunks, the generator cannot produce a grounded summary
+            # or trustworthy citations.
+            raise ValueError("Document has no chunks to summarize")
+
         partial_summaries: list[tuple[str, tuple[int, ...]]] = []
         prompt_references = [SUMMARY_MAP_PROMPT.reference]
         context_offset = 0
@@ -187,7 +213,7 @@ class DocumentSummarizationService:
                     identity_fingerprint=identity.fingerprint,
                     batch_number=batch_number,
                 )
-                if self.cache is not None and identity is not None
+                if (not force and self.cache is not None and identity is not None)
                 else None
             )
 
@@ -227,7 +253,12 @@ class DocumentSummarizationService:
 
             # Persist only validated model output. Otherwise a malformed response
             # would poison every later resume attempt for the same identity.
-            if cached_batch is None and self.cache is not None and identity is not None:
+            if (
+                not force
+                and cached_batch is None
+                and self.cache is not None
+                and identity is not None
+            ):
                 self.cache.save_batch(
                     CachedSummaryBatch(
                         identity_fingerprint=identity.fingerprint,
@@ -299,13 +330,35 @@ class DocumentSummarizationService:
             for citation_number in unique_citation_numbers
         )
 
-        return DocumentSummary(
+        summary = DocumentSummary(
             document_id=document.id,
             source=document.source,
             text=final_text,
             citations=citations,
             prompt_references=unique_prompt_references,
         )
+
+        # Persist only the fully validated final result. Map batches may already
+        # be cached independently, but they are not a replacement for the
+        # completed document-wide summary.
+        if self.final_summaries is not None and identity is not None:
+            persisted = PersistedDocumentSummary(
+                document_id=summary.document_id,
+                identity_fingerprint=identity.fingerprint,
+                source=summary.source,
+                text=summary.text,
+                citations=summary.citations,
+                prompt_references=summary.prompt_references,
+            )
+
+            if force:
+                # Force is the explicit authorization to replace an existing
+                # result for the otherwise identical generation identity.
+                self.final_summaries.replace(persisted)
+            else:
+                self.final_summaries.save(persisted)
+
+        return summary
 
     def _batch_chunks(
         self,

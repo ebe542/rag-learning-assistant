@@ -25,6 +25,7 @@ from rag_learning_assistant.generation import (
     GenerationIdentity,
     HuggingFaceTextGenerator,
     PromptReference,
+    SqliteDocumentSummaryRepository,
 )
 from rag_learning_assistant.generation.huggingface import (
     JSON_REPAIR_PROMPT,
@@ -172,6 +173,7 @@ def build_document_summarization_service(
         progress=write_summarization_progress,
         cache=SqliteSummaryCache(database_path),
         identity_factory=build_identity,
+        final_summaries=SqliteDocumentSummaryRepository(database_path),
     )
 
 
@@ -207,6 +209,7 @@ def run_summarize(
     max_map_new_tokens: int,
     max_reduce_new_tokens: int,
     max_batch_chars: int,
+    force: bool = False,
 ) -> int:
     """Summarize one indexed document and write the result as JSON."""
 
@@ -216,7 +219,10 @@ def run_summarize(
         max_reduce_new_tokens,
         max_batch_chars,
     )
-    summary = service.summarize(document_id)
+    summary = service.summarize(
+        document_id,
+        force=force,
+    )
 
     payload = {
         "document_id": str(summary.document_id),

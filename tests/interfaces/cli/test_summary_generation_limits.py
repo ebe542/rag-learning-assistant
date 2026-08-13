@@ -58,7 +58,7 @@ def test_entrypoint_forwards_separate_summary_token_limits(
     (index_directory / "metadata.sqlite3").touch()
 
     document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-    calls: list[tuple[Path, UUID, int, int, int]] = []
+    calls: list[tuple[Path, UUID, int, int, int, bool]] = []
 
     def fake_run_summarize(
         index_directory: Path,
@@ -66,6 +66,7 @@ def test_entrypoint_forwards_separate_summary_token_limits(
         max_map_new_tokens: int,
         max_reduce_new_tokens: int,
         max_batch_chars: int,
+        force: bool,
     ) -> int:
         calls.append(
             (
@@ -74,6 +75,7 @@ def test_entrypoint_forwards_separate_summary_token_limits(
                 max_map_new_tokens,
                 max_reduce_new_tokens,
                 max_batch_chars,
+                force,
             )
         )
         return 0
@@ -106,5 +108,6 @@ def test_entrypoint_forwards_separate_summary_token_limits(
             128,
             256,
             8000,
+            False,
         )
     ]

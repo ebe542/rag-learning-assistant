@@ -23,3 +23,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0015: Resume interrupted document summaries](0015-resume-document-summaries.md)
 - [0016: Configure Map and Reduce generation limits separately](0016-separate-map-and-reduce-generation-limits.md)
 - [0017: Evaluate grounded generation with versioned reference cases](0017-evaluate-grounded-generation.md)
+- [0018: Persist final document summaries](0018-persist-final-document-summaries.md)

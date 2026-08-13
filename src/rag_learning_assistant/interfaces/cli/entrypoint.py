@@ -65,6 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 max_map_new_tokens=args.max_map_new_tokens,
                 max_reduce_new_tokens=args.max_reduce_new_tokens,
                 max_batch_chars=args.max_batch_chars,
+                force=args.force,
             )
         except DocumentNotFoundError as exc:
             parser.error(str(exc))

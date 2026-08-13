@@ -30,7 +30,12 @@ class RecordingSummarizationService:
         self.summary = summary
         self.requested_ids: list[UUID] = []
 
-    def summarize(self, document_id: UUID) -> DocumentSummary:
+    def summarize(
+        self,
+        document_id: UUID,
+        *,
+        force: bool = False,
+    ) -> DocumentSummary:
         self.requested_ids.append(document_id)
         return self.summary
 
@@ -130,7 +135,7 @@ def test_entrypoint_dispatches_summarize_command(
     (index_directory / "metadata.sqlite3").touch()
 
     document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-    calls: list[tuple[Path, UUID, int, int, int]] = []
+    calls: list[tuple[Path, UUID, int, int, int, bool]] = []
 
     def fake_run_summarize(
         index_directory: Path,
@@ -138,6 +143,7 @@ def test_entrypoint_dispatches_summarize_command(
         max_map_new_tokens: int,
         max_reduce_new_tokens: int,
         max_batch_chars: int,
+        force: bool,
     ) -> int:
         calls.append(
             (
@@ -146,6 +152,7 @@ def test_entrypoint_dispatches_summarize_command(
                 max_map_new_tokens,
                 max_reduce_new_tokens,
                 max_batch_chars,
+                force,
             )
         )
         return 0
@@ -179,6 +186,7 @@ def test_entrypoint_dispatches_summarize_command(
             160,
             320,
             36_000,
+            False,
         )
     ]
 
@@ -319,6 +327,7 @@ def test_entrypoint_reports_unknown_document_as_cli_error(
         max_map_new_tokens: int,
         max_reduce_new_tokens: int,
         max_batch_chars: int,
+        force: bool,
     ) -> int:
         assert index_directory == tmp_path / "library"
         assert max_map_new_tokens == DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS

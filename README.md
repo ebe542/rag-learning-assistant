@@ -139,6 +139,19 @@ Completed map batches are cached in the library's `metadata.sqlite3` and reused
 after an interrupted run when the document and generation configuration remain
 unchanged.
 
+Completed final summaries are also stored in `metadata.sqlite3`. Repeating the
+command with the same document, model revision, prompts, and generation limits
+returns the validated result without loading chunks or invoking the model. Use
+`--force` to bypass both final and Map caches, regenerate every phase, and explicitly
+replace the final result:
+
+```bash
+rag-learn summarize \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  --force
+```
+
 Measure real local-model generation and cache behavior manually:
 
 ```bash

@@ -266,5 +266,9 @@ def build_parser() -> argparse.ArgumentParser:
             f"(default: {DEFAULT_SUMMARY_MAX_BATCH_CHARS})"
         ),
     )
-
+    summarize_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate the summary even when a matching final result exists",
+    )
     return parser
