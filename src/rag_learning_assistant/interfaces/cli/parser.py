@@ -10,6 +10,8 @@ DEFAULT_RESULT_LIMIT = 5
 DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS = 192
 DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS = 384
 DEFAULT_SUMMARY_MAX_BATCH_CHARS = 12_000
+DEFAULT_QUESTION_COUNT = 5
+DEFAULT_QUESTION_MAX_NEW_TOKENS = 512
 
 
 def positive_int(value: str) -> int:
@@ -320,5 +322,80 @@ def build_parser() -> argparse.ArgumentParser:
         "identity_fingerprint",
         type=sha256_fingerprint,
         help="SHA-256 generation identity of the stored summary",
+    )
+
+    question_generate_parser = commands.add_parser(
+        "question-generate",
+        help="Generate a grounded question bank from a persisted summary",
+    )
+    question_generate_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
+    question_generate_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the source document",
+    )
+    question_generate_parser.add_argument(
+        "summary_identity_fingerprint",
+        type=sha256_fingerprint,
+        help="SHA-256 identity of the persisted source summary",
+    )
+    question_generate_parser.add_argument(
+        "--count",
+        type=positive_int,
+        default=DEFAULT_QUESTION_COUNT,
+        help=(f"Number of study questions to generate (default: {DEFAULT_QUESTION_COUNT})"),
+    )
+    question_generate_parser.add_argument(
+        "--max-new-tokens",
+        type=positive_int,
+        default=DEFAULT_QUESTION_MAX_NEW_TOKENS,
+        help=(
+            "Maximum tokens generated for the complete question bank "
+            f"(default: {DEFAULT_QUESTION_MAX_NEW_TOKENS})"
+        ),
+    )
+    question_generate_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate and replace an existing matching question bank",
+    )
+
+    question_list_parser = commands.add_parser(
+        "question-list",
+        help="List persisted question banks for one document",
+    )
+    question_list_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
+    question_list_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the document whose question banks should be listed",
+    )
+
+    question_show_parser = commands.add_parser(
+        "question-show",
+        help="Show one persisted grounded question bank",
+    )
+    question_show_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
+    question_show_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the source document",
+    )
+    question_show_parser.add_argument(
+        "identity_fingerprint",
+        type=sha256_fingerprint,
+        help="SHA-256 generation identity of the question bank",
     )
     return parser

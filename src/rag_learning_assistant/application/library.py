@@ -1,7 +1,7 @@
 """Application service for adding documents to a library."""
 
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -57,7 +57,7 @@ class DocumentIndexer(Protocol):
         ...
 
 
-class DocumentSummaryCleaner(Protocol):
+class DocumentDerivedDataCleaner(Protocol):
     """Remove derived summaries belonging to a library document."""
 
     def delete_document(self, document_id: UUID) -> int:
@@ -86,13 +86,14 @@ class LibraryService(LibraryCatalog):
         extractor: DocumentExtractor,
         indexer: DocumentIndexer,
         id_factory: Callable[[], UUID] = uuid4,
-        summaries: DocumentSummaryCleaner | None = None,
+        derived_data_cleaners: Sequence[DocumentDerivedDataCleaner] = (),
     ) -> None:
         super().__init__(repository)
         self.extractor = extractor
         self.indexer = indexer
         self.id_factory = id_factory
-        self.summaries = summaries
+        # An immutable tuple prevents callers from changing lifecycle behavior later.
+        self.derived_data_cleaners = tuple(derived_data_cleaners)
 
     def add_document(self, path: Path) -> IndexedDocument:
         """Index a file and register its persistent library metadata."""
@@ -154,10 +155,10 @@ class LibraryService(LibraryCatalog):
             chunk_count=len(chunks),
         )
 
-        if self.summaries is not None:
-            # Existing summaries describe the previous document content and must not
-            # survive a successful replacement, even when the document ID stays stable.
-            self.summaries.delete_document(document_id)
+        # Derived records describe the previous document content and must not survive
+        # a successful removal or replacement.
+        for cleaner in self.derived_data_cleaners:
+            cleaner.delete_document(document_id)
 
         self.repository.update(replaced_document)
         return replaced_document
@@ -177,9 +178,10 @@ class LibraryService(LibraryCatalog):
         if removed_chunk_count != document.chunk_count:
             raise RuntimeError("Removed chunk count does not match document metadata")
 
-        if self.summaries is not None:
-            # Summaries are derived from the chunks and must not outlive their document.
-            self.summaries.delete_document(document_id)
+        # Derived records describe the previous document content and must not survive
+        # a successful removal or replacement.
+        for cleaner in self.derived_data_cleaners:
+            cleaner.delete_document(document_id)
 
         self.repository.remove(document_id)
         return document

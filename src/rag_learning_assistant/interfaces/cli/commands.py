@@ -16,6 +16,11 @@ from rag_learning_assistant.application import (
     LibraryCatalog,
     LibraryService,
     QuestionAnsweringService,
+    QuestionBankCatalog,
+    QuestionBankService,
+)
+from rag_learning_assistant.application.question_bank import (
+    QUESTION_BANK_PROMPT,
 )
 from rag_learning_assistant.application.summarization import (
     SUMMARY_MAP_PROMPT,
@@ -26,15 +31,23 @@ from rag_learning_assistant.generation import (
     Citation,
     GenerationIdentity,
     HuggingFaceTextGenerator,
+    PersistedDocumentSummary,
     PromptReference,
     SqliteDocumentSummaryRepository,
 )
 from rag_learning_assistant.generation.huggingface import (
     JSON_REPAIR_PROMPT,
+    QUESTION_JSON_REPAIR_PROMPT,
+    QUESTION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
 )
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
+from rag_learning_assistant.learning import (
+    QuestionBankIdentity,
+    SqliteQuestionBankRepository,
+    StudyQuestion,
+)
 from rag_learning_assistant.library import IndexedDocument, SqliteDocumentRepository
 from rag_learning_assistant.retrieval import (
     FaissVectorStore,
@@ -99,7 +112,10 @@ def build_library_service(
             chunker,
             index_directory,
         ),
-        summaries=SqliteDocumentSummaryRepository(database_path),
+        derived_data_cleaners=(
+            SqliteDocumentSummaryRepository(database_path),
+            SqliteQuestionBankRepository(database_path),
+        ),
     )
 
 
@@ -122,6 +138,58 @@ def build_document_summary_catalog(
     return DocumentSummaryCatalog(
         documents=SqliteDocumentRepository(database_path),
         summaries=SqliteDocumentSummaryRepository(database_path),
+    )
+
+
+def build_question_bank_catalog(
+    index_directory: Path,
+) -> QuestionBankCatalog:
+    """Build read-only access to persisted question banks."""
+
+    database_path = index_directory / "metadata.sqlite3"
+
+    return QuestionBankCatalog(
+        documents=SqliteDocumentRepository(database_path),
+        banks=SqliteQuestionBankRepository(database_path),
+    )
+
+
+def build_question_bank_service(
+    index_directory: Path,
+    max_new_tokens: int,
+) -> QuestionBankService:
+    """Build grounded question generation for one persistent library."""
+
+    database_path = index_directory / "metadata.sqlite3"
+    generator = HuggingFaceTextGenerator(
+        max_new_tokens=max_new_tokens,
+    )
+
+    def build_identity(
+        summary: PersistedDocumentSummary,
+        question_count: int,
+    ) -> QuestionBankIdentity:
+        return QuestionBankIdentity(
+            model_name=generator.model_name,
+            model_revision=generator.model_revision,
+            prompt_references=(
+                QUESTION_BANK_PROMPT.reference,
+                QUESTION_SYSTEM_PROMPT.reference,
+                QUESTION_JSON_REPAIR_PROMPT.reference,
+            ),
+            question_count=question_count,
+            max_new_tokens=max_new_tokens,
+            summary_identity_fingerprint=(summary.identity_fingerprint),
+        )
+
+    return QuestionBankService(
+        summaries=build_document_summary_catalog(
+            index_directory,
+        ),
+        generator=generator,
+        banks=SqliteQuestionBankRepository(database_path),
+        identity_factory=build_identity,
+        max_new_tokens=max_new_tokens,
     )
 
 
@@ -255,6 +323,99 @@ def run_summarize(
     return 0
 
 
+def run_question_generate(
+    index_directory: Path,
+    document_id: UUID,
+    summary_identity_fingerprint: str,
+    question_count: int,
+    max_new_tokens: int,
+    force: bool = False,
+) -> int:
+    """Generate a grounded question bank and write it as JSON."""
+
+    service = build_question_bank_service(
+        index_directory=index_directory,
+        max_new_tokens=max_new_tokens,
+    )
+    bank = service.generate(
+        document_id,
+        summary_identity_fingerprint,
+        question_count=question_count,
+        force=force,
+    )
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(bank.document_id),
+        "summary_identity_fingerprint": (summary_identity_fingerprint),
+        "question_bank_identity_fingerprint": (bank.identity_fingerprint),
+        "source": bank.source,
+        "questions": _serialize_study_questions(bank.questions),
+        "prompts": _serialize_prompt_references(
+            bank.prompt_references,
+        ),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_question_list(
+    index_directory: Path,
+    document_id: UUID,
+) -> int:
+    """Write metadata for all persisted question banks of one document."""
+
+    catalog = build_question_bank_catalog(index_directory)
+    banks = catalog.list_document_banks(document_id)
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(document_id),
+        "question_banks": [
+            {
+                "identity_fingerprint": bank.identity_fingerprint,
+                "source": bank.source,
+                "question_count": len(bank.questions),
+                "prompts": _serialize_prompt_references(
+                    bank.prompt_references,
+                ),
+            }
+            for bank in banks
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_question_show(
+    index_directory: Path,
+    document_id: UUID,
+    identity_fingerprint: str,
+) -> int:
+    """Write one persisted grounded question bank as JSON."""
+
+    catalog = build_question_bank_catalog(index_directory)
+    bank = catalog.get_document_bank(
+        document_id,
+        identity_fingerprint,
+    )
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(bank.document_id),
+        "identity_fingerprint": bank.identity_fingerprint,
+        "source": bank.source,
+        "questions": _serialize_study_questions(
+            bank.questions,
+        ),
+        "prompts": _serialize_prompt_references(
+            bank.prompt_references,
+        ),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _serialize_import_outcome(outcome: ImportOutcome) -> dict[str, object]:
     """Convert one batch result into a JSON-compatible mapping."""
 
@@ -277,6 +438,24 @@ def _serialize_import_outcome(outcome: ImportOutcome) -> dict[str, object]:
         "document": document_payload,
         "message": outcome.message,
     }
+
+
+def _serialize_study_questions(
+    questions: Sequence[StudyQuestion],
+) -> list[dict[str, object]]:
+    """Convert grounded study questions to stable CLI JSON."""
+
+    return [
+        {
+            "number": question.number,
+            "text": question.text,
+            "expected_answer": question.expected_answer,
+            "citations": _serialize_citations(
+                question.citations,
+            ),
+        }
+        for question in questions
+    ]
 
 
 def run_extract(

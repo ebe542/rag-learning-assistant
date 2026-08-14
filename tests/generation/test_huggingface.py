@@ -7,6 +7,8 @@ import pytest
 from rag_learning_assistant.generation import PromptTemplate
 from rag_learning_assistant.generation.huggingface import (
     JSON_REPAIR_PROMPT,
+    QUESTION_JSON_REPAIR_PROMPT,
+    QUESTION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     HuggingFaceTextGenerator,
 )
@@ -330,6 +332,14 @@ def test_huggingface_prompts_have_explicit_versions() -> None:
     assert JSON_REPAIR_PROMPT.name == "generation.json-repair"
     assert JSON_REPAIR_PROMPT.version == 2
 
+    assert isinstance(QUESTION_SYSTEM_PROMPT, PromptTemplate)
+    assert QUESTION_SYSTEM_PROMPT.name == ("question-generation.system-json")
+    assert QUESTION_SYSTEM_PROMPT.version == 1
+
+    assert isinstance(QUESTION_JSON_REPAIR_PROMPT, PromptTemplate)
+    assert QUESTION_JSON_REPAIR_PROMPT.name == ("question-generation.json-repair")
+    assert QUESTION_JSON_REPAIR_PROMPT.version == 1
+
 
 def test_system_prompt_does_not_contain_a_copyable_answer_placeholder() -> None:
     assert SYSTEM_PROMPT.version == 2
@@ -338,3 +348,117 @@ def test_system_prompt_does_not_contain_a_copyable_answer_placeholder() -> None:
 
     assert JSON_REPAIR_PROMPT.version == 2
     assert "Never replace it with placeholder text" in JSON_REPAIR_PROMPT.text
+
+
+def test_generate_questions_uses_question_schema_and_parser() -> None:
+    pipeline = RecordingPipeline(
+        """
+        {
+          "questions": [
+            {
+              "text": "What is an embedding?",
+              "expected_answer": "A numeric representation of text.",
+              "citation_numbers": [1]
+            }
+          ]
+        }
+        """
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=512,
+    )
+
+    result = generator.generate_questions(
+        "Summary and grounded contexts",
+        max_new_tokens=256,
+    )
+
+    assert len(result.questions) == 1
+    assert result.questions[0].text == "What is an embedding?"
+    assert result.questions[0].citation_numbers == (1,)
+    assert result.prompt_references == (QUESTION_SYSTEM_PROMPT.reference,)
+
+    messages, _ = pipeline.calls[0]
+    assert messages[0] == {
+        "role": "system",
+        "content": QUESTION_SYSTEM_PROMPT.text,
+    }
+    assert messages[1] == {
+        "role": "user",
+        "content": "Summary and grounded contexts",
+    }
+    assert pipeline.generation_config.max_new_tokens == 256
+
+
+def test_generate_questions_retries_once_after_invalid_json() -> None:
+    invalid_response = (
+        '{"questions": [{"text": "What is an "embedding"?", '
+        '"expected_answer": "A vector.", '
+        '"citation_numbers": [1]}]}'
+    )
+    repaired_response = """
+    {
+      "questions": [
+        {
+          "text": "What is an embedding?",
+          "expected_answer": "A vector.",
+          "citation_numbers": [1]
+        }
+      ]
+    }
+    """
+    pipeline = SequentialRecordingPipeline(
+        [
+            invalid_response,
+            repaired_response,
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=512,
+    )
+
+    result = generator.generate_questions(
+        "Summary and grounded contexts",
+    )
+
+    assert result.questions[0].text == "What is an embedding?"
+    assert result.prompt_references == (
+        QUESTION_SYSTEM_PROMPT.reference,
+        QUESTION_JSON_REPAIR_PROMPT.reference,
+    )
+    assert len(pipeline.calls) == 2
+
+    retry_messages, _ = pipeline.calls[1]
+    assert retry_messages[-2] == {
+        "role": "assistant",
+        "content": invalid_response,
+    }
+    assert retry_messages[-1] == {
+        "role": "user",
+        "content": QUESTION_JSON_REPAIR_PROMPT.text,
+    }
+
+
+def test_generate_questions_stops_after_one_failed_repair() -> None:
+    pipeline = SequentialRecordingPipeline(
+        [
+            "not JSON",
+            "still not JSON",
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=512,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Question response must be valid JSON",
+    ):
+        generator.generate_questions(
+            "Summary and grounded contexts",
+        )
+
+    assert len(pipeline.calls) == 2

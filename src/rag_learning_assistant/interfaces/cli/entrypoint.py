@@ -9,6 +9,7 @@ from rag_learning_assistant.application import (
     DocumentNotFoundError,
     DocumentSummaryNotFoundError,
     DuplicateDocumentError,
+    QuestionBankNotFoundError,
 )
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import PdfExtractor
@@ -96,6 +97,51 @@ def main(argv: Sequence[str] | None = None) -> int:
                 index_directory=args.index_dir,
                 document_id=args.document_id,
                 identity_fingerprint=args.identity_fingerprint,
+            )
+        except (
+            DocumentNotFoundError,
+            DocumentSummaryNotFoundError,
+        ) as exc:
+            parser.error(str(exc))
+
+    if args.command in {"question-list", "question-show"}:
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            if args.command == "question-list":
+                return commands.run_question_list(
+                    index_directory=args.index_dir,
+                    document_id=args.document_id,
+                )
+
+            return commands.run_question_show(
+                index_directory=args.index_dir,
+                document_id=args.document_id,
+                identity_fingerprint=args.identity_fingerprint,
+            )
+        except (
+            DocumentNotFoundError,
+            QuestionBankNotFoundError,
+        ) as exc:
+            parser.error(str(exc))
+
+    if args.command == "question-generate":
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            return commands.run_question_generate(
+                index_directory=args.index_dir,
+                document_id=args.document_id,
+                summary_identity_fingerprint=(args.summary_identity_fingerprint),
+                question_count=args.count,
+                max_new_tokens=args.max_new_tokens,
+                force=args.force,
             )
         except (
             DocumentNotFoundError,

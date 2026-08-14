@@ -175,6 +175,37 @@ Removing a document also removes all of its persisted final summaries.
 Replacing a document preserves its UUID but removes summaries derived from the
 previous content after the new chunks have been indexed successfully.
 
+Generate a persistent grounded question bank from one exact stored summary:
+
+```bash
+rag-learn question-generate \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  SUMMARY_IDENTITY_SHA256 \
+  --count 5
+```
+
+The selected summary supplies the document overview and the trusted source
+citations. Repeating the same configuration reuses the stored bank; add `--force`
+to regenerate and replace it. List all banks for a document or retrieve one full
+bank without loading the generation model:
+
+```bash
+rag-learn question-list \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678
+```
+
+```bash
+rag-learn question-show \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  QUESTION_BANK_IDENTITY_SHA256
+```
+
+Removing or successfully replacing a document also removes question banks
+derived from its previous content.
+
 Measure real local-model generation and cache behavior manually:
 
 ```bash
@@ -230,8 +261,8 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
 
 Planned next milestones:
 
-1. generate summaries and reusable question banks
-2. track learner feedback and spaced repetition
+1. track learner feedback and spaced repetition
+2. generate detailed section-level learning material
 3. add optional Ollama and API model providers
 
 ## Development

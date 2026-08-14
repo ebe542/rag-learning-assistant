@@ -20,6 +20,11 @@ from rag_learning_assistant.generation.prompts import (
     PromptReference,
     PromptTemplate,
 )
+from rag_learning_assistant.generation.question_parser import (
+    GeneratedQuestionDraft,
+    QuestionGenerationResult,
+    parse_question_generation_response,
+)
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.generation.summary_repository import (
     DocumentSummaryRepository,
@@ -34,7 +39,9 @@ __all__ = [
     "GenerationIdentity",
     "GenerationResult",
     "GroundedAnswer",
+    "GeneratedQuestionDraft",
     "HuggingFaceTextGenerator",
+    "parse_question_generation_response",
     "PersistedDocumentSummary",
     "PromptReference",
     "PromptTemplate",
@@ -42,4 +49,5 @@ __all__ = [
     "SqliteSummaryCache",
     "SummaryBatchCache",
     "TextGenerator",
+    "QuestionGenerationResult",
 ]

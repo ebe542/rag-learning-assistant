@@ -53,6 +53,16 @@ class RecordingSummaryRepository:
         return 2
 
 
+class RecordingQuestionBankRepository:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def delete_document(self, document_id: UUID) -> int:
+        assert document_id == DOCUMENT_ID
+        self.events.append("delete question banks")
+        return 2
+
+
 class RecordingDocumentRepository:
     def __init__(
         self,
@@ -172,7 +182,7 @@ class MissingDocumentRepository(RecordingDocumentRepository):
         return None
 
 
-def test_remove_document_deletes_summaries_before_catalog_metadata() -> None:
+def test_remove_document_deletes_derived_data_before_catalog_metadata() -> None:
     events: list[str] = []
     document = IndexedDocument(
         id=DOCUMENT_ID,
@@ -185,7 +195,10 @@ def test_remove_document_deletes_summaries_before_catalog_metadata() -> None:
         repository=RecordingDocumentRepository(document, events),
         extractor=UnexpectedExtractor(),
         indexer=RecordingIndexer(events),
-        summaries=RecordingSummaryRepository(events),
+        derived_data_cleaners=(
+            RecordingSummaryRepository(events),
+            RecordingQuestionBankRepository(events),
+        ),
     )
 
     removed_document = service.remove_document(DOCUMENT_ID)
@@ -194,11 +207,12 @@ def test_remove_document_deletes_summaries_before_catalog_metadata() -> None:
     assert events == [
         "remove chunks",
         "delete summaries",
+        "delete question banks",
         "remove metadata",
     ]
 
 
-def test_remove_document_preserves_summaries_when_chunk_removal_is_incomplete() -> None:
+def test_remove_document_preserves_derived_data_when_chunk_removal_is_incomplete() -> None:
     events: list[str] = []
     document = IndexedDocument(
         id=DOCUMENT_ID,
@@ -211,7 +225,10 @@ def test_remove_document_preserves_summaries_when_chunk_removal_is_incomplete() 
         repository=RecordingDocumentRepository(document, events),
         extractor=UnexpectedExtractor(),
         indexer=MismatchedIndexer(events),
-        summaries=RecordingSummaryRepository(events),
+        derived_data_cleaners=(
+            RecordingSummaryRepository(events),
+            RecordingQuestionBankRepository(events),
+        ),
     )
 
     with pytest.raises(
@@ -223,7 +240,7 @@ def test_remove_document_preserves_summaries_when_chunk_removal_is_incomplete() 
     assert events == ["remove chunks"]
 
 
-def test_replace_document_deletes_summaries_before_updating_metadata(
+def test_replace_document_deletes_derived_data_before_updating_metadata(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -245,7 +262,10 @@ def test_replace_document_deletes_summaries_before_updating_metadata(
         repository=ReplacementRepository(original, events),
         extractor=ReplacementExtractor(replacement, events),
         indexer=ReplacementIndexer(events),
-        summaries=RecordingSummaryRepository(events),
+        derived_data_cleaners=(
+            RecordingSummaryRepository(events),
+            RecordingQuestionBankRepository(events),
+        ),
     )
 
     replaced_document = service.replace_document(
@@ -258,11 +278,12 @@ def test_replace_document_deletes_summaries_before_updating_metadata(
         "extract document",
         "replace chunks",
         "delete summaries",
+        "delete question banks",
         "update metadata",
     ]
 
 
-def test_replace_document_preserves_summaries_when_indexing_fails(
+def test_replace_document_preserves_derived_data_when_indexing_fails(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -284,7 +305,10 @@ def test_replace_document_preserves_summaries_when_indexing_fails(
         repository=ReplacementRepository(original, events),
         extractor=ReplacementExtractor(replacement, events),
         indexer=FailingReplacementIndexer(events),
-        summaries=RecordingSummaryRepository(events),
+        derived_data_cleaners=(
+            RecordingSummaryRepository(events),
+            RecordingQuestionBankRepository(events),
+        ),
     )
 
     with pytest.raises(RuntimeError, match="Index replacement failed"):

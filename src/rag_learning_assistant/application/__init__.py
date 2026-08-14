@@ -17,6 +17,11 @@ from rag_learning_assistant.application.library import (
 from rag_learning_assistant.application.question_answering import (
     QuestionAnsweringService,
 )
+from rag_learning_assistant.application.question_bank import (
+    QuestionBankCatalog,
+    QuestionBankNotFoundError,
+    QuestionBankService,
+)
 from rag_learning_assistant.application.summarization import (
     DocumentSummarizationService,
     DocumentSummary,
@@ -40,4 +45,7 @@ __all__ = [
     "LibraryCatalog",
     "LibraryService",
     "QuestionAnsweringService",
+    "QuestionBankService",
+    "QuestionBankCatalog",
+    "QuestionBankNotFoundError",
 ]

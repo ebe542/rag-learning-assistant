@@ -74,11 +74,13 @@ def test_library_builder_configures_summary_lifecycle_repository(
         tmp_path,
     )
 
+    summary_cleaner = service.derived_data_cleaners[0]
+
     assert isinstance(
-        service.summaries,
+        summary_cleaner,
         SqliteDocumentSummaryRepository,
     )
-    assert service.summaries.database_path == tmp_path / "metadata.sqlite3"
+    assert summary_cleaner.database_path == tmp_path / "metadata.sqlite3"
 
 
 def test_parser_accepts_summary_list_command() -> None:

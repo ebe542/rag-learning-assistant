@@ -7,6 +7,10 @@ from rag_learning_assistant.generation.models import (
     GenerationResult,
 )
 from rag_learning_assistant.generation.prompts import PromptTemplate
+from rag_learning_assistant.generation.question_parser import (
+    QuestionGenerationResult,
+    parse_question_generation_response,
+)
 from rag_learning_assistant.generation.response_parser import (
     parse_generation_response,
 )
@@ -37,6 +41,41 @@ Return the response again as valid JSON with exactly the fields "text" and
 "citation_numbers".
 Correct only the JSON representation.
 Do not add or remove factual claims.
+Do not add or remove citation numbers.
+Do not wrap the JSON in Markdown code fences.
+""".strip(),
+)
+
+QUESTION_SYSTEM_PROMPT = PromptTemplate(
+    name="question-generation.system-json",
+    version=1,
+    text="""
+Return only one valid JSON object with exactly one field named "questions".
+"questions" must be a non-empty array of objects with exactly these fields:
+- "text": the free-response study question
+- "expected_answer": a grounded model answer
+- "citation_numbers": a non-empty array of integers identifying only contexts
+  that directly support the expected answer
+
+Never invent source names, page numbers, excerpts, or context numbers.
+Never return placeholder text.
+Do not wrap the JSON object in Markdown code fences.
+""".strip(),
+)
+
+QUESTION_JSON_REPAIR_PROMPT = PromptTemplate(
+    name="question-generation.json-repair",
+    version=1,
+    text="""
+Your previous response did not match the required question-bank JSON format.
+Preserve every question, expected answer, and citation number from the previous
+response.
+Return the response again as one valid JSON object with exactly the field
+"questions".
+Each question must contain exactly "text", "expected_answer", and
+"citation_numbers".
+Correct only the JSON representation.
+Do not add, remove, or rewrite factual content.
 Do not add or remove citation numbers.
 Do not wrap the JSON in Markdown code fences.
 """.strip(),
@@ -154,6 +193,71 @@ class HuggingFaceTextGenerator:
             prompt_references=(
                 SYSTEM_PROMPT.reference,
                 JSON_REPAIR_PROMPT.reference,
+            ),
+        )
+
+    def generate_questions(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> QuestionGenerationResult:
+        """Generate and parse one structured set of study questions."""
+
+        effective_max_new_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
+        if effective_max_new_tokens < 1:
+            raise ValueError("max_new_tokens must be positive")
+
+        messages = [
+            {
+                "role": "system",
+                "content": QUESTION_SYSTEM_PROMPT.text,
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ]
+        raw_response = self._generate_raw_response(
+            messages,
+            max_new_tokens=effective_max_new_tokens,
+        )
+
+        try:
+            questions = parse_question_generation_response(
+                raw_response,
+            )
+            return QuestionGenerationResult(
+                questions=questions,
+                prompt_references=(QUESTION_SYSTEM_PROMPT.reference,),
+            )
+        except ValueError:
+            # Repair only the representation. Source grounding and question
+            # contents must remain unchanged.
+            repair_messages = [
+                *messages,
+                {
+                    "role": "assistant",
+                    "content": raw_response,
+                },
+                {
+                    "role": "user",
+                    "content": QUESTION_JSON_REPAIR_PROMPT.text,
+                },
+            ]
+            repaired_response = self._generate_raw_response(
+                repair_messages,
+                max_new_tokens=effective_max_new_tokens,
+            )
+
+        questions = parse_question_generation_response(
+            repaired_response,
+        )
+        return QuestionGenerationResult(
+            questions=questions,
+            prompt_references=(
+                QUESTION_SYSTEM_PROMPT.reference,
+                QUESTION_JSON_REPAIR_PROMPT.reference,
             ),
         )
 
