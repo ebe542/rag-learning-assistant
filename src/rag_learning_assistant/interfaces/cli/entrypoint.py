@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from rag_learning_assistant.application import (
     DocumentNotFoundError,
+    DocumentSummaryNotFoundError,
     DuplicateDocumentError,
 )
 from rag_learning_assistant.chunking import TextChunker
@@ -77,6 +78,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(str(exc))
 
         return commands.run_list(args.index_dir)
+
+    if args.command in {"summary-list", "summary-show"}:
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            if args.command == "summary-list":
+                return commands.run_summary_list(
+                    index_directory=args.index_dir,
+                    document_id=args.document_id,
+                )
+
+            return commands.run_summary_show(
+                index_directory=args.index_dir,
+                document_id=args.document_id,
+                identity_fingerprint=args.identity_fingerprint,
+            )
+        except (
+            DocumentNotFoundError,
+            DocumentSummaryNotFoundError,
+        ) as exc:
+            parser.error(str(exc))
 
     if args.command == "remove":
         try:

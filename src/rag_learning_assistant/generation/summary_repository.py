@@ -150,32 +150,10 @@ class SqliteDocumentSummaryRepository:
         if row is None:
             return None
 
-        citations = tuple(
-            Citation(
-                number=item["number"],
-                source=item["source"],
-                page_number=item["page_number"],
-                chunk_index=item["chunk_index"],
-                excerpt=item["excerpt"],
-            )
-            for item in json.loads(row["citations_json"])
-        )
-        prompt_references = tuple(
-            PromptReference(
-                name=item["name"],
-                version=item["version"],
-                fingerprint=item["fingerprint"],
-            )
-            for item in json.loads(row["prompt_references_json"])
-        )
-
-        return PersistedDocumentSummary(
+        return self._deserialize(
             document_id=document_id,
             identity_fingerprint=identity_fingerprint,
-            source=row["source"],
-            text=row["text"],
-            citations=citations,
-            prompt_references=prompt_references,
+            row=row,
         )
 
     def replace(self, summary: PersistedDocumentSummary) -> None:
@@ -209,6 +187,51 @@ class SqliteDocumentSummaryRepository:
             # final result exists yet.
             self.save(summary)
 
+    def delete_document(self, document_id: UUID) -> int:
+        """Delete every persisted summary version belonging to one document."""
+
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM document_summaries
+                WHERE document_id = ?
+                """,
+                (str(document_id),),
+            )
+
+            return cursor.rowcount
+
+    def list_document(
+        self,
+        document_id: UUID,
+    ) -> list[PersistedDocumentSummary]:
+        """Return every persisted summary version for one document."""
+
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    identity_fingerprint,
+                    source,
+                    text,
+                    citations_json,
+                    prompt_references_json
+                FROM document_summaries
+                WHERE document_id = ?
+                ORDER BY identity_fingerprint
+                """,
+                (str(document_id),),
+            ).fetchall()
+
+        return [
+            self._deserialize(
+                document_id=document_id,
+                identity_fingerprint=row["identity_fingerprint"],
+                row=row,
+            )
+            for row in rows
+        ]
+
     @staticmethod
     def _serialize(
         summary: PersistedDocumentSummary,
@@ -234,4 +257,39 @@ class SqliteDocumentSummaryRepository:
         return (
             json.dumps(citations, ensure_ascii=False),
             json.dumps(prompt_references, ensure_ascii=False),
+        )
+
+    @staticmethod
+    def _deserialize(
+        *,
+        document_id: UUID,
+        identity_fingerprint: str,
+        row: sqlite3.Row,
+    ) -> PersistedDocumentSummary:
+        citations = tuple(
+            Citation(
+                number=item["number"],
+                source=item["source"],
+                page_number=item["page_number"],
+                chunk_index=item["chunk_index"],
+                excerpt=item["excerpt"],
+            )
+            for item in json.loads(row["citations_json"])
+        )
+        prompt_references = tuple(
+            PromptReference(
+                name=item["name"],
+                version=item["version"],
+                fingerprint=item["fingerprint"],
+            )
+            for item in json.loads(row["prompt_references_json"])
+        )
+
+        return PersistedDocumentSummary(
+            document_id=document_id,
+            identity_fingerprint=identity_fingerprint,
+            source=row["source"],
+            text=row["text"],
+            citations=citations,
+            prompt_references=prompt_references,
         )

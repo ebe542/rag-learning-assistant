@@ -21,6 +21,10 @@ from rag_learning_assistant.application.summarization import (
     DocumentSummarizationService,
     DocumentSummary,
 )
+from rag_learning_assistant.application.summary_catalog import (
+    DocumentSummaryCatalog,
+    DocumentSummaryNotFoundError,
+)
 
 __all__ = [
     "BatchImportService",
@@ -28,6 +32,8 @@ __all__ = [
     "DocumentSearchService",
     "DocumentSummarizationService",
     "DocumentSummary",
+    "DocumentSummaryCatalog",
+    "DocumentSummaryNotFoundError",
     "DuplicateDocumentError",
     "ImportOutcome",
     "ImportStatus",

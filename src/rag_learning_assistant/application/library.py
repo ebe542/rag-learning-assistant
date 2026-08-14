@@ -57,6 +57,14 @@ class DocumentIndexer(Protocol):
         ...
 
 
+class DocumentSummaryCleaner(Protocol):
+    """Remove derived summaries belonging to a library document."""
+
+    def delete_document(self, document_id: UUID) -> int:
+        """Delete all persisted summary versions of a document."""
+        ...
+
+
 class LibraryCatalog:
     """Provide read-only access to registered library documents."""
 
@@ -78,11 +86,13 @@ class LibraryService(LibraryCatalog):
         extractor: DocumentExtractor,
         indexer: DocumentIndexer,
         id_factory: Callable[[], UUID] = uuid4,
+        summaries: DocumentSummaryCleaner | None = None,
     ) -> None:
         super().__init__(repository)
         self.extractor = extractor
         self.indexer = indexer
         self.id_factory = id_factory
+        self.summaries = summaries
 
     def add_document(self, path: Path) -> IndexedDocument:
         """Index a file and register its persistent library metadata."""
@@ -143,6 +153,12 @@ class LibraryService(LibraryCatalog):
             page_count=len(document.pages),
             chunk_count=len(chunks),
         )
+
+        if self.summaries is not None:
+            # Existing summaries describe the previous document content and must not
+            # survive a successful replacement, even when the document ID stays stable.
+            self.summaries.delete_document(document_id)
+
         self.repository.update(replaced_document)
         return replaced_document
 
@@ -160,6 +176,10 @@ class LibraryService(LibraryCatalog):
         # Removing it would hide an inconsistent index from library management.
         if removed_chunk_count != document.chunk_count:
             raise RuntimeError("Removed chunk count does not match document metadata")
+
+        if self.summaries is not None:
+            # Summaries are derived from the chunks and must not outlive their document.
+            self.summaries.delete_document(document_id)
 
         self.repository.remove(document_id)
         return document

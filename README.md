@@ -152,6 +152,29 @@ rag-learn summarize \
   --force
 ```
 
+List the persisted generation identities for a document without loading the
+generation model:
+
+```bash
+rag-learn summary-list \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678
+```
+
+Use an identity fingerprint from that output to retrieve the complete grounded
+summary with citations and prompt references:
+
+```bash
+rag-learn summary-show \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  GENERATION_IDENTITY_SHA256
+```
+
+Removing a document also removes all of its persisted final summaries.
+Replacing a document preserves its UUID but removes summaries derived from the
+previous content after the new chunks have been indexed successfully.
+
 Measure real local-model generation and cache behavior manually:
 
 ```bash

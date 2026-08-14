@@ -10,6 +10,7 @@ from rag_learning_assistant.application import (
     BatchImportService,
     DocumentSearchService,
     DocumentSummarizationService,
+    DocumentSummaryCatalog,
     ImportOutcome,
     ImportStatus,
     LibraryCatalog,
@@ -22,6 +23,7 @@ from rag_learning_assistant.application.summarization import (
 )
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.generation import (
+    Citation,
     GenerationIdentity,
     HuggingFaceTextGenerator,
     PromptReference,
@@ -87,7 +89,9 @@ def build_library_service(
 ) -> LibraryService:
     """Build document-library management for one persistent index."""
 
-    repository = SqliteDocumentRepository(index_directory / "metadata.sqlite3")
+    database_path = index_directory / "metadata.sqlite3"
+    repository = SqliteDocumentRepository(database_path)
+
     return LibraryService(
         repository=repository,
         extractor=PdfExtractor(),
@@ -95,6 +99,7 @@ def build_library_service(
             chunker,
             index_directory,
         ),
+        summaries=SqliteDocumentSummaryRepository(database_path),
     )
 
 
@@ -105,6 +110,19 @@ def build_library_catalog(
 
     repository = SqliteDocumentRepository(index_directory / "metadata.sqlite3")
     return LibraryCatalog(repository)
+
+
+def build_document_summary_catalog(
+    index_directory: Path,
+) -> DocumentSummaryCatalog:
+    """Build read-only access to persisted document summaries."""
+
+    database_path = index_directory / "metadata.sqlite3"
+
+    return DocumentSummaryCatalog(
+        documents=SqliteDocumentRepository(database_path),
+        summaries=SqliteDocumentSummaryRepository(database_path),
+    )
 
 
 def write_summarization_progress(
@@ -230,16 +248,7 @@ def run_summarize(
         "summary": summary.text,
         # Citation metadata is reconstructed from persistent chunks rather
         # than accepted from model-generated text.
-        "citations": [
-            {
-                "number": citation.number,
-                "source": citation.source,
-                "page_number": citation.page_number,
-                "chunk_index": citation.chunk_index,
-                "excerpt": citation.excerpt,
-            }
-            for citation in summary.citations
-        ],
+        "citations": _serialize_citations(summary.citations),
         "prompts": _serialize_prompt_references(summary.prompt_references),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -343,20 +352,28 @@ def run_ask(
         "answer": answer.text,
         # Citation metadata comes from retrieval, not from model-generated text.
         # This keeps source references trustworthy even if the model misbehaves.
-        "citations": [
-            {
-                "number": citation.number,
-                "source": citation.source,
-                "page_number": citation.page_number,
-                "chunk_index": citation.chunk_index,
-                "excerpt": citation.excerpt,
-            }
-            for citation in answer.citations
-        ],
+        "citations": _serialize_citations(answer.citations),
         "prompts": _serialize_prompt_references(answer.prompt_references),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
+
+
+def _serialize_citations(
+    citations: Sequence[Citation],
+) -> list[dict[str, object]]:
+    """Convert grounded citations to their stable CLI JSON representation."""
+
+    return [
+        {
+            "number": citation.number,
+            "source": citation.source,
+            "page_number": citation.page_number,
+            "chunk_index": citation.chunk_index,
+            "excerpt": citation.excerpt,
+        }
+        for citation in citations
+    ]
 
 
 def _serialize_prompt_references(
@@ -432,6 +449,34 @@ def run_remove(
     return 0
 
 
+def run_summary_list(
+    index_directory: Path,
+    document_id: UUID,
+) -> int:
+    """Write metadata for all persisted summaries of one document."""
+
+    catalog = build_document_summary_catalog(index_directory)
+    summaries = catalog.list_document_summaries(document_id)
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(document_id),
+        "summaries": [
+            {
+                "identity_fingerprint": summary.identity_fingerprint,
+                "source": summary.source,
+                "citation_count": len(summary.citations),
+                "prompts": _serialize_prompt_references(
+                    summary.prompt_references,
+                ),
+            }
+            for summary in summaries
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def run_list(index_directory: Path) -> int:
     """Write all registered library documents as JSON."""
 
@@ -450,6 +495,34 @@ def run_list(index_directory: Path) -> int:
             }
             for document in documents
         ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_summary_show(
+    index_directory: Path,
+    document_id: UUID,
+    identity_fingerprint: str,
+) -> int:
+    """Write one persisted summary with its provenance as JSON."""
+
+    catalog = build_document_summary_catalog(index_directory)
+    summary = catalog.get_document_summary(
+        document_id,
+        identity_fingerprint,
+    )
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(summary.document_id),
+        "identity_fingerprint": summary.identity_fingerprint,
+        "source": summary.source,
+        "summary": summary.text,
+        "citations": _serialize_citations(summary.citations),
+        "prompts": _serialize_prompt_references(
+            summary.prompt_references,
+        ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0

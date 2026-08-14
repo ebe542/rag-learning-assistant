@@ -82,6 +82,21 @@ def validate_library_directory(index_directory: Path) -> None:
         raise ValueError("library directory is incomplete")
 
 
+def sha256_fingerprint(value: str) -> str:
+    """Parse and normalize a SHA-256 hexadecimal fingerprint."""
+
+    normalized = value.strip().lower()
+
+    if len(normalized) != 64 or any(
+        character not in "0123456789abcdef" for character in normalized
+    ):
+        raise argparse.ArgumentTypeError(
+            "value must be a 64-character SHA-256 fingerprint",
+        )
+
+    return normalized
+
+
 def add_chunking_options(parser: argparse.ArgumentParser) -> None:
     """Add options shared by commands that process documents."""
 
@@ -270,5 +285,40 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="Regenerate the summary even when a matching final result exists",
+    )
+
+    summary_list_parser = commands.add_parser(
+        "summary-list",
+        help="List persisted summaries for one library document",
+    )
+    summary_list_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
+    summary_list_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the document whose summaries should be listed",
+    )
+
+    summary_show_parser = commands.add_parser(
+        "summary-show",
+        help="Show one persisted summary with citations",
+    )
+    summary_show_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
+    summary_show_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the summarized document",
+    )
+    summary_show_parser.add_argument(
+        "identity_fingerprint",
+        type=sha256_fingerprint,
+        help="SHA-256 generation identity of the stored summary",
     )
     return parser
