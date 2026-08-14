@@ -63,6 +63,16 @@ class RecordingQuestionBankRepository:
         return 2
 
 
+class RecordingQuestionProgressRepository:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def delete_document(self, document_id: UUID) -> int:
+        assert document_id == DOCUMENT_ID
+        self.events.append("delete question progress")
+        return 3
+
+
 class RecordingDocumentRepository:
     def __init__(
         self,
@@ -198,6 +208,7 @@ def test_remove_document_deletes_derived_data_before_catalog_metadata() -> None:
         derived_data_cleaners=(
             RecordingSummaryRepository(events),
             RecordingQuestionBankRepository(events),
+            RecordingQuestionProgressRepository(events),
         ),
     )
 
@@ -208,6 +219,7 @@ def test_remove_document_deletes_derived_data_before_catalog_metadata() -> None:
         "remove chunks",
         "delete summaries",
         "delete question banks",
+        "delete question progress",
         "remove metadata",
     ]
 
@@ -228,6 +240,7 @@ def test_remove_document_preserves_derived_data_when_chunk_removal_is_incomplete
         derived_data_cleaners=(
             RecordingSummaryRepository(events),
             RecordingQuestionBankRepository(events),
+            RecordingQuestionProgressRepository(events),
         ),
     )
 
@@ -265,6 +278,7 @@ def test_replace_document_deletes_derived_data_before_updating_metadata(
         derived_data_cleaners=(
             RecordingSummaryRepository(events),
             RecordingQuestionBankRepository(events),
+            RecordingQuestionProgressRepository(events),
         ),
     )
 
@@ -279,6 +293,7 @@ def test_replace_document_deletes_derived_data_before_updating_metadata(
         "replace chunks",
         "delete summaries",
         "delete question banks",
+        "delete question progress",
         "update metadata",
     ]
 
@@ -308,6 +323,7 @@ def test_replace_document_preserves_derived_data_when_indexing_fails(
         derived_data_cleaners=(
             RecordingSummaryRepository(events),
             RecordingQuestionBankRepository(events),
+            RecordingQuestionProgressRepository(events),
         ),
     )
 

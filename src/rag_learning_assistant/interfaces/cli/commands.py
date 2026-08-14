@@ -3,6 +3,7 @@
 import json
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -18,6 +19,8 @@ from rag_learning_assistant.application import (
     QuestionAnsweringService,
     QuestionBankCatalog,
     QuestionBankService,
+    ReviewScheduler,
+    ReviewService,
 )
 from rag_learning_assistant.application.question_bank import (
     QUESTION_BANK_PROMPT,
@@ -45,7 +48,10 @@ from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
 from rag_learning_assistant.learning import (
     QuestionBankIdentity,
+    QuestionProgress,
+    ReviewRating,
     SqliteQuestionBankRepository,
+    SqliteQuestionProgressRepository,
     StudyQuestion,
 )
 from rag_learning_assistant.library import IndexedDocument, SqliteDocumentRepository
@@ -115,6 +121,7 @@ def build_library_service(
         derived_data_cleaners=(
             SqliteDocumentSummaryRepository(database_path),
             SqliteQuestionBankRepository(database_path),
+            SqliteQuestionProgressRepository(database_path),
         ),
     )
 
@@ -151,6 +158,20 @@ def build_question_bank_catalog(
     return QuestionBankCatalog(
         documents=SqliteDocumentRepository(database_path),
         banks=SqliteQuestionBankRepository(database_path),
+    )
+
+
+def build_review_service(
+    index_directory: Path,
+) -> ReviewService:
+    """Build persistent spaced-review coordination for one library."""
+
+    database_path = index_directory / "metadata.sqlite3"
+
+    return ReviewService(
+        banks=build_question_bank_catalog(index_directory),
+        progress=SqliteQuestionProgressRepository(database_path),
+        scheduler=ReviewScheduler(),
     )
 
 
@@ -458,6 +479,22 @@ def _serialize_study_questions(
     ]
 
 
+def _serialize_question_progress(
+    progress: QuestionProgress,
+) -> dict[str, object]:
+    """Convert one current review schedule to stable CLI JSON."""
+
+    return {
+        "repetition_count": progress.repetition_count,
+        "interval_days": progress.interval_days,
+        "ease_factor": progress.ease_factor,
+        "due_at": progress.due_at.isoformat(),
+        "last_reviewed_at": (
+            progress.last_reviewed_at.isoformat() if progress.last_reviewed_at is not None else None
+        ),
+    }
+
+
 def run_extract(
     document: Document,
     chunker: TextChunker,
@@ -702,6 +739,84 @@ def run_summary_show(
         "prompts": _serialize_prompt_references(
             summary.prompt_references,
         ),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_review_due(
+    index_directory: Path,
+    document_id: UUID,
+    question_bank_identity_fingerprint: str,
+    limit: int,
+    *,
+    as_of: datetime | None = None,
+) -> int:
+    """Write due questions and their current schedules as JSON."""
+
+    query_time = as_of if as_of is not None else datetime.now(UTC)
+    service = build_review_service(index_directory)
+    due_questions = service.list_due(
+        document_id,
+        question_bank_identity_fingerprint,
+        as_of=query_time,
+        limit=limit,
+    )
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(document_id),
+        "question_bank_identity_fingerprint": (question_bank_identity_fingerprint),
+        "as_of": query_time.isoformat(),
+        "questions": [
+            {
+                "number": item.question.number,
+                "text": item.question.text,
+                "expected_answer": item.question.expected_answer,
+                "citations": _serialize_citations(
+                    item.question.citations,
+                ),
+                "progress": (
+                    _serialize_question_progress(item.progress)
+                    if item.progress is not None
+                    else None
+                ),
+            }
+            for item in due_questions
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_review_record(
+    index_directory: Path,
+    document_id: UUID,
+    question_bank_identity_fingerprint: str,
+    question_number: int,
+    rating: ReviewRating,
+    *,
+    reviewed_at: datetime | None = None,
+) -> int:
+    """Record one rating and write the updated schedule as JSON."""
+
+    review_time = reviewed_at if reviewed_at is not None else datetime.now(UTC)
+    service = build_review_service(index_directory)
+    progress = service.record_review(
+        document_id,
+        question_bank_identity_fingerprint,
+        question_number,
+        rating,
+        reviewed_at=review_time,
+    )
+
+    payload = {
+        "index_directory": str(index_directory),
+        "document_id": str(document_id),
+        "question_bank_identity_fingerprint": (question_bank_identity_fingerprint),
+        "question_number": question_number,
+        "rating": rating.value,
+        "progress": _serialize_question_progress(progress),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0

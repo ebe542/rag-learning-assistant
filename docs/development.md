@@ -1,374 +1,512 @@
 # Development Guide
 
-This guide describes the architecture, local workflow, and extension points of the RAG Learning Assistant.
-For user-facing setup and usage, see the project [README](../README.md).
+This guide describes the current architecture, development workflow, persistence
+rules, and extension points of the RAG Learning Assistant. For user-facing setup
+and commands, see the project [README](../README.md). Long-lived design reasons
+are recorded in the [Architecture Decision Records](adr/README.md).
 
-## Architecture
+## Current system
 
-The application is built as a sequence of independent stages:
+The project is a local, source-grounded learning system built around a persistent
+document library:
 
 ```text
-PDF -> ingestion -> chunking -> embeddings -> vector retrieval -> grounded generation
+PDF
+  -> page extraction
+  -> page-bounded chunks
+  -> E5 embeddings
+  -> FAISS retrieval
+  -> grounded answers
+  -> persisted document summaries
+  -> persisted grounded question banks
+  -> persisted spaced-review schedules
 ```
 
-The current source tree reflects implemented responsibilities rather than anticipated features:
+The detailed classes, protocols, inheritance, and runtime relationships are
+maintained in the renderable [PlantUML class overview](class-overview.puml).
+
+## Source responsibilities
 
 ```text
 src/rag_learning_assistant/
-├── cli.py
 ├── application/
+│   ├── batch_import.py
 │   ├── document_search.py
-│   └── library.py
+│   ├── library.py
+│   ├── question_answering.py
+│   ├── question_bank.py
+│   ├── review.py
+│   ├── summarization.py
+│   └── summary_catalog.py
+├── chunking/
+├── evaluation/
+├── generation/
+├── ingestion/
 ├── interfaces/
 │   └── cli/
 │       ├── commands.py
 │       ├── entrypoint.py
-│       └── parser.py
-├── ingestion/
-│   ├── models.py
-│   └── pdf.py
+│       ├── parser.py
+│       ├── parsing.py
+│       └── parsers/
+├── learning/
 ├── library/
-│   ├── models.py
-│   └── repository.py
-├── chunking/
-│   ├── models.py
-│   └── service.py
-└── retrieval/
-    ├── embeddings.py
-    ├── faiss_store.py
-    ├── models.py
-    ├── sentence_transformer.py
-    ├── service.py
-    └── store.py
+├── retrieval/
+└── cli.py
 ```
+
+The packages follow responsibility boundaries rather than technical convenience:
+
+- `ingestion` reads source documents and preserves source metadata;
+- `chunking` creates searchable, page-bounded text units;
+- `retrieval` embeds, stores, and searches chunks;
+- `library` owns persistent document metadata;
+- `generation` owns model adapters, prompts, parsing, identities, and generation
+  persistence;
+- `learning` owns grounded question-bank and review-progress domain models plus
+  SQLite repositories;
+- `application` coordinates use cases through narrow protocols;
+- `evaluation` measures deterministic citation and concept coverage;
+- `interfaces.cli` validates CLI input, wires concrete adapters, and serializes
+  stable JSON output.
+
+## Architectural conventions
+
+Domain models are generally frozen, slotted dataclasses. They validate their own
+state in `__post_init__`, while application services validate transitions that
+require knowledge of previous state or external data.
+
+Application services depend on `Protocol` interfaces. Concrete adapters satisfy
+these protocols structurally and do not need to inherit from them. This keeps
+the domain independent of PyMuPDF, FAISS, SQLite, Sentence Transformers, and
+Transformers.
+
+Feature packages export supported public names through `__init__.py`. Internal
+modules may be imported directly when a concrete implementation is explicitly
+required, but callers should prefer package-level imports.
+
+The project uses stable identities at every persistent boundary:
+
+- document UUID identifies a library entry across replacement;
+- document SHA-256 identifies exact file content;
+- model name and pinned revision identify embeddings and generation models;
+- prompt name, version, and SHA-256 identify exact prompt text;
+- generation fingerprints identify complete summary configurations;
+- question-bank fingerprints include their selected persisted summary identity;
+- review progress uses document UUID, question-bank fingerprint, and question
+  number as its composite identity.
+
+## Processing stages
 
 ### Ingestion
 
-`PdfExtractor` reads text-based PDFs with PyMuPDF.
-It produces immutable `Document` and `Page` models while retaining one-based page numbers and the source filename.
-Scanned PDFs do not yet support OCR.
+`PdfExtractor` uses PyMuPDF to read text-based PDFs and returns immutable
+`Document` and `Page` models. Page numbers are one-based and every page retains
+the source filename. PDF handles are closed through their context-manager
+contract. OCR is intentionally not part of the current ingestion adapter.
 
 ### Chunking
 
-`TextChunker` turns pages into immutable `Chunk` objects.
-Chunks never cross page boundaries, and their indices increase across the entire document.
+`TextChunker` creates immutable `Chunk` objects without crossing page boundaries.
+Chunk indices increase across the complete document. The algorithm prefers
+paragraph and word boundaries, hard-splits text only when necessary, and applies
+overlap only to split paragraphs. Character-based limits keep the core
+independent of a specific tokenizer.
 
-The chunker:
+### Embeddings and retrieval
 
-- prefers complete paragraph boundaries;
-- splits long paragraphs at word boundaries;
-- hard-splits words longer than the configured maximum;
-- applies overlap only when a long paragraph has to be split;
-- rejects invalid size and overlap settings.
-
-Chunk size is currently measured in characters to keep the core independent of a specific model and tokenizer.
-
-### Retrieval
-
-`Embedder` separates document and query embeddings because asymmetric retrieval models may require different input representations.
-`VectorStore` defines storage and search without coupling the application service to a database implementation.
-
-`InMemoryVectorStore` is the reference implementation.
-It uses cosine similarity and validates vector dimensions and non-zero magnitudes.
-`RetrievalService` coordinates batch indexing and query search.
-
-`FaissVectorStore` is the persistent implementation.
-It stores normalized vectors and numeric IDs in an exact FAISS inner-product index and stores chunks plus embedding-model metadata in SQLite.
-For normalized vectors, inner product is equivalent to cosine similarity.
-Batch writes load and persist the FAISS index once per document instead of once per chunk.
-
-`SentenceTransformerEmbedder` provides local embeddings using the pinned default model:
+`Embedder` separates document and query embeddings because asymmetric retrieval
+models may encode them differently. `SentenceTransformerEmbedder` uses:
 
 ```text
-Model:    intfloat/multilingual-e5-small
-Revision: 614241f622f53c4eeff9890bdc4f31cfecc418b3
+Model:     intfloat/multilingual-e5-small
+Revision:  614241f622f53c4eeff9890bdc4f31cfecc418b3
 Dimension: 384
 ```
 
-The adapter adds the E5 `passage: ` and `query: ` prefixes, requests normalized vectors, and loads the model only on first use.
-The model is cached by Hugging Face outside the repository.
+The adapter applies the E5 `passage: ` and `query: ` prefixes, normalizes output,
+and loads the model lazily.
 
-### Application flow
+`InMemoryVectorStore` is the small reference implementation.
+`FaissVectorStore` persists normalized vectors in an exact inner-product index
+and stores chunk metadata, document IDs, and embedding identity in SQLite. For
+normalized vectors, inner product is equivalent to cosine similarity.
 
-`DocumentSearchService` coordinates chunking and indexing without implementing those responsibilities itself.
-`LibraryService` calculates content hashes, rejects duplicates, assigns document UUIDs, coordinates indexing, registers persistent metadata, and removes documents consistently across vector and catalog storage.
-`LibraryCatalog` exposes read-only document listing without constructing PDF or embedding dependencies.
+FAISS and SQLite are separate stores because they serve different purposes:
+FAISS ranks vectors efficiently, while SQLite preserves inspectable metadata and
+maps FAISS IDs back to source chunks. Mutation methods validate complete batches
+before replacing persisted state and preserve unrelated documents.
 
-The CLI exposes `extract`, `index`, `list`, `remove`, and `search` as separate commands.
-`index` adds PDFs to a new or existing library, `list` reads its document catalog, `remove` deletes one document by UUID, and `search` opens its vectors without reopening or re-embedding PDFs.
-Index paths are validated before a PDF or model is loaded.
+### Document library
 
-### Command-line interface
+`LibraryService` hashes content, rejects duplicates, assigns UUIDs, coordinates
+indexing, and writes catalog metadata. `BatchImportService` processes paths
+sequentially to avoid loading multiple GPU-backed embedding models and isolates
+ordinary per-file failures.
 
-The top-level `cli.py` remains the stable console-script target and delegates to the interface package.
-`interfaces/cli/parser.py` owns argument definitions and boundary validation.
-`interfaces/cli/commands.py` owns JSON output, command execution, and wiring concrete adapters into application services.
-`interfaces/cli/entrypoint.py` dispatches parsed commands and coordinates only the steps shared at the CLI boundary.
+Document replacement preserves the UUID but changes source metadata, content
+hash, chunks, and vectors. Document removal verifies the removed chunk count
+before deleting catalog metadata.
 
-This separation keeps parsing and presentation concerns out of application and retrieval modules while preserving `rag_learning_assistant.cli:main` as the installed entry point.
+Summaries, question banks, and review progress are derived data. After a
+successful removal or replacement, `LibraryService` invokes every registered
+`DocumentDerivedDataCleaner` before changing document metadata. If vector
+mutation fails or reports inconsistent state, derived data and catalog metadata
+remain available for diagnosis.
 
-## Public interfaces
+### Grounded question answering
 
-Each feature package exports its supported public API from `__init__.py`.
-Internal code may import concrete modules directly to keep dependencies explicit, while callers should prefer package-level imports:
+`QuestionAnsweringService` retrieves a small top-k context set, builds a versioned
+prompt, asks a `TextGenerator` for strict JSON, and maps model citation numbers
+back to trusted retrieval results. Source metadata never comes from generated
+text. The service rejects citation numbers that do not exist in the supplied
+contexts.
 
-```python
-from rag_learning_assistant.chunking import Chunk, TextChunker
-from rag_learning_assistant.ingestion import Document, Page, PdfExtractor
-from rag_learning_assistant.retrieval import RetrievalService
+Focused questions belong to this retrieval path. Document-wide requests do not:
+a small similarity result cannot reliably cover an entire book.
+
+### Local generation
+
+`HuggingFaceTextGenerator` uses the pinned local model:
+
+```text
+Model:    Qwen/Qwen3-1.7B
+Revision: 70d244cc86ccca08cf5af4e1e306ecf908b1ad5e
 ```
 
-## Environment setup
+The adapter loads its pipeline lazily, uses deterministic generation, disables
+Qwen reasoning output for structured responses, parses strict JSON, and permits
+one format-only repair attempt. Repair does not add source facts. Every prompt
+has an explicit version and SHA-256 reference; results report which prompts were
+actually used.
 
-Python 3.11 or newer is supported by the package.
-Python 3.13 is the recommended local version for the current ML toolchain.
-On Windows with Git Bash:
+### Document-wide summarization
 
-```bash
-py -3.13 -m venv .venv && source .venv/Scripts/activate
+`DocumentSummarizationService` reads every stored chunk for one document and uses
+a map-reduce workflow:
+
+1. map batches summarize bounded source contexts;
+2. successful map results are cached by generation identity and batch number;
+3. reduce combines all partial summaries while preserving trusted original
+   citation numbers;
+4. the validated final summary is persisted by its exact generation identity.
+
+Map and reduce token limits are separate because partial and final outputs have
+different requirements. A normal rerun reuses compatible map batches and an
+existing final summary. `--force` bypasses those reads, regenerates all phases,
+and explicitly replaces the final result.
+
+`DocumentSummaryCatalog` lists stored summary identities and retrieves one exact
+grounded result without loading the model.
+
+### Grounded question banks
+
+`QuestionBankService` generates a requested number of free-response questions
+from one explicitly selected persisted summary. The summary provides the
+overview; its stored citations are the only permitted evidence. Model-returned
+citation numbers are resolved back to trusted `Citation` objects.
+
+A question-bank identity includes model revision, all available prompt versions,
+question count, token limit, and source-summary identity. Complete banks are
+persisted in SQLite. `QuestionBankCatalog` lists and retrieves them without
+loading generation dependencies.
+
+Question banks currently produce document-overview questions. Detailed
+section- or chunk-level learning material is a separate future capability.
+
+### Spaced review
+
+`ReviewScheduler` is a deterministic, inspectable policy inspired by SM-2 but is
+not presented as an exact implementation:
+
+- `again` retries after ten minutes and resets successful repetitions;
+- `hard` grows the interval conservatively and lowers ease;
+- `good` uses one day, then six days, then multiplies by ease;
+- `easy` starts at four days and grows faster;
+- ease never drops below 1.3.
+
+`ReviewService` validates the exact bank and question, loads current progress,
+applies the scheduler, and saves the new immutable state. New questions have no
+database row until their first recorded review. Due selection prioritizes the
+oldest scheduled reviews before new questions, preventing old work from being
+starved by newly generated material. Timestamps are timezone-aware and CLI events
+use UTC.
+
+The current milestone stores self-ratings and current schedules. It does not yet
+persist answer text, review history, or automated answer-quality feedback.
+
+### Grounded evaluation
+
+`GroundedGenerationEvaluator` compares generated answers with versioned cases.
+It reports exact source-page citation recall and precision plus deterministic
+recall for curated concepts and accepted phrases. This is a reproducible
+regression signal, not a substitute for human semantic or factual review.
+
+## Command-line interface
+
+`rag_learning_assistant.cli:main` remains the stable console entry point.
+
+The CLI implementation is split as follows:
+
+- `parser.py` composes the top-level parser and preserves its public imports;
+- `parsing.py` contains shared constants, validators, and options;
+- `parsers/documents.py`, `retrieval.py`, `summaries.py`, `questions.py`, and
+  `reviews.py` register responsibility-specific subcommands;
+- `entrypoint.py` loads the optional environment, validates storage boundaries,
+  dispatches commands, and translates application errors into CLI errors;
+- `commands.py` wires concrete adapters and emits machine-readable JSON.
+
+Current commands are:
+
+```text
+extract
+index
+list
+remove
+replace
+search
+ask
+summarize
+summary-list
+summary-show
+question-generate
+question-list
+question-show
+review-due
+review-record
 ```
 
-Install the core development dependencies:
+A repository-root `.env` is loaded optionally. It may define `HF_TOKEN` for
+authenticated Hugging Face downloads, but public-model commands continue when
+the file is absent or environment loading fails.
 
-```bash
-python -m pip install -e ".[dev]"
-```
+## Persistence layout
 
-Install local Hugging Face embedding, generation, and persistent-storage support as well:
-
-```bash
-python -m pip install -e ".[dev,embeddings,generation,storage]"
-```
-
-The embedding extra includes Sentence Transformers and its ML runtime dependencies.
-The generation extra includes Transformers, Accelerate, and PyTorch for local text generation.
-The storage extra includes the CPU FAISS runtime; embedding generation can still use CUDA independently.
-The core PDF and chunking functionality deliberately remains usable without them.
-
-## Persistent document libraries
-
-Keep private documents and generated indices outside version control:
+Private documents and generated libraries belong under ignored local paths:
 
 ```text
 local-data/
 ├── documents/
 └── indexes/
+    └── learning/
+        ├── vectors.faiss
+        └── metadata.sqlite3
 ```
 
-Create a library with multiple documents, inspect it, and search it:
+`vectors.faiss` contains vector IDs and normalized embeddings.
+`metadata.sqlite3` contains document and chunk metadata, embedding identity,
+summary map cache entries, final summaries, question banks, and current question
+progress. Persistent formats validate identities when reopened so incompatible
+models or generation configurations are not silently mixed.
+
+## Environment setup
+
+The package supports Python 3.11 through 3.13. Python 3.13 is the recommended
+local version for the current Windows ML toolchain.
+
+With Git Bash:
 
 ```bash
-rag-learn index \
-  local-data/documents/book.pdf \
-  local-data/documents/notes.pdf \
-  --index-dir local-data/indexes/learning
-rag-learn list local-data/indexes/learning
-rag-learn replace \
-  12345678-1234-5678-1234-567812345678 \
-  local-data/documents/revised-book.pdf \
-  --index-dir local-data/indexes/learning
-rag-learn remove \
-  12345678-1234-5678-1234-567812345678 \
-  --index-dir local-data/indexes/learning
-rag-learn search local-data/indexes/learning "What are Python functions?" --limit 3
+py -3.13 -m venv .venv && source .venv/Scripts/activate && python -m pip install --upgrade pip
 ```
 
-An index directory contains:
-
-```text
-learning/
-├── vectors.faiss
-└── metadata.sqlite3
-```
-
-SQLite stores one `IndexedDocument` row per library document and maps persistent FAISS IDs to chunk text, source, page number, document-wide chunk index, and document UUID.
-It also records model name, pinned revision, and the dimension established by the first embedding.
-Opening an index with a different model identity is rejected.
-
-Document UUIDs remain stable identifiers for future update and deletion operations.
-SHA-256 identifies the current file content independently of its filename, so renamed duplicate files are rejected before PDF extraction and GPU embedding.
-Indices created before document management are migrated with nullable document IDs; their existing vectors remain searchable but are not automatically registered as library documents.
-
-Document removal follows the UUID across all layers.
-The persistent store first identifies the associated SQLite chunk IDs, removes the same IDs from an in-memory FAISS index, writes that index to a temporary file, deletes the chunk rows, and then replaces the persisted FAISS file.
-`LibraryService` removes the catalog entry only after the vector store reports the expected number of removed chunks.
-An unknown UUID is reported as a CLI usage error without changing storage.
-
-Document replacement preserves the registered UUID while updating its source, content hash, page count, chunk count, chunk metadata, and vectors.
-The replacement PDF is hashed, checked for duplicates, extracted, chunked, and embedded before persistent chunks are changed.
-Both vector-store adapters validate the complete replacement batch before removing the old entries.
-The FAISS adapter constructs the replacement index in memory and persists it through a temporary file, while unrelated document vectors remain untouched.
-Invalid replacement embeddings therefore leave the previous document searchable.
-
-`BatchImportService` processes input paths sequentially in their original order.
-This avoids running multiple embedding-model instances against limited GPU memory.
-Every path produces an `ImportOutcome` with status `added`, `skipped`, or `failed`; duplicates are skipped and ordinary per-file exceptions are isolated so later inputs still run.
-The CLI prints all outcomes as JSON and returns exit code 1 if any input failed.
-
-### CUDA-enabled PyTorch on Windows
-
-Installing Sentence Transformers from the regular Python package index can resolve to a CPU-only PyTorch build.
-Changing the Python version alone does not enable GPU execution.
-
-For a supported NVIDIA GPU, install the appropriate CUDA-enabled PyTorch wheel before the project extras:
+Install all development and production extras:
 
 ```bash
-python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
 python -m pip install -e ".[dev,embeddings,generation,storage]"
 ```
 
-This order lets the Sentence Transformers dependency reuse the already installed CUDA-enabled PyTorch version.
-The current setup was verified on Windows with Python 3.13, PyTorch `2.13.0+cu132`, CUDA 13.2, and an NVIDIA GeForce RTX 3060 Ti.
+The extras are intentionally separated:
 
-Check the runtime after installation:
+- `dev`: Pytest, coverage, and Ruff;
+- `embeddings`: Sentence Transformers and its runtime dependencies;
+- `generation`: Transformers, Accelerate, and PyTorch;
+- `storage`: CPU FAISS. Embedding and generation models may still use CUDA.
+
+### CUDA-enabled PyTorch on Windows
+
+Installing ML packages from the regular package index can select a CPU-only
+PyTorch build. Install the appropriate CUDA wheel before project extras:
+
+```bash
+python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132 && python -m pip install -e ".[dev,embeddings,generation,storage]"
+```
+
+The current environment was verified with Python 3.13, PyTorch `2.13.0+cu132`,
+CUDA 13.2, and an NVIDIA GeForce RTX 3060 Ti. Verify the active runtime:
 
 ```bash
 python -c "import torch; print('Torch:', torch.__version__); print('CUDA:', torch.version.cuda); print('Available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
 ```
 
-Expected key values for the verified setup are `CUDA: 13.2` and `Available: True`.
-Use the [official PyTorch installation selector](https://pytorch.org/get-started/locally/) when changing versions because CUDA wheel availability is maintained separately from `pyproject.toml`.
+Use the [official PyTorch installation selector](https://pytorch.org/get-started/locally/)
+when versions change. CUDA-specific wheels remain an environment concern and are
+not pinned in `pyproject.toml`.
 
-The project metadata intentionally does not pin a CUDA-specific PyTorch build.
-CPU, CUDA, and other accelerator variants require different package indexes, so the runtime choice remains an environment setup concern.
+## Development workflow
 
-## Quality checks
+The default workflow is red-green-refactor:
 
-Use the following command during local development:
+1. write one behavior-focused test;
+2. verify the expected failure;
+3. implement the smallest coherent behavior;
+4. format, lint, and run the focused tests;
+5. refactor only while tests remain green;
+6. finish the milestone with the strict and isolated CI checks.
+
+When multiple Git Bash commands are supplied, chain them with `&&` so later
+checks stop after the first failure:
 
 ```bash
 ruff format . && ruff check . && pytest -q
 ```
 
-Before committing, also inspect whitespace and scope:
+Before committing:
 
 ```bash
 git status --short && git diff --check && git diff --stat
 ```
 
-CI runs tests with coverage and verifies Ruff formatting without modifying files.
-Pytest uses `--import-mode=importlib`, allowing identically named test modules in different responsibility-based directories.
-
-At the end of a milestone, run the same complete quality gate as CI:
+Run the complete local quality gate:
 
 ```bash
 python scripts/check_milestone.py
 ```
 
-Unlike the fast development command, this check treats resource and unraisable
-warnings as errors, requires at least 90% test coverage, and checks the Git diff
-for whitespace errors. The hardware- and network-dependent generation smoke test
-remains separate so the quality gate is reproducible on every supported system.
+This verifies Ruff formatting, linting, the complete suite, at least 90% coverage,
+resource cleanup warnings, unraisable exceptions, and Git whitespace.
+
+Reproduce the GitHub CI dependency boundary in a disposable virtual environment:
+
+```bash
+python scripts/check_ci_environment.py
+```
+
+The temporary environment is deleted automatically. It installs only
+`dev,storage`, verifies that tooling imports without Torch, and runs the shared
+milestone gate. This catches missing optional-dependency boundaries before code
+is pushed.
 
 ## Testing strategy
 
-Behavior is generally developed using a red-green-refactor cycle.
-Unit tests use small fakes at integration boundaries so the default test suite never downloads models or depends on external services.
+Tests mirror production responsibilities:
 
-The real `multilingual-e5-small` adapter was additionally smoke-tested in German.
-This manual check confirmed 384-dimensional vectors and ranked a Python passage above an unrelated database passage for a question about Python functions.
-The complete CLI flow was then smoke-tested with a real text-based PDF and returned three semantically relevant, page-cited results.
+```text
+tests/
+├── application/
+├── chunking/
+├── evaluation/
+├── generation/
+├── ingestion/
+├── interfaces/cli/
+├── learning/
+├── library/
+├── retrieval/
+├── scripts/
+└── test_cli.py
+```
 
-### Local generation GPU smoke test
+Fast tests use fakes at model, filesystem, and application boundaries. The
+default suite must remain offline-capable and must not download or load real ML
+models. SQLite and FAISS tests use temporary libraries and reopen them to verify
+durability.
 
-`scripts/smoke_test_generation.py` exercises the real pinned `Qwen/Qwen3-1.7B` model rather than a test double.
-It requires a CUDA-capable GPU and the `generation` dependency extra.
-The first run downloads the model into the Hugging Face cache; later runs reuse that cache.
+`--import-mode=importlib` permits repeated test filenames in responsibility-based
+directories. CI runs Python 3.11, 3.12, and 3.13 within the package's declared
+support range.
 
-Run it from the repository root:
+## Manual smoke tests and benchmarks
+
+Hardware-, network-, and model-dependent checks remain separate from CI.
+
+### Generation adapter
 
 ```bash
 python scripts/smoke_test_generation.py
 ```
 
-The script verifies that CUDA is available, loads the generator lazily, produces a structured answer for one controlled context, and requires citation `(1,)`.
-It also prints the GPU name, generated text, citations, and peak allocated GPU memory.
-The exact wording is deliberately not asserted because it may vary across compatible runtime versions; the stable smoke-test contract is successful structured parsing and correct source selection.
+This loads the real pinned Qwen model, verifies CUDA, produces strict structured
+output for a controlled context, checks citation `(1,)`, and reports peak GPU
+memory.
 
-The test was last verified on 7 August 2026 with an NVIDIA GeForce RTX 3060 Ti.
-It returned the answer `four`, citation `(1,)`, and approximately 4173 MB peak allocated GPU memory.
-
-This check is intentionally not part of the default pytest suite.
-Normal tests must remain fast, offline-capable, and independent of a specific GPU, while this script validates the real ML runtime on demand.
-
-### Full local RAG smoke test
-
-The `ask` command is the manual end-to-end smoke test for the complete RAG path: query embedding, FAISS retrieval, prompt construction, local generation, strict response parsing, and trusted citation mapping.
-It requires an existing local library as well as the `embeddings`, `generation`, and `storage` dependency extras.
-
-Run it with a focused question against any locally indexed documents:
+### Full RAG answer
 
 ```bash
 rag-learn ask local-data/indexes/learning "What are Python functions?" --limit 3
 ```
 
-The stable contract is a successful JSON response containing `question`, `answer`, `citations`, and `prompts`; every cited item must include its context number, source, page number, chunk index, and excerpt, while every prompt reference contains its name, version, and SHA-256 fingerprint.
-The output should contain no Hugging Face or Transformers configuration warnings, and its factual claims must be supported by the returned excerpts.
-Exact wording and local document content are deliberately not asserted or committed.
+This exercises query embedding, FAISS retrieval, prompt construction, local
+generation, response parsing, and trusted citation mapping.
 
-This smoke test is intentionally excluded from CI because the index, source documents, model cache, and suitable accelerator are local resources.
-Broad requests such as summarizing an entire book are outside this retrieval path: top-k similarity search is designed for focused questions, while complete summaries require document-wide coverage.
+### Document summarization
 
-Tests mirror the production structure:
-
-```text
-tests/
-├── test_cli.py
-├── application/
-├── generation/
-├── library/
-├── ingestion/
-├── chunking/
-└── retrieval/
+```bash
+python scripts/smoke_test_summarization.py INDEX_DIRECTORY DOCUMENT_UUID --max-map-new-tokens 192 --max-reduce-new-tokens 384 --max-batch-chars 8000
 ```
 
-## Adding an embedding provider
+The script prints map/reduce progress, JSON output, elapsed time, GPU name, and
+peak memory. A reproducible redistributable fixture and measurements are
+described in the [summarization benchmark](summarization-benchmark.md).
 
-A provider implements the `Embedder` protocol:
+For detailed call timings and cache counters:
 
-```python
-class Embedder(Protocol):
-    def embed_documents(self, texts: Sequence[str]) -> list[Embedding]: ...
-
-    def embed_query(self, text: str) -> Embedding: ...
+```bash
+python scripts/benchmark_summarization.py INDEX_DIRECTORY DOCUMENT_UUID --max-map-new-tokens 192 --max-reduce-new-tokens 384 --max-batch-chars 8000 --ignore-cache
 ```
 
-Provider-specific prefixes, batching, network clients, and response conversion belong inside the adapter.
-`RetrievalService` must remain unaware of those details.
+### Grounded generation evaluation
 
-Add contract-focused unit tests with a fake backend.
-Network-dependent smoke tests should not be part of the fast default suite.
-
-## Adding a vector store
-
-A store implements the `VectorStore` protocol:
-
-```python
-class VectorStore(Protocol):
-    def add(self, chunk: Chunk, embedding: Embedding) -> None: ...
-
-    def add_many(
-        self,
-        entries: Sequence[tuple[Chunk, Embedding]],
-    ) -> None: ...
-
-    def search(self, query: Embedding, limit: int) -> list[SearchResult]: ...
+```bash
+python scripts/evaluate_grounded_generation.py local-data/indexes/summarization-benchmark --output local-data/evaluation/grounded-generation-baseline.json
 ```
 
-Persistent implementations must store enough model metadata to detect incompatible indices.
-Changing the embedding model or revision requires rebuilding existing vectors.
+The report includes per-case citation and concept results plus aggregate recall,
+precision, and pass rate.
+
+## Extension points
+
+### Embedding provider
+
+Implement `Embedder` with separate `embed_documents` and `embed_query` methods.
+Provider-specific prefixes, batching, clients, and response conversion stay in
+the adapter. `RetrievalService` must remain provider-agnostic.
+
+### Vector store
+
+Implement `VectorStore` and preserve enough model metadata to reject incompatible
+indices. Persistent stores must keep vector IDs and source metadata consistent
+across add, remove, replace, reopen, and failed writes.
+
+### Text-generation provider
+
+Implement `TextGenerator` for grounded answers and summaries. Question generation
+also requires the narrow `QuestionGenerator` behavior. Provider adapters must
+return validated `GenerationResult` or `QuestionGenerationResult` objects and
+report prompt references actually used. Application services remain responsible
+for mapping citation numbers back to trusted source objects.
+
+### Learning algorithm
+
+Keep scheduling policy inside `ReviewScheduler`. A future replacement may use a
+different algorithm, but it must preserve timezone-aware due dates, immutable
+state transitions, the minimum ease invariant, and deterministic tests. If new
+state fields are required, add an explicit SQLite migration rather than silently
+changing stored meaning.
 
 ## Documentation and decisions
 
-Long-lived decisions are recorded in [Architecture Decision Records](adr/README.md).
-ADRs explain context and consequences; code comments should explain only non-obvious local decisions.
-Tests remain the executable specification of behavior.
-Hardware-dependent measurements and the current local baseline are recorded in
-the [summarization benchmark](summarization-benchmark.md), separately from ADRs.
+ADRs explain why durable choices were made. `development.md` describes the
+current integrated system. Code comments explain non-obvious local constraints,
+and tests remain the executable behavior specification.
+
+Update the [PlantUML class overview](class-overview.puml) whenever classes,
+protocols, inheritance, or major runtime relationships change.
 
 ## Near-term roadmap
 
-1. Expose grounded answer generation through the CLI.
-2. Add consistency recovery for interrupted FAISS and SQLite writes.
-3. Build a small German retrieval and answer-quality evaluation set.
-4. Compare the local Qwen baseline with larger or remote providers.
+1. Add interactive study sessions and answer capture.
+2. Add grounded answer feedback without allowing generated feedback to alter
+   trusted citations.
+3. Persist append-only review history for analytics and algorithm experiments.
+4. Generate detailed section-level learning material.
+5. Add optional Ollama and remote API generation providers.

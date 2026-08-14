@@ -10,6 +10,7 @@ from rag_learning_assistant.application import (
     DocumentSummaryNotFoundError,
     DuplicateDocumentError,
     QuestionBankNotFoundError,
+    StudyQuestionNotFoundError,
 )
 from rag_learning_assistant.chunking import TextChunker
 from rag_learning_assistant.ingestion import PdfExtractor
@@ -146,6 +147,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (
             DocumentNotFoundError,
             DocumentSummaryNotFoundError,
+        ) as exc:
+            parser.error(str(exc))
+
+    if args.command in {"review-due", "review-record"}:
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            if args.command == "review-due":
+                return commands.run_review_due(
+                    index_directory=args.index_dir,
+                    document_id=args.document_id,
+                    question_bank_identity_fingerprint=(args.question_bank_identity_fingerprint),
+                    limit=args.limit,
+                )
+
+            return commands.run_review_record(
+                index_directory=args.index_dir,
+                document_id=args.document_id,
+                question_bank_identity_fingerprint=(args.question_bank_identity_fingerprint),
+                question_number=args.question_number,
+                rating=args.rating,
+            )
+        except (
+            DocumentNotFoundError,
+            QuestionBankNotFoundError,
+            StudyQuestionNotFoundError,
         ) as exc:
             parser.error(str(exc))
 

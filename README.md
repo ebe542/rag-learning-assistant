@@ -206,6 +206,34 @@ rag-learn question-show \
 Removing or successfully replacing a document also removes question banks
 derived from its previous content.
 
+List the next due questions from one exact question bank:
+
+```bash
+rag-learn review-due \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  QUESTION_BANK_IDENTITY_SHA256 \
+  --limit 10
+```
+
+Questions that have never been reviewed are due immediately. Existing scheduled
+reviews are returned first by oldest due date, followed by new questions in bank
+order. Record a self-rating after answering one question:
+
+```bash
+rag-learn review-record \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  QUESTION_BANK_IDENTITY_SHA256 \
+  1 \
+  good
+```
+
+Supported ratings are `again`, `hard`, `good`, and `easy`. The command persists
+the updated repetition count, ease factor, interval, and next due timestamp.
+Removing or successfully replacing the source document also removes its review
+progress.
+
 Measure real local-model generation and cache behavior manually:
 
 ```bash
@@ -259,9 +287,12 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
                                                         -> questions and progress
 ```
 
+The package-level classes, protocols, inheritance, and runtime relationships are
+maintained as a renderable [PlantUML class overview](docs/class-overview.puml).
+
 Planned next milestones:
 
-1. track learner feedback and spaced repetition
+1. add interactive study sessions and answer feedback
 2. generate detailed section-level learning material
 3. add optional Ollama and API model providers
 

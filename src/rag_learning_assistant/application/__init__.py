@@ -22,6 +22,12 @@ from rag_learning_assistant.application.question_bank import (
     QuestionBankNotFoundError,
     QuestionBankService,
 )
+from rag_learning_assistant.application.review import (
+    DueQuestion,
+    ReviewScheduler,
+    ReviewService,
+    StudyQuestionNotFoundError,
+)
 from rag_learning_assistant.application.summarization import (
     DocumentSummarizationService,
     DocumentSummary,
@@ -48,4 +54,8 @@ __all__ = [
     "QuestionBankService",
     "QuestionBankCatalog",
     "QuestionBankNotFoundError",
+    "ReviewScheduler",
+    "ReviewService",
+    "StudyQuestionNotFoundError",
+    "DueQuestion",
 ]
