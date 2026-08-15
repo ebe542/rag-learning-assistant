@@ -9,7 +9,9 @@ __pycache__/
 
 # Test, lint, and coverage artifacts
 .pytest_cache/
-.pytest-tmp/
+# Milestone and diagnostic runs use named base-temp directories. Windows may
+# keep them locked briefly, but none of their contents belong in Git or Ruff.
+.pytest-*/
 .ruff_cache/
 .coverage
 htmlcov/

@@ -1,3 +1,8 @@
+from rag_learning_assistant.learning.attempt_repository import (
+    SqliteStudyAttemptRepository,
+    StudyAttemptRepository,
+)
+from rag_learning_assistant.learning.attempts import StudyAttempt
 from rag_learning_assistant.learning.models import (
     QuestionBank,
     QuestionBankIdentity,
@@ -26,4 +31,7 @@ __all__ = [
     "ReviewRating",
     "QuestionProgressRepository",
     "SqliteQuestionProgressRepository",
+    "StudyAttempt",
+    "SqliteStudyAttemptRepository",
+    "StudyAttemptRepository",
 ]

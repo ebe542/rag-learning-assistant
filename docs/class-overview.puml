@@ -81,11 +81,14 @@ package "learning" #F3E8FF {
   class QuestionBankIdentity <<immutable model>>
   enum ReviewRating
   class QuestionProgress <<immutable model>>
+  class StudyAttempt <<immutable model>>
 
   interface QuestionBankRepository <<Protocol>>
   interface QuestionProgressRepository <<Protocol>>
+  interface StudyAttemptRepository <<Protocol>>
   class SqliteQuestionBankRepository
   class SqliteQuestionProgressRepository
+  class SqliteStudyAttemptRepository
 }
 
 package "application" #FFE8E8 {
@@ -110,6 +113,9 @@ package "application" #FFE8E8 {
   interface QuestionBankReader <<Protocol>>
   interface ReviewQuestionBankLookup <<Protocol>>
   interface ReviewProgressRepository <<Protocol>>
+  interface StudySessionQuestionBankLookup <<Protocol>>
+  interface StudySessionReviewer <<Protocol>>
+  interface StudySessionRecorder <<Protocol>>
 
   enum ImportStatus
   class ImportOutcome <<immutable model>>
@@ -127,6 +133,7 @@ package "application" #FFE8E8 {
   class QuestionBankService
   class ReviewScheduler
   class ReviewService
+  class StudySessionService
 }
 
 package "evaluation" #EFFFF4 {
@@ -240,6 +247,7 @@ SqliteQuestionBankRepository ..|> DocumentDerivedDataCleaner
 QuestionBankCatalog o-- QuestionBankDocumentLookup
 QuestionBankCatalog o-- QuestionBankReader
 QuestionBankCatalog ..|> ReviewQuestionBankLookup
+QuestionBankCatalog ..|> StudySessionQuestionBankLookup
 QuestionBankService o-- DocumentSummaryLookup
 QuestionBankService o-- QuestionGenerator
 QuestionBankService o-- QuestionBankRepository
@@ -259,6 +267,18 @@ ReviewService o-- ReviewQuestionBankLookup
 ReviewService o-- ReviewProgressRepository
 ReviewService o-- ReviewScheduler
 ReviewService --> DueQuestion
+ReviewService ..|> StudySessionReviewer
+StudyAttempt *-- "1..*" Citation
+StudyAttempt *-- QuestionProgress : resulting snapshot
+StudyAttempt --> ReviewRating
+SqliteStudyAttemptRepository ..|> StudyAttemptRepository
+SqliteStudyAttemptRepository ..|> StudySessionRecorder
+SqliteStudyAttemptRepository ..|> DocumentDerivedDataCleaner
+StudySessionService o-- StudySessionQuestionBankLookup
+StudySessionService o-- StudySessionReviewer
+StudySessionService o-- StudySessionRecorder
+StudySessionService --> DueQuestion
+StudySessionService --> StudyAttempt
 
 ' Evaluation
 GroundedEvaluationCase *-- "1..*" ExpectedCitation

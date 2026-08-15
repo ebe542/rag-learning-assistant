@@ -150,13 +150,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         ) as exc:
             parser.error(str(exc))
 
-    if args.command in {"review-due", "review-record"}:
+    if args.command in {"review-due", "review-record", "study"}:
         try:
             validate_library_directory(args.index_dir)
         except ValueError as exc:
             parser.error(str(exc))
 
         try:
+            if args.command == "study":
+                return commands.run_study(
+                    index_directory=args.index_dir,
+                    document_id=args.document_id,
+                    question_bank_identity_fingerprint=(args.question_bank_identity_fingerprint),
+                )
+
             if args.command == "review-due":
                 return commands.run_review_due(
                     index_directory=args.index_dir,

@@ -181,7 +181,7 @@ class ReviewService:
         due.sort(key=priority)
         return due[:limit]
 
-    def record_review(
+    def prepare_review(
         self,
         document_id: UUID,
         question_bank_identity_fingerprint: str,
@@ -190,7 +190,7 @@ class ReviewService:
         *,
         reviewed_at: datetime,
     ) -> QuestionProgress:
-        """Record one answer rating and return its updated schedule."""
+        """Calculate a review result without persisting it."""
 
         bank = self.banks.get_document_bank(
             document_id,
@@ -203,8 +203,9 @@ class ReviewService:
 
         if question is None:
             raise StudyQuestionNotFoundError(
-                f"Study question does not exist: "
-                f"{document_id}/{question_bank_identity_fingerprint}/"
+                "Study question does not exist: "
+                f"{document_id}/"
+                f"{question_bank_identity_fingerprint}/"
                 f"{question_number}"
             )
 
@@ -228,8 +229,27 @@ class ReviewService:
                 last_reviewed_at=None,
             )
 
-        reviewed = self.scheduler.review(
+        return self.scheduler.review(
             current,
+            rating,
+            reviewed_at=reviewed_at,
+        )
+
+    def record_review(
+        self,
+        document_id: UUID,
+        question_bank_identity_fingerprint: str,
+        question_number: int,
+        rating: ReviewRating,
+        *,
+        reviewed_at: datetime,
+    ) -> QuestionProgress:
+        """Calculate and persist one question's updated schedule."""
+
+        reviewed = self.prepare_review(
+            document_id,
+            question_bank_identity_fingerprint,
+            question_number,
             rating,
             reviewed_at=reviewed_at,
         )

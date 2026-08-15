@@ -52,6 +52,9 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Pytest base-temp directories may remain locked on Windows. They contain no
+# source files and must not be traversed by formatting or lint checks.
+extend-exclude = [".pytest-*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

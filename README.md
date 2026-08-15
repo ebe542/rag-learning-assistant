@@ -229,6 +229,21 @@ rag-learn review-record \
   good
 ```
 
+Run one interactive active-recall session for the highest-priority due question:
+
+```bash
+rag-learn study \
+  local-data/indexes/learning \
+  12345678-1234-5678-1234-567812345678 \
+  QUESTION_BANK_IDENTITY_SHA256
+```
+
+The expected answer and trusted sources remain hidden until an answer has been
+entered. The selected self-rating updates the schedule while the answer,
+question snapshot, citations, and resulting progress are stored as one immutable
+attempt. Both writes share one SQLite transaction. Removing or successfully
+replacing the document also removes its attempt history.
+
 Supported ratings are `again`, `hard`, `good`, and `easy`. The command persists
 the updated repetition count, ease factor, interval, and next due timestamp.
 Removing or successfully replacing the source document also removes its review
@@ -292,9 +307,10 @@ maintained as a renderable [PlantUML class overview](docs/class-overview.puml).
 
 Planned next milestones:
 
-1. add interactive study sessions and answer feedback
-2. generate detailed section-level learning material
-3. add optional Ollama and API model providers
+1. add grounded answer feedback to interactive study sessions
+2. add progress analytics over study-attempt history
+3. generate detailed section-level learning material
+4. add optional Ollama and API model providers
 
 ## Development
 

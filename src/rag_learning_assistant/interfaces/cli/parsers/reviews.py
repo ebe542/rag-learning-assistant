@@ -57,3 +57,23 @@ def add_review_commands(commands: SubcommandCollection) -> None:
         choices=tuple(ReviewRating),
         help="Learner rating: again, hard, good, or easy",
     )
+
+    study_parser = commands.add_parser(
+        "study",
+        help="Interactively answer the next due study question",
+    )
+    study_parser.add_argument(
+        "index_dir",
+        type=Path,
+        help="Directory containing the library metadata",
+    )
+    study_parser.add_argument(
+        "document_id",
+        type=UUID,
+        help="UUID of the source document",
+    )
+    study_parser.add_argument(
+        "question_bank_identity_fingerprint",
+        type=sha256_fingerprint,
+        help="SHA-256 identity of the persisted question bank",
+    )

@@ -20,6 +20,7 @@ PDF
   -> persisted document summaries
   -> persisted grounded question banks
   -> persisted spaced-review schedules
+  -> interactive study attempts
 ```
 
 The detailed classes, protocols, inheritance, and runtime relationships are
@@ -36,6 +37,7 @@ src/rag_learning_assistant/
 │   ├── question_answering.py
 │   ├── question_bank.py
 │   ├── review.py
+│   ├── study_session.py
 │   ├── summarization.py
 │   └── summary_catalog.py
 ├── chunking/
@@ -63,8 +65,8 @@ The packages follow responsibility boundaries rather than technical convenience:
 - `library` owns persistent document metadata;
 - `generation` owns model adapters, prompts, parsing, identities, and generation
   persistence;
-- `learning` owns grounded question-bank and review-progress domain models plus
-  SQLite repositories;
+- `learning` owns grounded question-bank, review-progress, and immutable study-
+  attempt domain models plus SQLite repositories;
 - `application` coordinates use cases through narrow protocols;
 - `evaluation` measures deterministic citation and concept coverage;
 - `interfaces.cli` validates CLI input, wires concrete adapters, and serializes
@@ -95,6 +97,8 @@ The project uses stable identities at every persistent boundary:
 - question-bank fingerprints include their selected persisted summary identity;
 - review progress uses document UUID, question-bank fingerprint, and question
   number as its composite identity.
+- study attempts use their own UUID while retaining the complete question-bank
+  identity and resulting progress snapshot.
 
 ## Processing stages
 
@@ -148,7 +152,7 @@ Document replacement preserves the UUID but changes source metadata, content
 hash, chunks, and vectors. Document removal verifies the removed chunk count
 before deleting catalog metadata.
 
-Summaries, question banks, and review progress are derived data. After a
+Summaries, question banks, review progress, and study attempts are derived data. After a
 successful removal or replacement, `LibraryService` invokes every registered
 `DocumentDerivedDataCleaner` before changing document metadata. If vector
 mutation fails or reports inconsistent state, derived data and catalog metadata
@@ -232,8 +236,17 @@ oldest scheduled reviews before new questions, preventing old work from being
 starved by newly generated material. Timestamps are timezone-aware and CLI events
 use UTC.
 
-The current milestone stores self-ratings and current schedules. It does not yet
-persist answer text, review history, or automated answer-quality feedback.
+`StudySessionService` selects one due question and records the learner's answer,
+expected answer, trusted citations, self-rating, timestamp, and resulting
+schedule as an immutable `StudyAttempt`. Review calculation is separated from
+persistence so the SQLite adapter can write the attempt and current progress in
+one transaction. This prevents a failed attempt insert from advancing the
+schedule without a matching history entry.
+
+The terminal workflow reveals the expected answer only after active recall and
+then requests the self-rating. Attempts are append-only, identical retries are
+idempotent, and histories are ordered chronologically for one exact question.
+Automated answer-quality feedback is intentionally not part of this milestone.
 
 ### Grounded evaluation
 
@@ -274,6 +287,7 @@ question-list
 question-show
 review-due
 review-record
+study
 ```
 
 A repository-root `.env` is loaded optionally. It may define `HF_TOKEN` for
@@ -295,8 +309,8 @@ local-data/
 
 `vectors.faiss` contains vector IDs and normalized embeddings.
 `metadata.sqlite3` contains document and chunk metadata, embedding identity,
-summary map cache entries, final summaries, question banks, and current question
-progress. Persistent formats validate identities when reopened so incompatible
+summary map cache entries, final summaries, question banks, current question
+progress, and immutable study attempts. Persistent formats validate identities when reopened so incompatible
 models or generation configurations are not silently mixed.
 
 ## Environment setup
@@ -504,9 +518,8 @@ protocols, inheritance, or major runtime relationships change.
 
 ## Near-term roadmap
 
-1. Add interactive study sessions and answer capture.
-2. Add grounded answer feedback without allowing generated feedback to alter
+1. Add grounded answer feedback without allowing generated feedback to alter
    trusted citations.
-3. Persist append-only review history for analytics and algorithm experiments.
-4. Generate detailed section-level learning material.
-5. Add optional Ollama and remote API generation providers.
+2. Add progress analytics over the append-only attempt history.
+3. Generate detailed section-level learning material.
+4. Add optional Ollama and remote API generation providers.

@@ -28,6 +28,9 @@ from rag_learning_assistant.application.review import (
     ReviewService,
     StudyQuestionNotFoundError,
 )
+from rag_learning_assistant.application.study_session import (
+    StudySessionService,
+)
 from rag_learning_assistant.application.summarization import (
     DocumentSummarizationService,
     DocumentSummary,
@@ -58,4 +61,5 @@ __all__ = [
     "ReviewService",
     "StudyQuestionNotFoundError",
     "DueQuestion",
+    "StudySessionService",
 ]

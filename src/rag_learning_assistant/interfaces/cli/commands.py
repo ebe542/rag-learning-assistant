@@ -2,10 +2,10 @@
 
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from rag_learning_assistant.application import (
     BatchImportService,
@@ -21,6 +21,7 @@ from rag_learning_assistant.application import (
     QuestionBankService,
     ReviewScheduler,
     ReviewService,
+    StudySessionService,
 )
 from rag_learning_assistant.application.question_bank import (
     QUESTION_BANK_PROMPT,
@@ -46,12 +47,16 @@ from rag_learning_assistant.generation.huggingface import (
 )
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
+from rag_learning_assistant.interfaces.cli.study import (
+    conduct_study_question,
+)
 from rag_learning_assistant.learning import (
     QuestionBankIdentity,
     QuestionProgress,
     ReviewRating,
     SqliteQuestionBankRepository,
     SqliteQuestionProgressRepository,
+    SqliteStudyAttemptRepository,
     StudyQuestion,
 )
 from rag_learning_assistant.library import IndexedDocument, SqliteDocumentRepository
@@ -122,6 +127,7 @@ def build_library_service(
             SqliteDocumentSummaryRepository(database_path),
             SqliteQuestionBankRepository(database_path),
             SqliteQuestionProgressRepository(database_path),
+            SqliteStudyAttemptRepository(database_path),
         ),
     )
 
@@ -172,6 +178,24 @@ def build_review_service(
         banks=build_question_bank_catalog(index_directory),
         progress=SqliteQuestionProgressRepository(database_path),
         scheduler=ReviewScheduler(),
+    )
+
+
+def build_study_session_service(
+    index_directory: Path,
+) -> StudySessionService:
+    """Build persistent interactive study-session coordination."""
+
+    database_path = index_directory / "metadata.sqlite3"
+    reviewer = build_review_service(index_directory)
+
+    # The reviewer and session share the exact bank lookup so both operations
+    # are guaranteed to address the same persisted question-bank identity.
+    return StudySessionService(
+        banks=reviewer.banks,
+        reviewer=reviewer,
+        attempts=SqliteStudyAttemptRepository(database_path),
+        attempt_id_factory=uuid4,
     )
 
 
@@ -434,6 +458,46 @@ def run_question_show(
         ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_study(
+    index_directory: Path,
+    document_id: UUID,
+    question_bank_identity_fingerprint: str,
+    *,
+    as_of: datetime | None = None,
+    read_line: Callable[[str], str] = input,
+    write_line: Callable[[str], None] = print,
+) -> int:
+    """Run one interactive due-question study session."""
+
+    study_time = as_of if as_of is not None else datetime.now(UTC)
+    service = build_study_session_service(index_directory)
+    due = service.next_due(
+        document_id,
+        question_bank_identity_fingerprint,
+        as_of=study_time,
+    )
+
+    if due is None:
+        write_line("No study questions are due.")
+        return 0
+
+    answer_text, rating = conduct_study_question(
+        due.question,
+        read_line=read_line,
+        write_line=write_line,
+    )
+    attempt = service.record_answer(
+        document_id,
+        question_bank_identity_fingerprint,
+        due.question.number,
+        answer_text=answer_text,
+        rating=rating,
+        answered_at=study_time,
+    )
+    write_line(f"Review recorded. Next due: {attempt.resulting_progress.due_at.isoformat()}")
     return 0
 
 

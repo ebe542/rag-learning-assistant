@@ -529,3 +529,28 @@ def test_list_due_prioritizes_overdue_reviews_before_new_questions() -> None:
             progress=overdue,
         )
     ]
+
+
+def test_prepare_review_calculates_progress_without_saving() -> None:
+    progress = RecordingProgressRepository()
+    service = ReviewService(
+        banks=StaticQuestionBankCatalog(build_question_bank()),
+        progress=progress,
+        scheduler=ReviewScheduler(),
+    )
+
+    reviewed = service.prepare_review(
+        DOCUMENT_ID,
+        BANK_IDENTITY,
+        1,
+        ReviewRating.GOOD,
+        reviewed_at=REVIEWED_AT,
+    )
+
+    assert reviewed.repetition_count == 1
+    assert reviewed.interval_days == 1
+    assert reviewed.due_at == REVIEWED_AT + timedelta(days=1)
+    assert progress.find_calls == [
+        (DOCUMENT_ID, BANK_IDENTITY, 1),
+    ]
+    assert progress.saved == []
