@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from rag_learning_assistant.application import (
+    AnswerEvaluationService,
     BatchImportService,
     DocumentSearchService,
     DocumentSummarizationService,
@@ -47,8 +48,11 @@ from rag_learning_assistant.generation.huggingface import (
 )
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
+from rag_learning_assistant.interfaces.cli.parsing import (
+    DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS,
+)
 from rag_learning_assistant.interfaces.cli.study import (
-    conduct_study_question,
+    capture_study_answer,
 )
 from rag_learning_assistant.learning import (
     QuestionBankIdentity,
@@ -196,6 +200,11 @@ def build_study_session_service(
         reviewer=reviewer,
         attempts=SqliteStudyAttemptRepository(database_path),
         attempt_id_factory=uuid4,
+        evaluator=AnswerEvaluationService(
+            HuggingFaceTextGenerator(
+                max_new_tokens=(DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS),
+            )
+        ),
     )
 
 
@@ -484,7 +493,7 @@ def run_study(
         write_line("No study questions are due.")
         return 0
 
-    answer_text, rating = conduct_study_question(
+    answer_text = capture_study_answer(
         due.question,
         read_line=read_line,
         write_line=write_line,
@@ -494,9 +503,29 @@ def run_study(
         question_bank_identity_fingerprint,
         due.question.number,
         answer_text=answer_text,
-        rating=rating,
         answered_at=study_time,
     )
+    evaluation = attempt.evaluation
+    if evaluation is None:
+        raise RuntimeError("Automatic answer evaluation returned no feedback")
+
+    # Reveal trusted learning material only after the learner has committed to
+    # a written answer and the automatic evaluation has completed.
+    write_line(f"Expected answer: {attempt.expected_answer}")
+    for citation in attempt.citations:
+        write_line(
+            f"Source {citation.number}: "
+            f"{citation.source}, "
+            f"page {citation.page_number}, "
+            f"chunk {citation.chunk_index}"
+        )
+
+    write_line(f"Evaluation: {evaluation.verdict.value} (score: {evaluation.score:.2f})")
+    write_line(f"Feedback: {evaluation.feedback}")
+    for concept in evaluation.missing_concepts:
+        write_line(f"Missing concept: {concept}")
+
+    write_line(f"Scheduled as: {attempt.rating.value}")
     write_line(f"Review recorded. Next due: {attempt.resulting_progress.due_at.isoformat()}")
     return 0
 

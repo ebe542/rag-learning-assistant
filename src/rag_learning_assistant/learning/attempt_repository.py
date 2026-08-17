@@ -8,8 +8,15 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
-from rag_learning_assistant.generation import Citation
+from rag_learning_assistant.generation import (
+    Citation,
+    PromptReference,
+)
 from rag_learning_assistant.learning.attempts import StudyAttempt
+from rag_learning_assistant.learning.feedback import (
+    AnswerEvaluation,
+    AnswerVerdict,
+)
 from rag_learning_assistant.learning.progress import (
     QuestionProgress,
     ReviewRating,
@@ -177,10 +184,36 @@ class SqliteStudyAttemptRepository:
         return [self._deserialize(row) for row in rows]
 
     @staticmethod
+    def _serialize_evaluation(
+        evaluation: AnswerEvaluation | None,
+    ) -> str | None:
+        if evaluation is None:
+            return None
+
+        return json.dumps(
+            {
+                "verdict": evaluation.verdict.value,
+                "score": evaluation.score,
+                "feedback": evaluation.feedback,
+                "missing_concepts": list(evaluation.missing_concepts),
+                "prompt_references": [
+                    {
+                        "name": reference.name,
+                        "version": reference.version,
+                        "fingerprint": reference.fingerprint,
+                    }
+                    for reference in evaluation.prompt_references
+                ],
+            },
+            ensure_ascii=False,
+        )
+
+    @staticmethod
     def _insert_attempt(
         connection: sqlite3.Connection,
         attempt: StudyAttempt,
     ) -> None:
+        evaluation_json = SqliteStudyAttemptRepository._serialize_evaluation(attempt.evaluation)
         citations_json = json.dumps(
             [
                 {
@@ -213,9 +246,10 @@ class SqliteStudyAttemptRepository:
                 interval_days,
                 ease_factor,
                 due_at,
-                last_reviewed_at
+                last_reviewed_at,
+                evaluation_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(attempt.id),
@@ -237,6 +271,7 @@ class SqliteStudyAttemptRepository:
                     if progress.last_reviewed_at is not None
                     else None
                 ),
+                evaluation_json,
             ),
         )
 
@@ -285,10 +320,24 @@ class SqliteStudyAttemptRepository:
                     interval_days INTEGER NOT NULL,
                     ease_factor REAL NOT NULL,
                     due_at TEXT NOT NULL,
-                    last_reviewed_at TEXT
+                    last_reviewed_at TEXT,
+                    evaluation_json TEXT
                 )
                 """
             )
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(study_attempts)").fetchall()
+            }
+            if "evaluation_json" not in columns:
+                # Existing libraries predate automatic feedback. A nullable
+                # column preserves their manually rated attempt history.
+                connection.execute(
+                    """
+                    ALTER TABLE study_attempts
+                    ADD COLUMN evaluation_json TEXT
+                    """
+                )
 
     @staticmethod
     def _deserialize(row: sqlite3.Row) -> StudyAttempt:
@@ -324,6 +373,27 @@ class SqliteStudyAttemptRepository:
             ),
         )
 
+        evaluation_payload = (
+            json.loads(row["evaluation_json"]) if row["evaluation_json"] is not None else None
+        )
+        evaluation = (
+            AnswerEvaluation(
+                verdict=AnswerVerdict(evaluation_payload["verdict"]),
+                score=evaluation_payload["score"],
+                feedback=evaluation_payload["feedback"],
+                missing_concepts=tuple(evaluation_payload["missing_concepts"]),
+                prompt_references=tuple(
+                    PromptReference(
+                        name=item["name"],
+                        version=item["version"],
+                        fingerprint=item["fingerprint"],
+                    )
+                    for item in evaluation_payload["prompt_references"]
+                ),
+            )
+            if evaluation_payload is not None
+            else None
+        )
         return StudyAttempt(
             id=UUID(row["id"]),
             document_id=document_id,
@@ -336,4 +406,5 @@ class SqliteStudyAttemptRepository:
             rating=ReviewRating(row["rating"]),
             answered_at=answered_at,
             resulting_progress=progress,
+            evaluation=evaluation,
         )

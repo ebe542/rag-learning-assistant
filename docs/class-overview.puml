@@ -82,6 +82,8 @@ package "learning" #F3E8FF {
   enum ReviewRating
   class QuestionProgress <<immutable model>>
   class StudyAttempt <<immutable model>>
+  enum AnswerVerdict
+  class AnswerEvaluation <<immutable model>>
 
   interface QuestionBankRepository <<Protocol>>
   interface QuestionProgressRepository <<Protocol>>
@@ -116,6 +118,8 @@ package "application" #FFE8E8 {
   interface StudySessionQuestionBankLookup <<Protocol>>
   interface StudySessionReviewer <<Protocol>>
   interface StudySessionRecorder <<Protocol>>
+  interface AnswerEvaluationGenerator <<Protocol>>
+  interface StudyAnswerEvaluator <<Protocol>>
 
   enum ImportStatus
   class ImportOutcome <<immutable model>>
@@ -134,6 +138,8 @@ package "application" #FFE8E8 {
   class ReviewScheduler
   class ReviewService
   class StudySessionService
+  class EvaluatedStudyAnswer <<immutable model>>
+  class AnswerEvaluationService
 }
 
 package "evaluation" #EFFFF4 {
@@ -158,6 +164,7 @@ QuestionBankNotFoundError --|> LookupError
 StudyQuestionNotFoundError --|> LookupError
 ImportStatus --|> StrEnum
 ReviewRating --|> StrEnum
+AnswerVerdict --|> StrEnum
 
 ' Ingestion and chunking
 Document *-- "1..*" Page
@@ -214,6 +221,7 @@ ApplicationDocumentSummary o-- "0..*" PromptReference
 
 HuggingFaceTextGenerator ..|> TextGenerator
 HuggingFaceTextGenerator ..|> QuestionGenerator
+HuggingFaceTextGenerator ..|> AnswerEvaluationGenerator
 HuggingFaceTextGenerator o-- ChatPipeline
 ChatPipeline o-- PipelineGenerationConfig
 SqliteSummaryCache ..|> SummaryBatchCache
@@ -271,14 +279,22 @@ ReviewService ..|> StudySessionReviewer
 StudyAttempt *-- "1..*" Citation
 StudyAttempt *-- QuestionProgress : resulting snapshot
 StudyAttempt --> ReviewRating
+StudyAttempt o-- "0..1" AnswerEvaluation
+AnswerEvaluation --> AnswerVerdict
+AnswerEvaluation o-- "0..*" PromptReference
 SqliteStudyAttemptRepository ..|> StudyAttemptRepository
 SqliteStudyAttemptRepository ..|> StudySessionRecorder
 SqliteStudyAttemptRepository ..|> DocumentDerivedDataCleaner
 StudySessionService o-- StudySessionQuestionBankLookup
 StudySessionService o-- StudySessionReviewer
 StudySessionService o-- StudySessionRecorder
+StudySessionService o-- StudyAnswerEvaluator
 StudySessionService --> DueQuestion
 StudySessionService --> StudyAttempt
+AnswerEvaluationService o-- AnswerEvaluationGenerator
+AnswerEvaluationService --> EvaluatedStudyAnswer
+EvaluatedStudyAnswer *-- AnswerEvaluation
+EvaluatedStudyAnswer --> ReviewRating
 
 ' Evaluation
 GroundedEvaluationCase *-- "1..*" ExpectedCitation

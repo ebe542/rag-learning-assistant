@@ -1,8 +1,18 @@
 """Hugging Face adapter for local chat-based text generation."""
 
-from dataclasses import replace
-from typing import Any, Protocol, cast
+from __future__ import annotations
 
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, Protocol, cast
+
+if TYPE_CHECKING:
+    from rag_learning_assistant.learning.feedback import (
+        AnswerEvaluation,
+    )
+
+from rag_learning_assistant.generation.feedback_parser import (
+    parse_answer_evaluation,
+)
 from rag_learning_assistant.generation.models import (
     GenerationResult,
 )
@@ -80,6 +90,40 @@ Do not add or remove citation numbers.
 Do not wrap the JSON in Markdown code fences.
 """.strip(),
 )
+
+ANSWER_EVALUATION_SYSTEM_PROMPT = PromptTemplate(
+    name="answer-evaluation.system-json",
+    version=1,
+    text="""
+Return only one valid JSON object with exactly these fields:
+- "verdict": one of "incorrect", "partially_correct", or "correct"
+- "score": a number from 0 to 1
+- "feedback": a concise constructive explanation
+- "missing_concepts": an array of strings
+
+Judge only against the expected answer and supplied source contexts.
+Do not invent facts, sources, citations, or review ratings.
+Do not return "again", "hard", "good", or "easy".
+Do not wrap the JSON object in Markdown code fences.
+""".strip(),
+)
+
+ANSWER_EVALUATION_JSON_REPAIR_PROMPT = PromptTemplate(
+    name="answer-evaluation.json-repair",
+    version=1,
+    text="""
+Your previous response did not match the required answer-evaluation JSON format.
+Preserve the verdict, score, feedback, and missing concepts from the previous
+response.
+Return one valid JSON object with exactly the fields "verdict", "score",
+"feedback", and "missing_concepts".
+Correct only the JSON representation.
+Do not add, remove, or rewrite evaluation content.
+Do not introduce review ratings, facts, sources, or citations.
+Do not wrap the JSON object in Markdown code fences.
+""".strip(),
+)
+
 
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
@@ -258,6 +302,67 @@ class HuggingFaceTextGenerator:
             prompt_references=(
                 QUESTION_SYSTEM_PROMPT.reference,
                 QUESTION_JSON_REPAIR_PROMPT.reference,
+            ),
+        )
+
+    def evaluate_answer(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int | None = None,
+    ) -> AnswerEvaluation:
+        """Generate and parse one grounded learner-answer evaluation."""
+
+        effective_max_new_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
+        if effective_max_new_tokens < 1:
+            raise ValueError("max_new_tokens must be positive")
+
+        messages = [
+            {
+                "role": "system",
+                "content": ANSWER_EVALUATION_SYSTEM_PROMPT.text,
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ]
+        raw_response = self._generate_raw_response(
+            messages,
+            max_new_tokens=effective_max_new_tokens,
+        )
+
+        try:
+            evaluation = parse_answer_evaluation(raw_response)
+            return replace(
+                evaluation,
+                prompt_references=(ANSWER_EVALUATION_SYSTEM_PROMPT.reference,),
+            )
+        except ValueError:
+            # Repair only the structured representation. The evaluator must
+            # preserve its original judgment and may not change scheduling.
+            repair_messages = [
+                *messages,
+                {
+                    "role": "assistant",
+                    "content": raw_response,
+                },
+                {
+                    "role": "user",
+                    "content": (ANSWER_EVALUATION_JSON_REPAIR_PROMPT.text),
+                },
+            ]
+            repaired_response = self._generate_raw_response(
+                repair_messages,
+                max_new_tokens=effective_max_new_tokens,
+            )
+
+        evaluation = parse_answer_evaluation(repaired_response)
+        return replace(
+            evaluation,
+            prompt_references=(
+                ANSWER_EVALUATION_SYSTEM_PROMPT.reference,
+                ANSWER_EVALUATION_JSON_REPAIR_PROMPT.reference,
             ),
         )
 

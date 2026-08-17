@@ -6,6 +6,9 @@ from datetime import datetime
 from uuid import UUID
 
 from rag_learning_assistant.generation import Citation
+from rag_learning_assistant.learning.feedback import (
+    AnswerEvaluation,
+)
 from rag_learning_assistant.learning.progress import (
     QuestionProgress,
     ReviewRating,
@@ -27,6 +30,7 @@ class StudyAttempt:
     rating: ReviewRating
     answered_at: datetime
     resulting_progress: QuestionProgress
+    evaluation: AnswerEvaluation | None = None
 
     def __post_init__(self) -> None:
         if not self.question_text.strip():

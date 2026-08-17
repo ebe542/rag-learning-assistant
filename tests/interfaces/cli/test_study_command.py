@@ -5,18 +5,24 @@ from uuid import UUID
 import pytest
 
 from rag_learning_assistant.application import (
+    AnswerEvaluationService,
     DueQuestion,
     QuestionBankCatalog,
     ReviewService,
     StudySessionService,
 )
-from rag_learning_assistant.generation import Citation
+from rag_learning_assistant.generation import (
+    Citation,
+    HuggingFaceTextGenerator,
+)
 from rag_learning_assistant.interfaces.cli import commands, entrypoint
 from rag_learning_assistant.interfaces.cli.parser import build_parser
 from rag_learning_assistant.interfaces.cli.study import (
-    conduct_study_question,
+    capture_study_answer,
 )
 from rag_learning_assistant.learning import (
+    AnswerEvaluation,
+    AnswerVerdict,
     QuestionProgress,
     ReviewRating,
     SqliteStudyAttemptRepository,
@@ -45,7 +51,7 @@ def test_parser_accepts_interactive_study_command() -> None:
     assert args.question_bank_identity_fingerprint == BANK_IDENTITY
 
 
-def test_conduct_study_question_reveals_answer_before_rating() -> None:
+def test_capture_study_answer_requires_written_response() -> None:
     question = StudyQuestion(
         number=1,
         text="What is retrieval?",
@@ -64,7 +70,6 @@ def test_conduct_study_question_reveals_answer_before_rating() -> None:
     answers = iter(
         [
             "It finds relevant passages.",
-            "good",
         ]
     )
 
@@ -75,30 +80,20 @@ def test_conduct_study_question_reveals_answer_before_rating() -> None:
     def write_line(text: str) -> None:
         events.append(("write", text))
 
-    answer_text, rating = conduct_study_question(
+    answer_text = capture_study_answer(
         question,
         read_line=read_line,
         write_line=write_line,
     )
 
     assert answer_text == "It finds relevant passages."
-    assert rating is ReviewRating.GOOD
     assert events == [
         ("write", "Question 1: What is retrieval?"),
         ("read", "Your answer: "),
-        (
-            "write",
-            "Expected answer: Retrieval finds relevant source passages.",
-        ),
-        (
-            "write",
-            "Source 1: document.pdf, page 3, chunk 4",
-        ),
-        ("read", "Rating [again/hard/good/easy]: "),
     ]
 
 
-def test_conduct_study_question_repeats_invalid_inputs() -> None:
+def test_capture_study_answer_repeats_blank_input() -> None:
     question = StudyQuestion(
         number=1,
         text="What is retrieval?",
@@ -117,22 +112,18 @@ def test_conduct_study_question_repeats_invalid_inputs() -> None:
         [
             "   ",
             "It finds relevant passages.",
-            "unknown",
-            "hard",
         ]
     )
     output: list[str] = []
 
-    answer_text, rating = conduct_study_question(
+    answer_text = capture_study_answer(
         question,
         read_line=lambda prompt: next(inputs),
         write_line=output.append,
     )
 
     assert answer_text == "It finds relevant passages."
-    assert rating is ReviewRating.HARD
     assert "Answer must not be blank." in output
-    assert "Rating must be again, hard, good, or easy." in output
 
 
 def test_entrypoint_dispatches_study_command(
@@ -189,6 +180,14 @@ def test_study_session_builder_uses_persistent_library_storage(
     assert isinstance(service, StudySessionService)
     assert isinstance(service.banks, QuestionBankCatalog)
     assert isinstance(service.reviewer, ReviewService)
+    assert isinstance(
+        service.evaluator,
+        AnswerEvaluationService,
+    )
+    assert isinstance(
+        service.evaluator.generator,
+        HuggingFaceTextGenerator,
+    )
     assert isinstance(
         service.attempts,
         SqliteStudyAttemptRepository,
@@ -259,7 +258,7 @@ class RecordingStudySessionService:
         self.due = due
         self.attempt = attempt
         self.next_due_calls: list[tuple[UUID, str, datetime]] = []
-        self.record_answer_calls: list[tuple[UUID, str, int, str, ReviewRating, datetime]] = []
+        self.record_answer_calls: list[tuple[UUID, str, int, str, datetime]] = []
 
     def next_due(
         self,
@@ -284,7 +283,6 @@ class RecordingStudySessionService:
         question_number: int,
         *,
         answer_text: str,
-        rating: ReviewRating,
         answered_at: datetime,
     ) -> StudyAttempt:
         self.record_answer_calls.append(
@@ -293,7 +291,6 @@ class RecordingStudySessionService:
                 question_bank_identity_fingerprint,
                 question_number,
                 answer_text,
-                rating,
                 answered_at,
             )
         )
@@ -328,6 +325,12 @@ def test_run_study_records_interactive_answer(
         due_at=AS_OF + timedelta(days=1),
         last_reviewed_at=AS_OF,
     )
+    evaluation = AnswerEvaluation(
+        verdict=AnswerVerdict.PARTIALLY_CORRECT,
+        score=0.7,
+        feedback="Retrieval was identified, but its order was omitted.",
+        missing_concepts=("Retrieval happens before generation.",),
+    )
     attempt = StudyAttempt(
         id=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
         document_id=DOCUMENT_ID,
@@ -337,15 +340,20 @@ def test_run_study_records_interactive_answer(
         answer_text="It finds relevant passages.",
         expected_answer=question.expected_answer,
         citations=question.citations,
-        rating=ReviewRating.GOOD,
+        rating=ReviewRating.HARD,
         answered_at=AS_OF,
         resulting_progress=progress,
+        evaluation=evaluation,
     )
     service = RecordingStudySessionService(
         due=DueQuestion(question=question, progress=None),
         attempt=attempt,
     )
-    inputs = iter(["It finds relevant passages.", "good"])
+    inputs = iter(
+        [
+            "It finds relevant passages.",
+        ]
+    )
     output: list[str] = []
 
     monkeypatch.setattr(
@@ -370,8 +378,12 @@ def test_run_study_records_interactive_answer(
             BANK_IDENTITY,
             1,
             "It finds relevant passages.",
-            ReviewRating.GOOD,
             AS_OF,
         )
     ]
+    assert "Expected answer: Retrieval finds relevant source passages." in output
+    assert "Evaluation: partially_correct (score: 0.70)" in output
+    assert "Feedback: Retrieval was identified, but its order was omitted." in output
+    assert "Missing concept: Retrieval happens before generation." in output
+    assert "Scheduled as: hard" in output
     assert output[-1] == (f"Review recorded. Next due: {progress.due_at.isoformat()}")

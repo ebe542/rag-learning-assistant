@@ -4,6 +4,9 @@ from rag_learning_assistant.generation.cache import (
     CachedSummaryBatch,
     SummaryBatchCache,
 )
+from rag_learning_assistant.generation.feedback_parser import (
+    parse_answer_evaluation,
+)
 from rag_learning_assistant.generation.generator import TextGenerator
 from rag_learning_assistant.generation.huggingface import (
     HuggingFaceTextGenerator,
@@ -50,4 +53,5 @@ __all__ = [
     "SummaryBatchCache",
     "TextGenerator",
     "QuestionGenerationResult",
+    "parse_answer_evaluation",
 ]

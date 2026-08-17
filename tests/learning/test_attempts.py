@@ -6,6 +6,8 @@ import pytest
 
 from rag_learning_assistant.generation import Citation
 from rag_learning_assistant.learning import (
+    AnswerEvaluation,
+    AnswerVerdict,
     QuestionProgress,
     ReviewRating,
     StudyAttempt,
@@ -216,3 +218,19 @@ def test_study_attempt_requires_matching_resulting_progress(
             attempt,
             resulting_progress=inconsistent_progress,
         )
+
+
+def test_study_attempt_preserves_automatic_evaluation() -> None:
+    evaluation = AnswerEvaluation(
+        verdict=AnswerVerdict.CORRECT,
+        score=0.95,
+        feedback="The answer covers the expected concept.",
+        missing_concepts=(),
+    )
+
+    attempt = replace(
+        build_attempt(),
+        evaluation=evaluation,
+    )
+
+    assert attempt.evaluation == evaluation

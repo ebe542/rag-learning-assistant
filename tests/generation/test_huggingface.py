@@ -6,11 +6,17 @@ import pytest
 
 from rag_learning_assistant.generation import PromptTemplate
 from rag_learning_assistant.generation.huggingface import (
+    ANSWER_EVALUATION_JSON_REPAIR_PROMPT,
+    ANSWER_EVALUATION_SYSTEM_PROMPT,
     JSON_REPAIR_PROMPT,
     QUESTION_JSON_REPAIR_PROMPT,
     QUESTION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     HuggingFaceTextGenerator,
+)
+from rag_learning_assistant.learning import (
+    AnswerEvaluation,
+    AnswerVerdict,
 )
 
 
@@ -340,6 +346,20 @@ def test_huggingface_prompts_have_explicit_versions() -> None:
     assert QUESTION_JSON_REPAIR_PROMPT.name == ("question-generation.json-repair")
     assert QUESTION_JSON_REPAIR_PROMPT.version == 1
 
+    assert isinstance(
+        ANSWER_EVALUATION_SYSTEM_PROMPT,
+        PromptTemplate,
+    )
+    assert ANSWER_EVALUATION_SYSTEM_PROMPT.name == ("answer-evaluation.system-json")
+    assert ANSWER_EVALUATION_SYSTEM_PROMPT.version == 1
+
+    assert isinstance(
+        ANSWER_EVALUATION_JSON_REPAIR_PROMPT,
+        PromptTemplate,
+    )
+    assert ANSWER_EVALUATION_JSON_REPAIR_PROMPT.name == ("answer-evaluation.json-repair")
+    assert ANSWER_EVALUATION_JSON_REPAIR_PROMPT.version == 1
+
 
 def test_system_prompt_does_not_contain_a_copyable_answer_placeholder() -> None:
     assert SYSTEM_PROMPT.version == 2
@@ -460,5 +480,123 @@ def test_generate_questions_stops_after_one_failed_repair() -> None:
         generator.generate_questions(
             "Summary and grounded contexts",
         )
+
+    assert len(pipeline.calls) == 2
+
+
+def test_evaluate_answer_uses_evaluation_schema_and_parser() -> None:
+    pipeline = RecordingPipeline(
+        """
+        {
+          "verdict": "partially_correct",
+          "score": 0.7,
+          "feedback": "The answer omits generation order.",
+          "missing_concepts": [
+            "Retrieval happens before generation."
+          ]
+        }
+        """
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=192,
+    )
+
+    evaluation = generator.evaluate_answer(
+        "Question, learner answer, expected answer, and contexts"
+    )
+
+    assert evaluation == AnswerEvaluation(
+        verdict=AnswerVerdict.PARTIALLY_CORRECT,
+        score=0.7,
+        feedback="The answer omits generation order.",
+        missing_concepts=("Retrieval happens before generation.",),
+        prompt_references=(ANSWER_EVALUATION_SYSTEM_PROMPT.reference,),
+    )
+    assert len(pipeline.calls) == 1
+
+    messages, options = pipeline.calls[0]
+    assert messages[0] == {
+        "role": "system",
+        "content": ANSWER_EVALUATION_SYSTEM_PROMPT.text,
+    }
+    assert messages[1] == {
+        "role": "user",
+        "content": ("Question, learner answer, expected answer, and contexts"),
+    }
+    assert options == {
+        "clean_up_tokenization_spaces": False,
+        "tokenizer_encode_kwargs": {
+            "enable_thinking": False,
+        },
+    }
+    assert evaluation.prompt_references == (ANSWER_EVALUATION_SYSTEM_PROMPT.reference,)
+
+
+def test_evaluate_answer_retries_once_after_invalid_json() -> None:
+    invalid_response = """
+    {
+      "verdict": "partially_correct",
+      "score": 0.7,
+      "feedback": "The answer contains an "important" omission.",
+      "missing_concepts": ["Generation order"]
+    }
+    """
+    repaired_response = """
+    {
+      "verdict": "partially_correct",
+      "score": 0.7,
+      "feedback": "The answer contains an important omission.",
+      "missing_concepts": ["Generation order"]
+    }
+    """
+    pipeline = SequentialRecordingPipeline(
+        [
+            invalid_response,
+            repaired_response,
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=192,
+    )
+
+    evaluation = generator.evaluate_answer("Question and answer material")
+
+    assert evaluation.verdict is (AnswerVerdict.PARTIALLY_CORRECT)
+    assert len(pipeline.calls) == 2
+
+    retry_messages, _ = pipeline.calls[1]
+    assert retry_messages[-2] == {
+        "role": "assistant",
+        "content": invalid_response,
+    }
+    assert retry_messages[-1] == {
+        "role": "user",
+        "content": ANSWER_EVALUATION_JSON_REPAIR_PROMPT.text,
+    }
+    assert evaluation.prompt_references == (
+        ANSWER_EVALUATION_SYSTEM_PROMPT.reference,
+        ANSWER_EVALUATION_JSON_REPAIR_PROMPT.reference,
+    )
+
+
+def test_evaluate_answer_stops_after_one_failed_repair() -> None:
+    pipeline = SequentialRecordingPipeline(
+        [
+            "not JSON",
+            "still not JSON",
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=192,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Model evaluation must be valid JSON",
+    ):
+        generator.evaluate_answer("Question and answer material")
 
     assert len(pipeline.calls) == 2

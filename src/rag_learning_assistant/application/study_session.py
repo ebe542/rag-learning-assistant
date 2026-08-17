@@ -1,10 +1,14 @@
 """Application logic for recording completed study-question attempts."""
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from rag_learning_assistant.application.answer_evaluation import (
+    EvaluatedStudyAnswer,
+)
 from rag_learning_assistant.application.review import (
     DueQuestion,
     StudyQuestionNotFoundError,
@@ -14,6 +18,7 @@ from rag_learning_assistant.learning import (
     QuestionProgress,
     ReviewRating,
     StudyAttempt,
+    StudyQuestion,
 )
 
 
@@ -50,6 +55,16 @@ class StudySessionReviewer(Protocol):
     ) -> QuestionProgress: ...
 
 
+class StudyAnswerEvaluator(Protocol):
+    """Evaluate one written answer before scheduling its review."""
+
+    def evaluate(
+        self,
+        question: StudyQuestion,
+        answer_text: str,
+    ) -> EvaluatedStudyAnswer: ...
+
+
 class StudySessionRecorder(Protocol):
     """Atomically persist one attempt and its resulting progress."""
 
@@ -65,11 +80,13 @@ class StudySessionService:
         reviewer: StudySessionReviewer,
         attempts: StudySessionRecorder,
         attempt_id_factory: Callable[[], UUID],
+        evaluator: StudyAnswerEvaluator | None = None,
     ) -> None:
         self.banks = banks
         self.reviewer = reviewer
         self.attempts = attempts
         self.attempt_id_factory = attempt_id_factory
+        self.evaluator = evaluator
 
     def next_due(
         self,
@@ -95,8 +112,8 @@ class StudySessionService:
         question_number: int,
         *,
         answer_text: str,
-        rating: ReviewRating,
         answered_at: datetime,
+        rating: ReviewRating | None = None,
     ) -> StudyAttempt:
         """Record one answer and return its resulting immutable history entry."""
 
@@ -123,11 +140,31 @@ class StudySessionService:
                 f"{question_number}"
             )
 
+        evaluation = None
+
+        if self.evaluator is not None:
+            evaluated = self.evaluator.evaluate(
+                question,
+                answer_text,
+            )
+            effective_rating = evaluated.rating
+
+            # Persist the complete prompt chain, including the application
+            # prompt and every generator or repair prompt actually used.
+            evaluation = replace(
+                evaluated.evaluation,
+                prompt_references=(evaluated.prompt_references),
+            )
+        elif rating is not None:
+            effective_rating = rating
+        else:
+            raise RuntimeError("Automatic answer evaluation is not configured")
+
         progress = self.reviewer.prepare_review(
             document_id,
             question_bank_identity_fingerprint,
             question_number,
-            rating,
+            effective_rating,
             reviewed_at=answered_at,
         )
 
@@ -140,9 +177,10 @@ class StudySessionService:
             answer_text=answer_text,
             expected_answer=question.expected_answer,
             citations=question.citations,
-            rating=rating,
+            rating=effective_rating,
             answered_at=answered_at,
             resulting_progress=progress,
+            evaluation=evaluation,
         )
         self.attempts.record(attempt)
         return attempt

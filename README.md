@@ -238,11 +238,15 @@ rag-learn study \
   QUESTION_BANK_IDENTITY_SHA256
 ```
 
-The expected answer and trusted sources remain hidden until an answer has been
-entered. The selected self-rating updates the schedule while the answer,
-question snapshot, citations, and resulting progress are stored as one immutable
-attempt. Both writes share one SQLite transaction. Removing or successfully
-replacing the document also removes its attempt history.
+The expected answer and trusted sources remain hidden until a written answer has
+been entered and evaluated by the local model. The model returns a validated
+verdict, score, feedback, and missing concepts. The application deterministically
+maps `incorrect` to `again`, `partially_correct` to `hard`, and `correct` to
+`good`; the model never controls scheduling and one answer never produces
+`easy`. Feedback, prompt provenance, the answer, question snapshot, citations,
+and resulting progress are stored as one immutable attempt. Progress and attempt
+writes share one SQLite transaction. Removing or successfully replacing the
+document also removes its attempt history.
 
 Supported ratings are `again`, `hard`, `good`, and `easy`. The command persists
 the updated repetition count, ease factor, interval, and next due timestamp.
@@ -307,7 +311,7 @@ maintained as a renderable [PlantUML class overview](docs/class-overview.puml).
 
 Planned next milestones:
 
-1. add grounded answer feedback to interactive study sessions
+1. add manual correction for incorrectly evaluated study answers
 2. add progress analytics over study-attempt history
 3. generate detailed section-level learning material
 4. add optional Ollama and API model providers

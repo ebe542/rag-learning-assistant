@@ -32,6 +32,7 @@ maintained in the renderable [PlantUML class overview](class-overview.puml).
 src/rag_learning_assistant/
 ├── application/
 │   ├── batch_import.py
+│   ├── answer_evaluation.py
 │   ├── document_search.py
 │   ├── library.py
 │   ├── question_answering.py
@@ -236,17 +237,24 @@ oldest scheduled reviews before new questions, preventing old work from being
 starved by newly generated material. Timestamps are timezone-aware and CLI events
 use UTC.
 
-`StudySessionService` selects one due question and records the learner's answer,
-expected answer, trusted citations, self-rating, timestamp, and resulting
-schedule as an immutable `StudyAttempt`. Review calculation is separated from
-persistence so the SQLite adapter can write the attempt and current progress in
-one transaction. This prevents a failed attempt insert from advancing the
-schedule without a matching history entry.
+`StudySessionService` selects one due question and requires a written learner
+answer. `AnswerEvaluationService` compares it only with the expected answer and
+trusted citation excerpts, treating every supplied field as untrusted data. The
+validated result stores `incorrect`, `partially_correct`, or `correct`, a score,
+constructive feedback, missing concepts, and complete prompt provenance.
 
-The terminal workflow reveals the expected answer only after active recall and
-then requests the self-rating. Attempts are append-only, identical retries are
-idempotent, and histories are ordered chronologically for one exact question.
-Automated answer-quality feedback is intentionally not part of this milestone.
+The application deterministically maps those verdicts to `again`, `hard`, or
+`good`; the model cannot return a schedule and one correct answer never becomes
+`easy`. `ReviewScheduler` still calculates the next due time. The expected
+answer, sources, and feedback are shown only after active recall and model
+evaluation.
+
+The answer, evaluation, trusted question snapshot, and resulting schedule form
+an immutable `StudyAttempt`. Review calculation is separated from persistence so
+the SQLite adapter writes the attempt and current progress in one transaction.
+This prevents failed evaluation or persistence from advancing the schedule.
+Attempts are append-only, identical retries are idempotent, and histories are
+ordered chronologically for one exact question.
 
 ### Grounded evaluation
 
@@ -310,7 +318,9 @@ local-data/
 `vectors.faiss` contains vector IDs and normalized embeddings.
 `metadata.sqlite3` contains document and chunk metadata, embedding identity,
 summary map cache entries, final summaries, question banks, current question
-progress, and immutable study attempts. Persistent formats validate identities when reopened so incompatible
+progress, and immutable study attempts with optional automatic feedback. The
+nullable evaluation column migrates libraries created before automatic feedback.
+Persistent formats validate identities when reopened so incompatible
 models or generation configurations are not silently mixed.
 
 ## Environment setup
@@ -518,8 +528,7 @@ protocols, inheritance, or major runtime relationships change.
 
 ## Near-term roadmap
 
-1. Add grounded answer feedback without allowing generated feedback to alter
-   trusted citations.
+1. Add manual correction for incorrectly evaluated study answers.
 2. Add progress analytics over the append-only attempt history.
 3. Generate detailed section-level learning material.
 4. Add optional Ollama and remote API generation providers.

@@ -9,6 +9,8 @@ import pytest
 
 from rag_learning_assistant.generation import Citation
 from rag_learning_assistant.learning import (
+    AnswerEvaluation,
+    AnswerVerdict,
     QuestionProgress,
     ReviewRating,
     SqliteQuestionProgressRepository,
@@ -293,3 +295,66 @@ def test_failed_attempt_insert_rolls_back_progress_update(
         )
         == original_progress
     )
+
+
+def test_automatic_evaluation_survives_repository_reopening(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    evaluation = AnswerEvaluation(
+        verdict=AnswerVerdict.PARTIALLY_CORRECT,
+        score=0.7,
+        feedback="The answer omits the generation order.",
+        missing_concepts=("Retrieval happens before generation.",),
+    )
+    attempt = replace(
+        build_attempt(),
+        evaluation=evaluation,
+    )
+
+    SqliteStudyAttemptRepository(database_path).add(attempt)
+
+    reopened = SqliteStudyAttemptRepository(database_path)
+
+    assert reopened.find_by_id(attempt.id) == attempt
+
+
+def test_repository_adds_evaluation_column_to_existing_schema(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    SqliteStudyAttemptRepository(database_path)
+
+    # Removing the new nullable column recreates the schema used before
+    # automatic answer evaluation was introduced.
+    with closing(sqlite3.connect(database_path)) as connection, connection:
+        connection.execute(
+            """
+            ALTER TABLE study_attempts
+            DROP COLUMN evaluation_json
+            """
+        )
+
+    migrated = SqliteStudyAttemptRepository(database_path)
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(study_attempts)").fetchall()
+        }
+
+    assert "evaluation_json" in columns
+
+    evaluation = AnswerEvaluation(
+        verdict=AnswerVerdict.CORRECT,
+        score=1.0,
+        feedback="The answer is correct.",
+        missing_concepts=(),
+    )
+    attempt = replace(
+        build_attempt(),
+        evaluation=evaluation,
+    )
+
+    migrated.add(attempt)
+
+    assert migrated.find_by_id(attempt.id) == attempt

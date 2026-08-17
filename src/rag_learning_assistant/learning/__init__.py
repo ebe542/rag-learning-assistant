@@ -3,6 +3,10 @@ from rag_learning_assistant.learning.attempt_repository import (
     StudyAttemptRepository,
 )
 from rag_learning_assistant.learning.attempts import StudyAttempt
+from rag_learning_assistant.learning.feedback import (
+    AnswerEvaluation,
+    AnswerVerdict,
+)
 from rag_learning_assistant.learning.models import (
     QuestionBank,
     QuestionBankIdentity,
@@ -22,6 +26,8 @@ from rag_learning_assistant.learning.repository import (
 )
 
 __all__ = [
+    "AnswerEvaluation",
+    "AnswerVerdict",
     "QuestionBank",
     "StudyQuestion",
     "QuestionBankRepository",

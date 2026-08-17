@@ -1,5 +1,10 @@
 """Application services coordinating the processing pipeline."""
 
+from rag_learning_assistant.application.answer_evaluation import (
+    ANSWER_EVALUATION_PROMPT,
+    AnswerEvaluationService,
+    EvaluatedStudyAnswer,
+)
 from rag_learning_assistant.application.batch_import import (
     BatchImportService,
     ImportOutcome,
@@ -41,6 +46,9 @@ from rag_learning_assistant.application.summary_catalog import (
 )
 
 __all__ = [
+    "ANSWER_EVALUATION_PROMPT",
+    "AnswerEvaluationService",
+    "EvaluatedStudyAnswer",
     "BatchImportService",
     "DocumentNotFoundError",
     "DocumentSearchService",

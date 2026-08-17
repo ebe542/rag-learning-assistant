@@ -5,11 +5,14 @@ import pytest
 
 from rag_learning_assistant.application import (
     DueQuestion,
+    EvaluatedStudyAnswer,
     StudyQuestionNotFoundError,
     StudySessionService,
 )
 from rag_learning_assistant.generation import Citation, PromptReference
 from rag_learning_assistant.learning import (
+    AnswerEvaluation,
+    AnswerVerdict,
     QuestionBank,
     QuestionProgress,
     ReviewRating,
@@ -327,3 +330,127 @@ def test_next_due_returns_highest_priority_question() -> None:
             1,
         )
     ]
+
+
+class RecordingAnswerEvaluator:
+    def __init__(
+        self,
+        result: EvaluatedStudyAnswer,
+    ) -> None:
+        self.result = result
+        self.calls: list[tuple[StudyQuestion, str]] = []
+
+    def evaluate(
+        self,
+        question: StudyQuestion,
+        answer_text: str,
+    ) -> EvaluatedStudyAnswer:
+        self.calls.append((question, answer_text))
+        return self.result
+
+
+def test_record_answer_uses_automatic_evaluation_rating() -> None:
+    bank = build_bank()
+    evaluation = AnswerEvaluation(
+        verdict=AnswerVerdict.PARTIALLY_CORRECT,
+        score=0.7,
+        feedback="The answer omits the generation order.",
+        missing_concepts=("Retrieval happens before generation.",),
+    )
+    evaluated = EvaluatedStudyAnswer(
+        evaluation=evaluation,
+        rating=ReviewRating.HARD,
+        prompt_references=(),
+    )
+    evaluator = RecordingAnswerEvaluator(evaluated)
+    reviewer = RecordingReviewer(build_progress())
+    attempts = RecordingAttemptRepository()
+    service = StudySessionService(
+        banks=StaticQuestionBankLookup(bank),
+        reviewer=reviewer,
+        attempts=attempts,
+        attempt_id_factory=lambda: ATTEMPT_ID,
+        evaluator=evaluator,
+    )
+
+    attempt = service.record_answer(
+        DOCUMENT_ID,
+        BANK_IDENTITY,
+        1,
+        answer_text="Retrieval finds passages.",
+        answered_at=ANSWERED_AT,
+    )
+
+    assert evaluator.calls == [
+        (
+            bank.questions[0],
+            "Retrieval finds passages.",
+        )
+    ]
+    assert reviewer.calls == [
+        (
+            DOCUMENT_ID,
+            BANK_IDENTITY,
+            1,
+            ReviewRating.HARD,
+            ANSWERED_AT,
+        )
+    ]
+    assert attempt.rating is ReviewRating.HARD
+    assert attempt.evaluation == evaluation
+    assert attempts.added == [attempt]
+
+
+class FailingAnswerEvaluator:
+    def __init__(self) -> None:
+        self.calls: list[tuple[StudyQuestion, str]] = []
+
+    def evaluate(
+        self,
+        question: StudyQuestion,
+        answer_text: str,
+    ) -> EvaluatedStudyAnswer:
+        self.calls.append((question, answer_text))
+        raise ValueError("Model evaluation must be valid JSON")
+
+
+def test_failed_automatic_evaluation_preserves_schedule_and_history() -> None:
+    bank = build_bank()
+    evaluator = FailingAnswerEvaluator()
+    reviewer = RecordingReviewer(build_progress())
+    attempts = RecordingAttemptRepository()
+    generated_ids: list[UUID] = []
+
+    def generate_id() -> UUID:
+        generated_ids.append(ATTEMPT_ID)
+        return ATTEMPT_ID
+
+    service = StudySessionService(
+        banks=StaticQuestionBankLookup(bank),
+        reviewer=reviewer,
+        attempts=attempts,
+        attempt_id_factory=generate_id,
+        evaluator=evaluator,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Model evaluation must be valid JSON",
+    ):
+        service.record_answer(
+            DOCUMENT_ID,
+            BANK_IDENTITY,
+            1,
+            answer_text="Retrieval finds passages.",
+            answered_at=ANSWERED_AT,
+        )
+
+    assert evaluator.calls == [
+        (
+            bank.questions[0],
+            "Retrieval finds passages.",
+        )
+    ]
+    assert reviewer.calls == []
+    assert attempts.added == []
+    assert generated_ids == []

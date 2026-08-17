@@ -28,3 +28,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0020: Manage grounded question banks](0020-manage-grounded-question-banks.md)
 - [0021: Persist and schedule self-rated question reviews](0021-schedule-question-reviews.md)
 - [0022: Record interactive study sessions atomically](0022-record-interactive-study-sessions.md)
+- [0023: Evaluate written study answers automatically](0023-evaluate-written-study-answers.md)
