@@ -23,6 +23,11 @@ from rag_learning_assistant.application.library import (
     LibraryCatalog,
     LibraryService,
 )
+from rag_learning_assistant.application.package_study import (
+    LearningPackageNotFoundError,
+    LearningPackageNotReadyError,
+    LearningPackageStudyService,
+)
 from rag_learning_assistant.application.question_answering import (
     QuestionAnsweringService,
 )
@@ -76,4 +81,7 @@ __all__ = [
     "StudySessionService",
     "LearningPackageService",
     "LearningPackageCatalog",
+    "LearningPackageStudyService",
+    "LearningPackageNotFoundError",
+    "LearningPackageNotReadyError",
 ]
