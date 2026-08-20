@@ -12,6 +12,13 @@ from rag_learning_assistant.learning.models import (
     QuestionBankIdentity,
     StudyQuestion,
 )
+from rag_learning_assistant.learning.package_repository import (
+    SqliteLearningPackageRepository,
+)
+from rag_learning_assistant.learning.packages import (
+    LearningPackage,
+    LearningPackageStatus,
+)
 from rag_learning_assistant.learning.progress import (
     QuestionProgress,
     ReviewRating,
@@ -40,4 +47,7 @@ __all__ = [
     "StudyAttempt",
     "SqliteStudyAttemptRepository",
     "StudyAttemptRepository",
+    "LearningPackage",
+    "LearningPackageStatus",
+    "SqliteLearningPackageRepository",
 ]

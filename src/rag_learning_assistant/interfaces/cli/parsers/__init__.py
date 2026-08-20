@@ -3,6 +3,9 @@
 from rag_learning_assistant.interfaces.cli.parsers.documents import (
     add_document_commands,
 )
+from rag_learning_assistant.interfaces.cli.parsers.packages import (
+    add_package_commands,
+)
 from rag_learning_assistant.interfaces.cli.parsers.questions import (
     add_question_commands,
 )
@@ -22,4 +25,5 @@ __all__ = [
     "add_retrieval_commands",
     "add_review_commands",
     "add_summary_commands",
+    "add_package_commands",
 ]

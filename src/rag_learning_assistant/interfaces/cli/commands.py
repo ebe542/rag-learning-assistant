@@ -15,6 +15,8 @@ from rag_learning_assistant.application import (
     DocumentSummaryCatalog,
     ImportOutcome,
     ImportStatus,
+    LearningPackageCatalog,
+    LearningPackageService,
     LibraryCatalog,
     LibraryService,
     QuestionAnsweringService,
@@ -50,14 +52,22 @@ from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
 from rag_learning_assistant.interfaces.cli.parsing import (
     DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS,
+    DEFAULT_MAX_CHARS,
+    DEFAULT_OVERLAP_CHARS,
+    DEFAULT_QUESTION_MAX_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_BATCH_CHARS,
+    DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
+    DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS,
 )
 from rag_learning_assistant.interfaces.cli.study import (
     capture_study_answer,
 )
 from rag_learning_assistant.learning import (
+    LearningPackage,
     QuestionBankIdentity,
     QuestionProgress,
     ReviewRating,
+    SqliteLearningPackageRepository,
     SqliteQuestionBankRepository,
     SqliteQuestionProgressRepository,
     SqliteStudyAttemptRepository,
@@ -132,6 +142,7 @@ def build_library_service(
             SqliteQuestionBankRepository(database_path),
             SqliteQuestionProgressRepository(database_path),
             SqliteStudyAttemptRepository(database_path),
+            SqliteLearningPackageRepository(database_path),
         ),
     )
 
@@ -315,6 +326,127 @@ def build_document_summarization_service(
         identity_factory=build_identity,
         final_summaries=SqliteDocumentSummaryRepository(database_path),
     )
+
+
+def write_learning_package_progress(phase: str) -> None:
+    """Write immediate human-readable progress for product preparation."""
+
+    messages = {
+        "index": "Indexing document...",
+        "summarize": "Creating document summary...",
+        "questions": "Generating study questions...",
+        "ready": "Learning package is ready.",
+    }
+    print(
+        messages[phase],
+        file=sys.stderr,
+        flush=True,
+    )
+
+
+def build_learning_package_catalog(
+    library_directory: Path,
+) -> LearningPackageCatalog:
+    """Build read-only access to user-facing learning packages."""
+
+    repository = SqliteLearningPackageRepository(library_directory / "metadata.sqlite3")
+    return LearningPackageCatalog(repository)
+
+
+def _serialize_learning_package(
+    package: LearningPackage,
+) -> dict[str, object]:
+    """Serialize one package consistently across product commands."""
+
+    return {
+        "id": str(package.id),
+        "name": package.name,
+        "document_id": str(package.document_id),
+        "status": package.status.value,
+        "summary_identity_fingerprint": (package.summary_identity_fingerprint),
+        "question_bank_identity_fingerprint": (package.question_bank_identity_fingerprint),
+    }
+
+
+def build_learning_package_service(
+    library_directory: Path,
+) -> LearningPackageService:
+    """Build the product workflow for one personal learning library."""
+
+    database_path = library_directory / "metadata.sqlite3"
+    packages = SqliteLearningPackageRepository(database_path)
+    chunker = TextChunker(
+        max_chars=DEFAULT_MAX_CHARS,
+        overlap_chars=DEFAULT_OVERLAP_CHARS,
+    )
+
+    return LearningPackageService(
+        packages=packages,
+        documents=build_library_service(
+            chunker,
+            library_directory,
+        ),
+        summaries=build_document_summarization_service(
+            library_directory,
+            max_map_new_tokens=(DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS),
+            max_reduce_new_tokens=(DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS),
+            max_batch_chars=DEFAULT_SUMMARY_MAX_BATCH_CHARS,
+        ),
+        questions=build_question_bank_service(
+            library_directory,
+            max_new_tokens=DEFAULT_QUESTION_MAX_NEW_TOKENS,
+        ),
+        progress=write_learning_package_progress,
+    )
+
+
+def run_prepare(
+    pdf_path: Path,
+    library_directory: Path,
+    name: str,
+    question_count: int,
+) -> int:
+    """Prepare one complete learning package and emit its active state."""
+
+    service = build_learning_package_service(library_directory)
+    package = service.prepare(
+        name=name,
+        pdf_path=pdf_path,
+        question_count=question_count,
+    )
+
+    payload = {
+        "library_directory": str(library_directory),
+        "package": _serialize_learning_package(package),
+    }
+    print(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
+
+
+def run_package_list(
+    library_directory: Path,
+) -> int:
+    """List learning packages without loading model dependencies."""
+
+    catalog = build_learning_package_catalog(library_directory)
+    payload = {
+        "library_directory": str(library_directory),
+        "packages": [_serialize_learning_package(package) for package in catalog.list_packages()],
+    }
+    print(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
 
 
 def run_index(

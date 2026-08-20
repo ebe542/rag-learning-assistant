@@ -13,6 +13,10 @@ from rag_learning_assistant.application.batch_import import (
 from rag_learning_assistant.application.document_search import (
     DocumentSearchService,
 )
+from rag_learning_assistant.application.learning_package import (
+    LearningPackageCatalog,
+    LearningPackageService,
+)
 from rag_learning_assistant.application.library import (
     DocumentNotFoundError,
     DuplicateDocumentError,
@@ -70,4 +74,6 @@ __all__ = [
     "StudyQuestionNotFoundError",
     "DueQuestion",
     "StudySessionService",
+    "LearningPackageService",
+    "LearningPackageCatalog",
 ]

@@ -670,3 +670,58 @@ def test_force_bypasses_map_cache_and_regenerates_all_batches() -> None:
     assert map_cache.find_calls == []
     assert map_cache.saved == []
     assert len(final_repository.replaced) == 1
+
+
+def test_prepare_summary_returns_persisted_identity() -> None:
+    document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    document = IndexedDocument(
+        id=document_id,
+        source="document.pdf",
+        content_sha256="c" * 64,
+        page_count=1,
+        chunk_count=1,
+    )
+    identity = GenerationIdentity(
+        model_name="Qwen/Qwen3-1.7B",
+        model_revision="b" * 40,
+        prompt_references=(
+            PromptReference(
+                name="summarization.map",
+                version=2,
+                fingerprint="a" * 64,
+            ),
+        ),
+        max_map_new_tokens=192,
+        max_reduce_new_tokens=384,
+        max_batch_chars=8000,
+        document_content_sha256=document.content_sha256,
+    )
+    repository = RecordingFinalSummaryRepository()
+    service = DocumentSummarizationService(
+        documents=StaticDocumentLookup(document),
+        chunks=StaticChunkReader(
+            [
+                Chunk(
+                    text="Grounded source passage.",
+                    source=document.source,
+                    page_number=1,
+                    index=0,
+                    document_id=document_id,
+                )
+            ]
+        ),
+        generator=StaticGenerator(
+            GenerationResult(
+                text="Grounded summary.",
+                citation_numbers=(1,),
+            )
+        ),
+        identity_factory=lambda indexed_document: identity,
+        final_summaries=repository,
+    )
+
+    fingerprint = service.prepare_summary(document_id)
+
+    assert fingerprint == identity.fingerprint
+    assert len(repository.saved) == 1
+    assert repository.saved[0].identity_fingerprint == identity.fingerprint

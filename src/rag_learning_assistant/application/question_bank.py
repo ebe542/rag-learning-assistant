@@ -160,6 +160,22 @@ class QuestionBankService:
         self.identity_factory = identity_factory
         self.max_new_tokens = max_new_tokens
 
+    def prepare_questions(
+        self,
+        document_id: UUID,
+        summary_identity_fingerprint: str,
+        *,
+        question_count: int,
+    ) -> str:
+        """Prepare a question bank and return its persisted identity."""
+
+        bank = self.generate(
+            document_id,
+            summary_identity_fingerprint,
+            question_count=question_count,
+        )
+        return bank.identity_fingerprint
+
     def generate(
         self,
         document_id: UUID,

@@ -29,3 +29,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0021: Persist and schedule self-rated question reviews](0021-schedule-question-reviews.md)
 - [0022: Record interactive study sessions atomically](0022-record-interactive-study-sessions.md)
 - [0023: Evaluate written study answers automatically](0023-evaluate-written-study-answers.md)
+- [0024: Prepare user-facing learning packages](0024-prepare-user-facing-learning-packages.md)

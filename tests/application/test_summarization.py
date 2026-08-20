@@ -592,7 +592,7 @@ def test_document_summary_records_used_prompts() -> None:
     assert summary.prompt_references == (prompt.reference,)
 
 
-def test_reduction_must_preserve_all_partial_summary_citations() -> None:
+def test_reduction_preserves_all_partial_summary_citations() -> None:
     document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
     document = IndexedDocument(
         id=document_id,
@@ -649,8 +649,8 @@ def test_reduction_must_preserve_all_partial_summary_citations() -> None:
         max_reduce_new_tokens=256,
     )
 
-    with pytest.raises(
-        ValueError,
-        match="Reduction must preserve all section citations",
-    ):
-        service.summarize(document_id)
+    summary = service.summarize(document_id)
+
+    # Reduce only has to select supported evidence from every Map section.
+    # The application retains the complete validated Map citation union.
+    assert [citation.number for citation in summary.citations] == [1, 2, 3]

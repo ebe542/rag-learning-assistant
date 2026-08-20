@@ -18,8 +18,37 @@ Question generation and learning-progress tracking will build on this foundation
 - detect duplicate document content using SHA-256
 - create local multilingual E5 embeddings through an optional Sentence Transformers adapter
 - build source-grounded answers through an optional local Qwen3 generator
+- prepare resumable learning packages containing an indexed document, a
+  grounded summary, and a grounded question bank
 
 Scanned documents do not yet support OCR.
+
+## Product workflow
+
+Turn one PDF into a ready-to-study package without copying document UUIDs or
+generation fingerprints:
+
+```bash
+rag-learn prepare books/python-basics.pdf \
+  --library local-data/library \
+  --name "Python Basics" \
+  --questions 20
+```
+
+The name defaults to the PDF filename when `--name` is omitted. Preparation
+indexes the document, creates a persisted grounded summary, generates a
+persisted question bank, and records a checkpoint after every expensive phase.
+Repeating the command resumes an interrupted package or immediately reuses a
+package that is already ready.
+
+List packages without loading embedding or generation models:
+
+```bash
+rag-learn package-list --library local-data/library
+```
+
+UUIDs and SHA-256 identities remain in the JSON output for provenance and
+automation, but they are not required for the product-level workflow.
 
 ## Quick start
 

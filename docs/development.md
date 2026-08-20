@@ -21,6 +21,7 @@ PDF
   -> persisted grounded question banks
   -> persisted spaced-review schedules
   -> interactive study attempts
+  -> user-facing resumable learning packages
 ```
 
 The detailed classes, protocols, inheritance, and runtime relationships are
@@ -35,6 +36,7 @@ src/rag_learning_assistant/
 │   ├── answer_evaluation.py
 │   ├── document_search.py
 │   ├── library.py
+│   ├── learning_package.py
 │   ├── question_answering.py
 │   ├── question_bank.py
 │   ├── review.py
@@ -53,6 +55,8 @@ src/rag_learning_assistant/
 │       ├── parsing.py
 │       └── parsers/
 ├── learning/
+│   ├── package_repository.py
+│   └── packages.py
 ├── library/
 ├── retrieval/
 └── cli.py
@@ -66,8 +70,9 @@ The packages follow responsibility boundaries rather than technical convenience:
 - `library` owns persistent document metadata;
 - `generation` owns model adapters, prompts, parsing, identities, and generation
   persistence;
-- `learning` owns grounded question-bank, review-progress, and immutable study-
-  attempt domain models plus SQLite repositories;
+- `learning` owns grounded question-bank, review-progress, immutable study-
+  attempt, and user-facing learning-package domain models plus SQLite
+  repositories;
 - `application` coordinates use cases through narrow protocols;
 - `evaluation` measures deterministic citation and concept coverage;
 - `interfaces.cli` validates CLI input, wires concrete adapters, and serializes
@@ -100,6 +105,9 @@ The project uses stable identities at every persistent boundary:
   number as its composite identity.
 - study attempts use their own UUID while retaining the complete question-bank
   identity and resulting progress snapshot.
+- learning packages use a UUID internally and a case-insensitive unique name as
+  the user-facing selector for active document, summary, and question-bank
+  identities.
 
 ## Processing stages
 
@@ -256,6 +264,25 @@ This prevents failed evaluation or persistence from advancing the schedule.
 Attempts are append-only, identical retries are idempotent, and histories are
 ordered chronologically for one exact question.
 
+### Learning packages
+
+`LearningPackage` is the product-facing projection over one indexed document
+and its active summary and question-bank identities. Its status records the
+last successful expensive phase: `indexed`, `summarized`, or `ready`. Package
+contents are references to existing versioned data rather than copies.
+
+`LearningPackageService` coordinates the existing library, summarization, and
+question-bank services through narrow preparation protocols. It saves after
+every phase, so repeating `prepare` resumes after an interruption and a ready
+package returns without loading models. `LearningPackageCatalog` provides a
+read-only list for CLI and future UI clients. Package names are unique without
+regard to case, while UUIDs remain internal identities.
+
+For multi-batch summaries, Reduce must cite supported evidence from every Map
+section. The application conservatively retains the complete validated Map
+citation union because citations are currently global rather than attached to
+individual summary claims.
+
 ### Grounded evaluation
 
 `GroundedGenerationEvaluator` compares generated answers with versioned cases.
@@ -271,8 +298,9 @@ The CLI implementation is split as follows:
 
 - `parser.py` composes the top-level parser and preserves its public imports;
 - `parsing.py` contains shared constants, validators, and options;
-- `parsers/documents.py`, `retrieval.py`, `summaries.py`, `questions.py`, and
-  `reviews.py` register responsibility-specific subcommands;
+- `parsers/packages.py`, `documents.py`, `retrieval.py`, `summaries.py`,
+  `questions.py`, and `reviews.py` register responsibility-specific
+  subcommands;
 - `entrypoint.py` loads the optional environment, validates storage boundaries,
   dispatches commands, and translates application errors into CLI errors;
 - `commands.py` wires concrete adapters and emits machine-readable JSON.
@@ -280,6 +308,8 @@ The CLI implementation is split as follows:
 Current commands are:
 
 ```text
+prepare
+package-list
 extract
 index
 list

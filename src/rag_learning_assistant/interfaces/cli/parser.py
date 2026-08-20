@@ -4,6 +4,7 @@ import argparse
 
 from rag_learning_assistant.interfaces.cli.parsers import (
     add_document_commands,
+    add_package_commands,
     add_question_commands,
     add_retrieval_commands,
     add_review_commands,
@@ -65,5 +66,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_summary_commands(commands)
     add_question_commands(commands)
     add_review_commands(commands)
+    add_package_commands(commands)
 
     return parser

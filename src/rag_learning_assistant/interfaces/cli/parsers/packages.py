@@ -1,0 +1,54 @@
+"""Register user-facing learning-package commands."""
+
+from pathlib import Path
+
+from rag_learning_assistant.interfaces.cli.parsing import (
+    DEFAULT_QUESTION_COUNT,
+    SubcommandCollection,
+    non_blank_text,
+    positive_int,
+)
+
+
+def add_package_commands(
+    commands: SubcommandCollection,
+) -> None:
+    """Register product-level workflows over technical commands."""
+
+    prepare_parser = commands.add_parser(
+        "prepare",
+        help="Turn one PDF into a ready-to-study learning package",
+    )
+    prepare_parser.add_argument(
+        "pdf",
+        type=Path,
+        help="PDF document used to create the learning package",
+    )
+    prepare_parser.add_argument(
+        "--library",
+        type=Path,
+        required=True,
+        help="Directory containing the personal learning library",
+    )
+    prepare_parser.add_argument(
+        "--name",
+        type=non_blank_text,
+        help="Optional package name; defaults to the PDF filename",
+    )
+    prepare_parser.add_argument(
+        "--questions",
+        dest="question_count",
+        type=positive_int,
+        default=DEFAULT_QUESTION_COUNT,
+        help=(f"Number of study questions to prepare (default: {DEFAULT_QUESTION_COUNT})"),
+    )
+    list_parser = commands.add_parser(
+        "package-list",
+        help="List the learning packages in a personal library",
+    )
+    list_parser.add_argument(
+        "--library",
+        type=Path,
+        required=True,
+        help="Directory containing the personal learning library",
+    )

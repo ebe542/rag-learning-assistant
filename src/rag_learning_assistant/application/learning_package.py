@@ -1,0 +1,159 @@
+"""Prepare user-facing learning packages from source documents."""
+
+from collections.abc import Callable
+from dataclasses import replace
+from pathlib import Path
+from typing import Protocol
+from uuid import UUID, uuid4
+
+from rag_learning_assistant.learning import (
+    LearningPackage,
+    LearningPackageStatus,
+)
+from rag_learning_assistant.library import IndexedDocument
+
+
+class LearningPackageReader(Protocol):
+    """Read the user-facing learning packages of one library."""
+
+    def list_all(self) -> list[LearningPackage]: ...
+
+
+class LearningPackageRepository(
+    LearningPackageReader,
+    Protocol,
+):
+    """Persist the active preparation state of learning packages."""
+
+    def find_by_name(
+        self,
+        name: str,
+    ) -> LearningPackage | None: ...
+
+    def save(self, package: LearningPackage) -> None: ...
+
+    def replace(self, package: LearningPackage) -> None: ...
+
+
+class PackageDocumentImporter(Protocol):
+    """Import one source document into the persistent library."""
+
+    def add_document(self, path: Path) -> IndexedDocument: ...
+
+
+class PackageSummaryPreparer(Protocol):
+    """Prepare one persisted summary and return its identity."""
+
+    def prepare_summary(self, document_id: UUID) -> str: ...
+
+
+class PackageQuestionPreparer(Protocol):
+    """Prepare one persisted question bank and return its identity."""
+
+    def prepare_questions(
+        self,
+        document_id: UUID,
+        summary_identity_fingerprint: str,
+        *,
+        question_count: int,
+    ) -> str: ...
+
+
+class LearningPackageCatalog:
+    """Provide read-only access to available learning packages."""
+
+    def __init__(
+        self,
+        packages: LearningPackageReader,
+    ) -> None:
+        self.packages = packages
+
+    def list_packages(self) -> list[LearningPackage]:
+        """Return packages in repository-defined display order."""
+
+        return self.packages.list_all()
+
+
+class LearningPackageService:
+    """Coordinate document preparation through resumable checkpoints."""
+
+    def __init__(
+        self,
+        packages: LearningPackageRepository,
+        documents: PackageDocumentImporter,
+        summaries: PackageSummaryPreparer,
+        questions: PackageQuestionPreparer,
+        id_factory: Callable[[], UUID] = uuid4,
+        progress: Callable[[str], None] | None = None,
+    ) -> None:
+        self.packages = packages
+        self.documents = documents
+        self.summaries = summaries
+        self.questions = questions
+        self.id_factory = id_factory
+        self.progress = progress
+
+    def prepare(
+        self,
+        *,
+        name: str,
+        pdf_path: Path,
+        question_count: int,
+    ) -> LearningPackage:
+        """Prepare or resume one learning package by its user-facing name."""
+
+        if not name.strip():
+            raise ValueError("Learning package name must not be blank")
+
+        if question_count < 1:
+            raise ValueError("question_count must be positive")
+
+        package = self.packages.find_by_name(name)
+
+        if package is None:
+            self._report_progress("index")
+            document = self.documents.add_document(pdf_path)
+            package = LearningPackage(
+                id=self.id_factory(),
+                name=name,
+                document_id=document.id,
+                status=LearningPackageStatus.INDEXED,
+            )
+            # Persist each expensive completed phase before starting the next
+            # one, so a later retry can resume without repeating earlier work.
+            self.packages.save(package)
+
+        if package.status is LearningPackageStatus.INDEXED:
+            self._report_progress("summarize")
+            summary_identity = self.summaries.prepare_summary(package.document_id)
+            package = replace(
+                package,
+                status=LearningPackageStatus.SUMMARIZED,
+                summary_identity_fingerprint=summary_identity,
+            )
+            self.packages.replace(package)
+
+        if package.status is LearningPackageStatus.SUMMARIZED:
+            if package.summary_identity_fingerprint is None:
+                raise RuntimeError("Summarized learning package has no summary identity")
+            self._report_progress("questions")
+            question_bank_identity = self.questions.prepare_questions(
+                package.document_id,
+                package.summary_identity_fingerprint,
+                question_count=question_count,
+            )
+            package = replace(
+                package,
+                status=LearningPackageStatus.READY,
+                question_bank_identity_fingerprint=(question_bank_identity),
+            )
+            self.packages.replace(package)
+
+        self._report_progress("ready")
+        return package
+
+    def _report_progress(self, phase: str) -> None:
+        """Report product progress without coupling it to one interface."""
+
+        if self.progress is not None:
+            self.progress(phase)

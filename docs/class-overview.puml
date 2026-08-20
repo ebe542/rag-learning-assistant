@@ -84,6 +84,8 @@ package "learning" #F3E8FF {
   class StudyAttempt <<immutable model>>
   enum AnswerVerdict
   class AnswerEvaluation <<immutable model>>
+  enum LearningPackageStatus
+  class LearningPackage <<immutable model>>
 
   interface QuestionBankRepository <<Protocol>>
   interface QuestionProgressRepository <<Protocol>>
@@ -91,6 +93,7 @@ package "learning" #F3E8FF {
   class SqliteQuestionBankRepository
   class SqliteQuestionProgressRepository
   class SqliteStudyAttemptRepository
+  class SqliteLearningPackageRepository
 }
 
 package "application" #FFE8E8 {
@@ -120,6 +123,11 @@ package "application" #FFE8E8 {
   interface StudySessionRecorder <<Protocol>>
   interface AnswerEvaluationGenerator <<Protocol>>
   interface StudyAnswerEvaluator <<Protocol>>
+  interface LearningPackageReader <<Protocol>>
+  interface LearningPackageRepository <<Protocol>>
+  interface PackageDocumentImporter <<Protocol>>
+  interface PackageSummaryPreparer <<Protocol>>
+  interface PackageQuestionPreparer <<Protocol>>
 
   enum ImportStatus
   class ImportOutcome <<immutable model>>
@@ -140,6 +148,8 @@ package "application" #FFE8E8 {
   class StudySessionService
   class EvaluatedStudyAnswer <<immutable model>>
   class AnswerEvaluationService
+  class LearningPackageCatalog
+  class LearningPackageService
 }
 
 package "evaluation" #EFFFF4 {
@@ -261,6 +271,21 @@ QuestionBankService o-- QuestionGenerator
 QuestionBankService o-- QuestionBankRepository
 QuestionBankService --> QuestionBankIdentity
 QuestionBankService --> QuestionBank
+QuestionBankService ..|> PackageQuestionPreparer
+DocumentSummarizationService ..|> PackageSummaryPreparer
+LibraryService ..|> PackageDocumentImporter
+
+' User-facing learning packages
+LearningPackage --> LearningPackageStatus
+SqliteLearningPackageRepository ..|> LearningPackageRepository
+SqliteLearningPackageRepository ..|> LearningPackageReader
+SqliteLearningPackageRepository ..|> DocumentDerivedDataCleaner
+LearningPackageCatalog o-- LearningPackageReader
+LearningPackageService o-- LearningPackageRepository
+LearningPackageService o-- PackageDocumentImporter
+LearningPackageService o-- PackageSummaryPreparer
+LearningPackageService o-- PackageQuestionPreparer
+LearningPackageService --> LearningPackage
 
 ' Learning progress and review scheduling
 QuestionProgress --> ReviewRating : changed by rating

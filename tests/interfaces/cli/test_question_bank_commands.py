@@ -32,6 +32,7 @@ from rag_learning_assistant.interfaces.cli.parser import (
 )
 from rag_learning_assistant.learning import (
     QuestionBank,
+    SqliteLearningPackageRepository,
     SqliteQuestionBankRepository,
     SqliteQuestionProgressRepository,
     SqliteStudyAttemptRepository,
@@ -671,7 +672,7 @@ def test_library_builder_registers_all_derived_data_cleaners(
         tmp_path,
     )
 
-    assert len(service.derived_data_cleaners) == 4
+    assert len(service.derived_data_cleaners) == 5
     assert isinstance(
         service.derived_data_cleaners[0],
         SqliteDocumentSummaryRepository,
@@ -687,4 +688,8 @@ def test_library_builder_registers_all_derived_data_cleaners(
     assert isinstance(
         service.derived_data_cleaners[3],
         SqliteStudyAttemptRepository,
+    )
+    assert isinstance(
+        service.derived_data_cleaners[4],
+        SqliteLearningPackageRepository,
     )

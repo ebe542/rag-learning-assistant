@@ -36,6 +36,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "prepare":
+        try:
+            validate_index_directory(args.library)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        return commands.run_prepare(
+            pdf_path=args.pdf,
+            library_directory=args.library,
+            name=args.name or args.pdf.stem,
+            question_count=args.question_count,
+        )
+
+    if args.command == "package-list":
+        try:
+            validate_library_directory(args.library)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        return commands.run_package_list(args.library)
+
     if args.command in {"search", "ask"}:
         try:
             validate_existing_index_directory(args.index_dir)

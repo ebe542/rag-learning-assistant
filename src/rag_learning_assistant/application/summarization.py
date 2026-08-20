@@ -142,6 +142,20 @@ class DocumentSummarizationService:
         self.identity_factory = identity_factory
         self.final_summaries = final_summaries
 
+    def prepare_summary(self, document_id: UUID) -> str:
+        """Prepare a persisted summary and return its exact identity."""
+
+        if self.identity_factory is None or self.final_summaries is None:
+            raise RuntimeError("Summary preparation requires persistent identities")
+
+        document = self.documents.find_by_id(document_id)
+        if document is None:
+            raise DocumentNotFoundError(f"Document does not exist: {document_id}")
+
+        identity = self.identity_factory(document)
+        self.summarize(document_id)
+        return identity.fingerprint
+
     def summarize(
         self,
         document_id: UUID,
@@ -290,7 +304,10 @@ class DocumentSummarizationService:
 
             # The reduction may only cite original contexts that supported at least
             # one partial summary.
-            supported_numbers = {number for _, numbers in partial_summaries for number in numbers}
+            supported_citation_numbers = tuple(
+                dict.fromkeys(number for _, numbers in partial_summaries for number in numbers)
+            )
+            supported_numbers = set(supported_citation_numbers)
 
             for citation_number in reduction.citation_numbers:
                 if citation_number not in supported_numbers:
@@ -308,14 +325,13 @@ class DocumentSummarizationService:
             ):
                 raise ValueError("Reduction must be supported by every section summary")
 
-            # The current result format has one global citation list instead of
-            # claim-level citations. Keeping the complete Map citation union is
-            # conservative, but prevents Reduce from silently dropping evidence.
-            if supported_numbers - reduction_numbers:
-                raise ValueError("Reduction must preserve all section citations")
-
             final_text = reduction.text
-            final_citation_numbers = reduction.citation_numbers
+
+            # Citations are global rather than attached to individual claims.
+            # Preserve the complete validated Map evidence in source order;
+            # requiring the model to repeat every number makes long-document
+            # reduction unnecessarily fragile.
+            final_citation_numbers = supported_citation_numbers
 
         # Preserve citation order while removing duplicates.
         unique_citation_numbers = tuple(dict.fromkeys(final_citation_numbers))

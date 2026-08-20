@@ -732,3 +732,24 @@ def test_question_bank_catalog_returns_exact_bank_identity() -> None:
     assert banks.find_calls == [
         (DOCUMENT_ID, identity.fingerprint),
     ]
+
+
+def test_prepare_questions_returns_active_bank_identity() -> None:
+    summary = build_summary()
+    identity = build_identity()
+    bank = build_bank(identity)
+    service = QuestionBankService(
+        summaries=StaticSummaryLookup(summary),
+        generator=FailingQuestionGenerator(),
+        banks=StaticQuestionBankRepository(bank),
+        identity_factory=lambda persisted_summary, question_count: identity,
+        max_new_tokens=256,
+    )
+
+    fingerprint = service.prepare_questions(
+        DOCUMENT_ID,
+        SUMMARY_IDENTITY,
+        question_count=1,
+    )
+
+    assert fingerprint == identity.fingerprint
