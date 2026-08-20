@@ -258,14 +258,19 @@ rag-learn review-record \
   good
 ```
 
-Run one interactive active-recall session for the highest-priority due question:
+Run one interactive active-recall session for the highest-priority due question
+in a ready learning package:
 
 ```bash
 rag-learn study \
-  local-data/indexes/learning \
-  12345678-1234-5678-1234-567812345678 \
-  QUESTION_BANK_IDENTITY_SHA256
+  --library local-data/product-library \
+  --package "RAG Learning Assistant"
 ```
+
+The package name is the normal user-facing selector. The technical positional
+form with library directory, document UUID, and question-bank fingerprint
+remains available for diagnostics and automation that must address an exact
+persisted question-bank version.
 
 The expected answer and trusted sources remain hidden until a written answer has
 been entered and evaluated by the local model. The model returns a validated

@@ -102,6 +102,8 @@ package "application" #FFE8E8 {
   class DocumentSummaryNotFoundError
   class QuestionBankNotFoundError
   class StudyQuestionNotFoundError
+  class LearningPackageNotFoundError
+  class LearningPackageNotReadyError
 
   interface DocumentExtractor <<Protocol>>
   interface DocumentIndexer <<Protocol>>
@@ -128,6 +130,8 @@ package "application" #FFE8E8 {
   interface PackageDocumentImporter <<Protocol>>
   interface PackageSummaryPreparer <<Protocol>>
   interface PackageQuestionPreparer <<Protocol>>
+  interface LearningPackageLookup <<Protocol>>
+  interface PackageStudySession <<Protocol>>
 
   enum ImportStatus
   class ImportOutcome <<immutable model>>
@@ -150,6 +154,7 @@ package "application" #FFE8E8 {
   class AnswerEvaluationService
   class LearningPackageCatalog
   class LearningPackageService
+  class LearningPackageStudyService
 }
 
 package "evaluation" #EFFFF4 {
@@ -172,6 +177,8 @@ DocumentNotFoundError --|> LookupError
 DocumentSummaryNotFoundError --|> LookupError
 QuestionBankNotFoundError --|> LookupError
 StudyQuestionNotFoundError --|> LookupError
+LearningPackageNotFoundError --|> LookupError
+LearningPackageNotReadyError --|> ValueError
 ImportStatus --|> StrEnum
 ReviewRating --|> StrEnum
 AnswerVerdict --|> StrEnum
@@ -286,6 +293,11 @@ LearningPackageService o-- PackageDocumentImporter
 LearningPackageService o-- PackageSummaryPreparer
 LearningPackageService o-- PackageQuestionPreparer
 LearningPackageService --> LearningPackage
+SqliteLearningPackageRepository ..|> LearningPackageLookup
+StudySessionService ..|> PackageStudySession
+LearningPackageStudyService o-- LearningPackageLookup
+LearningPackageStudyService o-- PackageStudySession
+LearningPackageStudyService --> LearningPackage
 
 ' Learning progress and review scheduling
 QuestionProgress --> ReviewRating : changed by rating

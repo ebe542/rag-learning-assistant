@@ -278,6 +278,14 @@ package returns without loading models. `LearningPackageCatalog` provides a
 read-only list for CLI and future UI clients. Package names are unique without
 regard to case, while UUIDs remain internal identities.
 
+`LearningPackageStudyService` is the product-facing study facade. It resolves a
+case-insensitive package name, verifies that the package is ready, and delegates
+due-question selection and written-answer recording to `StudySessionService`
+with the exact stored document and question-bank identities. This keeps stable
+technical provenance inside the application while normal learners select only a
+library and package name. The technical positional `study` form remains
+available for diagnostics and exact-version automation.
+
 For multi-batch summaries, Reduce must cite supported evidence from every Map
 section. The application conservatively retains the complete validated Map
 citation union because citations are currently global rather than attached to
@@ -420,6 +428,27 @@ Before committing:
 ```bash
 git status --short && git diff --check && git diff --stat
 ```
+
+### Commit and milestone boundaries
+
+A product milestone may consist of several small, coherent commits. Each commit
+should represent one reviewable responsibility, such as application behavior,
+CLI integration, or documentation. Tests that specify or verify that
+responsibility belong in the same commit as its implementation. Documentation
+may follow in its own commit when a user-facing workflow spans several code
+changes.
+
+Focused checks are sufficient while completing an individual commit, provided
+the affected responsibility and its neighboring integration tests remain green.
+The complete milestone and clean-environment checks are required after all
+commits belonging to the milestone have been assembled and before the milestone
+is tagged or released.
+
+Project versions describe usable product releases, not individual commits. A
+version is changed only when the assembled milestone forms a deliberate release.
+After the full quality gates pass, that release may receive a matching Git tag.
+Bug fixes or intermediate refactor commits do not automatically require a
+version change or tag.
 
 Run the complete local quality gate:
 
