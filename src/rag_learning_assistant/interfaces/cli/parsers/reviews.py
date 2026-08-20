@@ -6,6 +6,7 @@ from uuid import UUID
 from rag_learning_assistant.interfaces.cli.parsing import (
     DEFAULT_REVIEW_LIMIT,
     SubcommandCollection,
+    non_blank_text,
     positive_int,
     sha256_fingerprint,
 )
@@ -64,16 +65,29 @@ def add_review_commands(commands: SubcommandCollection) -> None:
     )
     study_parser.add_argument(
         "index_dir",
+        nargs="?",
         type=Path,
         help="Directory containing the library metadata",
     )
     study_parser.add_argument(
         "document_id",
+        nargs="?",
         type=UUID,
         help="UUID of the source document",
     )
     study_parser.add_argument(
         "question_bank_identity_fingerprint",
+        nargs="?",
         type=sha256_fingerprint,
         help="SHA-256 identity of the persisted question bank",
+    )
+    study_parser.add_argument(
+        "--library",
+        type=Path,
+        help="Directory containing user-facing learning packages",
+    )
+    study_parser.add_argument(
+        "--package",
+        type=non_blank_text,
+        help="Name of the ready learning package to study",
     )

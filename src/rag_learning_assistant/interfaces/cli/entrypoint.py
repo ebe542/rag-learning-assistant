@@ -9,6 +9,8 @@ from rag_learning_assistant.application import (
     DocumentNotFoundError,
     DocumentSummaryNotFoundError,
     DuplicateDocumentError,
+    LearningPackageNotFoundError,
+    LearningPackageNotReadyError,
     QuestionBankNotFoundError,
     StudyQuestionNotFoundError,
 )
@@ -171,20 +173,73 @@ def main(argv: Sequence[str] | None = None) -> int:
         ) as exc:
             parser.error(str(exc))
 
-    if args.command in {"review-due", "review-record", "study"}:
+    if args.command == "study":
+        package_arguments_present = args.library is not None or args.package is not None
+        technical_arguments_present = (
+            args.index_dir is not None
+            or args.document_id is not None
+            or args.question_bank_identity_fingerprint is not None
+        )
+
+        if package_arguments_present and technical_arguments_present:
+            parser.error("Package and technical study arguments must not be mixed")
+
+        if package_arguments_present:
+            if args.library is None or args.package is None:
+                parser.error("--library and --package must be used together")
+
+            try:
+                validate_library_directory(args.library)
+            except ValueError as exc:
+                parser.error(str(exc))
+
+            try:
+                return commands.run_package_study(
+                    library_directory=args.library,
+                    package_name=args.package,
+                )
+            except (
+                LearningPackageNotFoundError,
+                LearningPackageNotReadyError,
+                StudyQuestionNotFoundError,
+            ) as exc:
+                parser.error(str(exc))
+
+        if (
+            args.index_dir is None
+            or args.document_id is None
+            or args.question_bank_identity_fingerprint is None
+        ):
+            parser.error(
+                "study requires either --library and --package "
+                "or all technical positional arguments"
+            )
+
         try:
             validate_library_directory(args.index_dir)
         except ValueError as exc:
             parser.error(str(exc))
 
         try:
-            if args.command == "study":
-                return commands.run_study(
-                    index_directory=args.index_dir,
-                    document_id=args.document_id,
-                    question_bank_identity_fingerprint=(args.question_bank_identity_fingerprint),
-                )
+            return commands.run_study(
+                index_directory=args.index_dir,
+                document_id=args.document_id,
+                question_bank_identity_fingerprint=(args.question_bank_identity_fingerprint),
+            )
+        except (
+            DocumentNotFoundError,
+            QuestionBankNotFoundError,
+            StudyQuestionNotFoundError,
+        ) as exc:
+            parser.error(str(exc))
 
+    if args.command in {"review-due", "review-record"}:
+        try:
+            validate_library_directory(args.index_dir)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
             if args.command == "review-due":
                 return commands.run_review_due(
                     index_directory=args.index_dir,

@@ -17,6 +17,7 @@ from rag_learning_assistant.application import (
     ImportStatus,
     LearningPackageCatalog,
     LearningPackageService,
+    LearningPackageStudyService,
     LibraryCatalog,
     LibraryService,
     QuestionAnsweringService,
@@ -71,6 +72,7 @@ from rag_learning_assistant.learning import (
     SqliteQuestionBankRepository,
     SqliteQuestionProgressRepository,
     SqliteStudyAttemptRepository,
+    StudyAttempt,
     StudyQuestion,
 )
 from rag_learning_assistant.library import IndexedDocument, SqliteDocumentRepository
@@ -216,6 +218,19 @@ def build_study_session_service(
                 max_new_tokens=(DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS),
             )
         ),
+    )
+
+
+def build_learning_package_study_service(
+    library_directory: Path,
+) -> LearningPackageStudyService:
+    """Build package-based study coordination for one personal library."""
+
+    database_path = library_directory / "metadata.sqlite3"
+
+    return LearningPackageStudyService(
+        packages=SqliteLearningPackageRepository(database_path),
+        sessions=build_study_session_service(library_directory),
     )
 
 
@@ -599,6 +614,76 @@ def run_question_show(
         ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _write_study_result(
+    attempt: StudyAttempt,
+    write_line: Callable[[str], None],
+) -> None:
+    """Reveal trusted learning material after a written answer."""
+
+    evaluation = attempt.evaluation
+
+    if evaluation is None:
+        raise RuntimeError("Automatic answer evaluation returned no feedback")
+
+    # Reveal trusted learning material only after the learner has committed to
+    # a written answer and the automatic evaluation has completed.
+    write_line(f"Expected answer: {attempt.expected_answer}")
+
+    for citation in attempt.citations:
+        write_line(
+            f"Source {citation.number}: "
+            f"{citation.source}, "
+            f"page {citation.page_number}, "
+            f"chunk {citation.chunk_index}"
+        )
+
+    write_line(f"Evaluation: {evaluation.verdict.value} (score: {evaluation.score:.2f})")
+    write_line(f"Feedback: {evaluation.feedback}")
+
+    for concept in evaluation.missing_concepts:
+        write_line(f"Missing concept: {concept}")
+
+    write_line(f"Scheduled as: {attempt.rating.value}")
+    write_line(f"Review recorded. Next due: {attempt.resulting_progress.due_at.isoformat()}")
+
+
+def run_package_study(
+    library_directory: Path,
+    package_name: str,
+    *,
+    as_of: datetime | None = None,
+    read_line: Callable[[str], str] = input,
+    write_line: Callable[[str], None] = print,
+) -> int:
+    """Run one interactive study session selected by package name."""
+
+    study_time = as_of if as_of is not None else datetime.now(UTC)
+    service = build_learning_package_study_service(library_directory)
+    due = service.next_due(
+        package_name,
+        as_of=study_time,
+    )
+
+    if due is None:
+        write_line("No study questions are due.")
+        return 0
+
+    answer_text = capture_study_answer(
+        due.question,
+        read_line=read_line,
+        write_line=write_line,
+    )
+    attempt = service.record_answer(
+        package_name,
+        due.question.number,
+        answer_text=answer_text,
+        answered_at=study_time,
+    )
+    _write_study_result(attempt, write_line)
+
     return 0
 
 
