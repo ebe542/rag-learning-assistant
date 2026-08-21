@@ -258,6 +258,7 @@ def test_question_bank_identity_is_stable_for_equal_configuration() -> None:
         "model_revision": "b" * 40,
         "prompt_references": (prompt,),
         "question_count": 5,
+        "batch_size": 5,
         "max_new_tokens": 512,
         "summary_identity_fingerprint": "c" * 64,
     }
@@ -286,6 +287,7 @@ def test_question_bank_identity_is_stable_for_equal_configuration() -> None:
             ),
         ),
         ("question_count", 10),
+        ("batch_size", 10),
         ("max_new_tokens", 768),
         ("summary_identity_fingerprint", "f" * 64),
     ],
@@ -305,6 +307,7 @@ def test_question_bank_identity_changes_with_configuration(
             ),
         ),
         question_count=5,
+        batch_size=5,
         max_new_tokens=512,
         summary_identity_fingerprint="c" * 64,
     )
@@ -331,6 +334,7 @@ def build_question_bank_identity(
             ),
         ),
         "question_count": 5,
+        "batch_size": 5,
         "max_new_tokens": 512,
         "summary_identity_fingerprint": "c" * 64,
     }
@@ -369,6 +373,8 @@ def test_question_bank_identity_requires_prompt_reference() -> None:
         ("question_count", -1),
         ("max_new_tokens", 0),
         ("max_new_tokens", -1),
+        ("batch_size", 0),
+        ("batch_size", -1),
     ],
 )
 def test_question_bank_identity_requires_positive_limits(

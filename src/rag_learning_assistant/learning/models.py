@@ -104,6 +104,7 @@ class QuestionBankIdentity:
     model_revision: str
     prompt_references: tuple[PromptReference, ...]
     question_count: int
+    batch_size: int
     max_new_tokens: int
     summary_identity_fingerprint: str
 
@@ -118,7 +119,7 @@ class QuestionBankIdentity:
                 "Question bank identity requires at least one prompt",
             )
 
-        if self.question_count < 1 or self.max_new_tokens < 1:
+        if self.question_count < 1 or self.batch_size < 1 or self.max_new_tokens < 1:
             raise ValueError(
                 "Question bank generation limits must be positive",
             )
@@ -143,6 +144,7 @@ class QuestionBankIdentity:
         # Canonical JSON keeps the cache key stable across processes and
         # supported platforms.
         payload = {
+            "batch_size": self.batch_size,
             "max_new_tokens": self.max_new_tokens,
             "model_name": self.model_name,
             "model_revision": self.model_revision,

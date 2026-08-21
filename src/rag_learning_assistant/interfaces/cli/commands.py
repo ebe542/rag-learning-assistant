@@ -298,6 +298,7 @@ def build_question_bank_service(
                 QUESTION_JSON_REPAIR_PROMPT.reference,
             ),
             question_count=question_count,
+            batch_size=question_count,
             max_new_tokens=max_new_tokens,
             summary_identity_fingerprint=(summary.identity_fingerprint),
         )
@@ -370,6 +371,15 @@ def build_document_summarization_service(
             document_content_sha256=document.content_sha256,
         )
 
+    def write_summary_warning(message: str) -> None:
+        """Persist a non-fatal summarization fallback warning."""
+
+        write_diagnostic_log(
+            message,
+            source="summarization",
+            context={"index_directory": index_directory},
+        )
+
     return DocumentSummarizationService(
         documents=repository,
         chunks=store,
@@ -381,11 +391,7 @@ def build_document_summarization_service(
         cache=SqliteSummaryCache(database_path),
         identity_factory=build_identity,
         final_summaries=SqliteDocumentSummaryRepository(database_path),
-        warning=lambda message: write_diagnostic_log(
-            message,
-            source="summarization",
-            context={"index_directory": index_directory},
-        ),
+        warning=write_summary_warning,
     )
 
 

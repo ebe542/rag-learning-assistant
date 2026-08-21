@@ -67,6 +67,7 @@ def build_identity() -> QuestionBankIdentity:
             ),
         ),
         question_count=1,
+        batch_size=1,
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
@@ -299,6 +300,7 @@ def test_generate_builds_and_persists_grounded_question_bank() -> None:
             system_prompt,
         ),
         question_count=1,
+        batch_size=1,
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
@@ -373,6 +375,7 @@ def test_generate_rejects_wrong_question_count_before_persistence() -> None:
             system_prompt,
         ),
         question_count=1,
+        batch_size=1,
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
@@ -433,6 +436,7 @@ def test_generate_rejects_unknown_citation_before_persistence() -> None:
             system_prompt,
         ),
         question_count=1,
+        batch_size=1,
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
@@ -492,6 +496,7 @@ def test_generate_rejects_prompt_not_covered_by_identity() -> None:
             expected_system_prompt,
         ),
         question_count=1,
+        batch_size=1,
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
@@ -546,6 +551,7 @@ def test_force_regenerates_and_replaces_question_bank() -> None:
             system_prompt,
         ),
         question_count=1,
+        batch_size=1,
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
