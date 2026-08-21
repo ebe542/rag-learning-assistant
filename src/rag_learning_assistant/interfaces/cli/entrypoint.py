@@ -59,6 +59,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return commands.run_package_list(args.library)
 
+    if args.command == "progress":
+        try:
+            validate_library_directory(args.library)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            return commands.run_progress(
+                library_directory=args.library,
+                package_name=args.package,
+            )
+        except (
+            LearningPackageNotFoundError,
+            LearningPackageNotReadyError,
+        ) as exc:
+            parser.error(str(exc))
+
     if args.command in {"search", "ask"}:
         try:
             validate_existing_index_directory(args.index_dir)

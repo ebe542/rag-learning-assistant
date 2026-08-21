@@ -52,3 +52,19 @@ def add_package_commands(
         required=True,
         help="Directory containing the personal learning library",
     )
+    progress_parser = commands.add_parser(
+        "progress",
+        help="Show learning progress for one ready package",
+    )
+    progress_parser.add_argument(
+        "--library",
+        type=Path,
+        required=True,
+        help="Directory containing the personal learning library",
+    )
+    progress_parser.add_argument(
+        "--package",
+        type=non_blank_text,
+        required=True,
+        help="Name of the learning package to report",
+    )

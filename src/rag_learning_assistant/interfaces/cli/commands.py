@@ -18,6 +18,7 @@ from rag_learning_assistant.application import (
     LearningPackageCatalog,
     LearningPackageService,
     LearningPackageStudyService,
+    LearningProgressService,
     LibraryCatalog,
     LibraryService,
     QuestionAnsweringService,
@@ -231,6 +232,21 @@ def build_learning_package_study_service(
     return LearningPackageStudyService(
         packages=SqliteLearningPackageRepository(database_path),
         sessions=build_study_session_service(library_directory),
+    )
+
+
+def build_learning_progress_service(
+    library_directory: Path,
+) -> LearningProgressService:
+    """Build package progress reporting from persistent library data."""
+
+    database_path = library_directory / "metadata.sqlite3"
+
+    return LearningProgressService(
+        packages=SqliteLearningPackageRepository(database_path),
+        banks=build_question_bank_catalog(library_directory),
+        progress=SqliteQuestionProgressRepository(database_path),
+        attempts=SqliteStudyAttemptRepository(database_path),
     )
 
 
@@ -454,6 +470,61 @@ def run_package_list(
         "library_directory": str(library_directory),
         "packages": [_serialize_learning_package(package) for package in catalog.list_packages()],
     }
+    print(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
+
+
+def run_progress(
+    library_directory: Path,
+    package_name: str,
+    *,
+    as_of: datetime | None = None,
+) -> int:
+    """Output current learning progress for one package as JSON."""
+
+    report_time = as_of if as_of is not None else datetime.now(UTC)
+    service = build_learning_progress_service(library_directory)
+    report = service.report(
+        package_name,
+        as_of=report_time,
+    )
+
+    payload = {
+        "library_directory": str(library_directory),
+        "package": report.package_name,
+        "questions": {
+            "total": report.total_question_count,
+            "answered": report.answered_question_count,
+            "due": report.due_question_count,
+            "answered_rate": report.answered_rate,
+        },
+        "attempts": {
+            "total": report.attempt_count,
+            "incorrect": report.incorrect_attempt_count,
+            "partially_correct": (report.partially_correct_attempt_count),
+            "correct": report.correct_attempt_count,
+            "unclassified": (report.unclassified_attempt_count),
+            "correct_rate": report.correct_attempt_rate,
+        },
+        "difficult_concepts": [
+            {
+                "concept": concept,
+                "missing_count": missing_count,
+            }
+            for concept, missing_count in report.difficult_concepts
+        ],
+        "last_studied_at": (
+            report.last_studied_at.isoformat() if report.last_studied_at is not None else None
+        ),
+        "next_due_at": (report.next_due_at.isoformat() if report.next_due_at is not None else None),
+    }
+
     print(
         json.dumps(
             payload,
