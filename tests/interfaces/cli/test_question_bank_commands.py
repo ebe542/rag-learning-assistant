@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from uuid import UUID
 
+import pytest
+
 from rag_learning_assistant.application import (
     DocumentSummaryCatalog,
     QuestionBankService,
@@ -21,11 +23,13 @@ from rag_learning_assistant.generation.huggingface import (
     QUESTION_JSON_REPAIR_PROMPT,
     QUESTION_SYSTEM_PROMPT,
 )
+from rag_learning_assistant.generation.question_cache import SqliteQuestionBatchCache
 from rag_learning_assistant.interfaces.cli import (
     commands,
     entrypoint,
 )
 from rag_learning_assistant.interfaces.cli.parser import (
+    DEFAULT_QUESTION_BATCH_SIZE,
     DEFAULT_QUESTION_COUNT,
     DEFAULT_QUESTION_MAX_NEW_TOKENS,
     build_parser,
@@ -60,6 +64,13 @@ def test_question_bank_builder_uses_library_database_and_lazy_generator(
         SqliteQuestionBankRepository,
     )
     assert service.banks.database_path == tmp_path / "metadata.sqlite3"
+    assert service.batch_size == DEFAULT_QUESTION_BATCH_SIZE
+    assert isinstance(
+        service.cache,
+        SqliteQuestionBatchCache,
+    )
+    assert service.cache.database_path == (tmp_path / "metadata.sqlite3")
+    assert service.progress is commands.write_question_generation_progress
 
 
 def test_question_bank_builder_versions_all_generation_inputs(
@@ -102,6 +113,7 @@ def test_question_bank_builder_versions_all_generation_inputs(
         QUESTION_JSON_REPAIR_PROMPT.reference,
     )
     assert identity.question_count == 5
+    assert identity.batch_size == DEFAULT_QUESTION_BATCH_SIZE
     assert identity.max_new_tokens == 256
     assert identity.summary_identity_fingerprint == "b" * 64
 
@@ -693,3 +705,33 @@ def test_library_builder_registers_all_derived_data_cleaners(
         service.derived_data_cleaners[4],
         SqliteLearningPackageRepository,
     )
+
+
+@pytest.mark.parametrize(
+    ("phase", "expected"),
+    [
+        (
+            "generate",
+            "Generating question batch 2/4...",
+        ),
+        (
+            "cached",
+            "Using cached question batch 2/4...",
+        ),
+    ],
+)
+def test_question_generation_progress_is_human_readable(
+    phase: str,
+    expected: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    commands.write_question_generation_progress(
+        phase,
+        2,
+        4,
+    )
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+    assert captured.err.strip() == expected

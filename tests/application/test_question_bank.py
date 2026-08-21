@@ -19,6 +19,7 @@ from rag_learning_assistant.generation import (
     PromptReference,
     QuestionGenerationResult,
 )
+from rag_learning_assistant.generation.question_cache import CachedQuestionBatch
 from rag_learning_assistant.learning import (
     QuestionBank,
     QuestionBankIdentity,
@@ -182,6 +183,27 @@ def test_question_bank_service_requires_positive_token_limit(
         )
 
 
+@pytest.mark.parametrize("batch_size", [0, -1])
+def test_question_bank_service_requires_positive_batch_size(
+    batch_size: int,
+) -> None:
+    identity = build_identity()
+    bank = build_bank(identity)
+
+    with pytest.raises(
+        ValueError,
+        match="batch_size must be positive",
+    ):
+        QuestionBankService(
+            summaries=StaticSummaryLookup(build_summary()),
+            generator=FailingQuestionGenerator(),
+            banks=StaticQuestionBankRepository(bank),
+            identity_factory=lambda summary, question_count: identity,
+            max_new_tokens=256,
+            batch_size=batch_size,
+        )
+
+
 @pytest.mark.parametrize("question_count", [0, -1])
 def test_generate_requires_positive_question_count_before_summary_lookup(
     question_count: int,
@@ -214,6 +236,7 @@ def test_generate_requires_positive_question_count_before_summary_lookup(
     ("field", "changed_value"),
     [
         ("question_count", 2),
+        ("batch_size", 2),
         ("max_new_tokens", 512),
         ("summary_identity_fingerprint", "f" * 64),
     ],
@@ -264,6 +287,70 @@ class RecordingQuestionGenerator:
         return self.result
 
 
+class SequentialQuestionGenerator:
+    def __init__(
+        self,
+        results: list[QuestionGenerationResult],
+    ) -> None:
+        self.results = results
+        self.calls: list[tuple[str, int]] = []
+
+    def generate_questions(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int,
+    ) -> QuestionGenerationResult:
+        self.calls.append((prompt, max_new_tokens))
+        return self.results[len(self.calls) - 1]
+
+
+class InterruptingQuestionGenerator:
+    def __init__(
+        self,
+        first_result: QuestionGenerationResult,
+    ) -> None:
+        self.first_result = first_result
+        self.call_count = 0
+
+    def generate_questions(
+        self,
+        prompt: str,
+        *,
+        max_new_tokens: int,
+    ) -> QuestionGenerationResult:
+        self.call_count += 1
+
+        if self.call_count == 1:
+            return self.first_result
+
+        raise KeyboardInterrupt
+
+
+class RecordingQuestionBatchCache:
+    def __init__(
+        self,
+        batches: list[CachedQuestionBatch] | None = None,
+    ) -> None:
+        self.batches = {
+            (batch.identity_fingerprint, batch.batch_number): batch for batch in batches or []
+        }
+        self.find_calls: list[tuple[str, int]] = []
+        self.saved: list[CachedQuestionBatch] = []
+
+    def find_batch(
+        self,
+        identity_fingerprint: str,
+        batch_number: int,
+    ) -> CachedQuestionBatch | None:
+        self.find_calls.append((identity_fingerprint, batch_number))
+        return self.batches.get((identity_fingerprint, batch_number))
+
+    def save_batch(self, batch: CachedQuestionBatch) -> None:
+        self.saved.append(batch)
+        self.batches[(batch.identity_fingerprint, batch.batch_number)] = batch
+
+
 class RecordingQuestionBankRepository:
     def __init__(self) -> None:
         self.find_calls: list[tuple[UUID, str]] = []
@@ -283,6 +370,96 @@ class RecordingQuestionBankRepository:
 
     def replace(self, bank: QuestionBank) -> None:
         self.replaced.append(bank)
+
+
+def test_generate_splits_questions_into_configured_batches() -> None:
+    summary = build_summary()
+    system_prompt = PromptReference(
+        name="question-generation.system-json",
+        version=1,
+        fingerprint="f" * 64,
+    )
+    identity = QuestionBankIdentity(
+        model_name="Qwen/Qwen3-1.7B",
+        model_revision="d" * 40,
+        prompt_references=(
+            QUESTION_BANK_PROMPT.reference,
+            system_prompt,
+        ),
+        question_count=6,
+        batch_size=5,
+        max_new_tokens=256,
+        summary_identity_fingerprint=SUMMARY_IDENTITY,
+    )
+    generator = SequentialQuestionGenerator(
+        [
+            QuestionGenerationResult(
+                questions=tuple(
+                    GeneratedQuestionDraft(
+                        number=number,
+                        text=f"Question {number}?",
+                        expected_answer=f"Answer {number}.",
+                        citation_numbers=(1,),
+                    )
+                    for number in range(1, 6)
+                ),
+                prompt_references=(system_prompt,),
+            ),
+            QuestionGenerationResult(
+                questions=(
+                    GeneratedQuestionDraft(
+                        number=1,
+                        text="Question 6?",
+                        expected_answer="Answer 6.",
+                        citation_numbers=(1,),
+                    ),
+                ),
+                prompt_references=(system_prompt,),
+            ),
+        ]
+    )
+    banks = RecordingQuestionBankRepository()
+    progress_calls: list[tuple[str, int, int]] = []
+    service = QuestionBankService(
+        summaries=StaticSummaryLookup(summary),
+        generator=generator,
+        banks=banks,
+        identity_factory=lambda persisted_summary, question_count: identity,
+        max_new_tokens=256,
+        batch_size=5,
+        progress=lambda phase, current, total: progress_calls.append((phase, current, total)),
+    )
+
+    bank = service.generate(
+        DOCUMENT_ID,
+        SUMMARY_IDENTITY,
+        question_count=6,
+    )
+
+    assert [question.number for question in bank.questions] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+    ]
+    assert len(generator.calls) == 2
+    assert progress_calls == [
+        ("generate", 1, 2),
+        ("generate", 2, 2),
+    ]
+    assert "Create exactly 5 study questions." in generator.calls[0][0]
+    assert "Create exactly 1 study questions." in generator.calls[1][0]
+    assert [token_limit for _, token_limit in generator.calls] == [
+        256,
+        256,
+    ]
+    assert banks.saved == [bank]
+    assert "Previously generated questions:" not in (generator.calls[0][0])
+    assert "Previously generated questions:" in (generator.calls[1][0])
+    for number in range(1, 6):
+        assert f"Question {number}?" in generator.calls[1][0]
 
 
 def test_generate_builds_and_persists_grounded_question_bank() -> None:
@@ -454,12 +631,14 @@ def test_generate_rejects_unknown_citation_before_persistence() -> None:
         )
     )
     banks = RecordingQuestionBankRepository()
+    cache = RecordingQuestionBatchCache()
     service = QuestionBankService(
         summaries=StaticSummaryLookup(summary),
         generator=generator,
         banks=banks,
         identity_factory=lambda persisted_summary, question_count: identity,
         max_new_tokens=256,
+        cache=cache,
     )
 
     with pytest.raises(
@@ -474,6 +653,7 @@ def test_generate_rejects_unknown_citation_before_persistence() -> None:
 
     assert banks.saved == []
     assert banks.replaced == []
+    assert cache.saved == []
 
 
 def test_generate_rejects_prompt_not_covered_by_identity() -> None:
@@ -514,12 +694,14 @@ def test_generate_rejects_prompt_not_covered_by_identity() -> None:
         )
     )
     banks = RecordingQuestionBankRepository()
+    cache = RecordingQuestionBatchCache()
     service = QuestionBankService(
         summaries=StaticSummaryLookup(summary),
         generator=generator,
         banks=banks,
         identity_factory=lambda persisted_summary, question_count: identity,
         max_new_tokens=256,
+        cache=cache,
     )
 
     with pytest.raises(
@@ -534,6 +716,7 @@ def test_generate_rejects_prompt_not_covered_by_identity() -> None:
 
     assert banks.saved == []
     assert banks.replaced == []
+    assert cache.saved == []
 
 
 def test_force_regenerates_and_replaces_question_bank() -> None:
@@ -555,6 +738,24 @@ def test_force_regenerates_and_replaces_question_bank() -> None:
         max_new_tokens=256,
         summary_identity_fingerprint=SUMMARY_IDENTITY,
     )
+    cached_batch = CachedQuestionBatch(
+        identity_fingerprint=identity.fingerprint,
+        batch_number=1,
+        first_question_number=1,
+        last_question_number=1,
+        result=QuestionGenerationResult(
+            questions=(
+                GeneratedQuestionDraft(
+                    number=1,
+                    text="Cached question?",
+                    expected_answer="Cached answer.",
+                    citation_numbers=(1,),
+                ),
+            ),
+            prompt_references=(system_prompt,),
+        ),
+    )
+    cache = RecordingQuestionBatchCache([cached_batch])
     generator = RecordingQuestionGenerator(
         QuestionGenerationResult(
             questions=(
@@ -575,6 +776,7 @@ def test_force_regenerates_and_replaces_question_bank() -> None:
         banks=banks,
         identity_factory=lambda persisted_summary, question_count: identity,
         max_new_tokens=256,
+        cache=cache,
     )
 
     bank = service.generate(
@@ -588,6 +790,8 @@ def test_force_regenerates_and_replaces_question_bank() -> None:
     assert banks.saved == []
     assert banks.replaced == [bank]
     assert bank.questions[0].text == "Regenerated question?"
+    assert cache.find_calls == []
+    assert cache.saved == []
 
 
 class StaticDocumentLookup:
@@ -759,3 +963,234 @@ def test_prepare_questions_returns_active_bank_identity() -> None:
     )
 
     assert fingerprint == identity.fingerprint
+
+
+def test_generate_resumes_after_cached_question_batch() -> None:
+    summary = build_summary()
+    system_prompt = PromptReference(
+        name="question-generation.system-json",
+        version=1,
+        fingerprint="f" * 64,
+    )
+    identity = QuestionBankIdentity(
+        model_name="Qwen/Qwen3-1.7B",
+        model_revision="d" * 40,
+        prompt_references=(
+            QUESTION_BANK_PROMPT.reference,
+            system_prompt,
+        ),
+        question_count=6,
+        batch_size=5,
+        max_new_tokens=256,
+        summary_identity_fingerprint=SUMMARY_IDENTITY,
+    )
+    cached_batch = CachedQuestionBatch(
+        identity_fingerprint=identity.fingerprint,
+        batch_number=1,
+        first_question_number=1,
+        last_question_number=5,
+        result=QuestionGenerationResult(
+            questions=tuple(
+                GeneratedQuestionDraft(
+                    number=number,
+                    text=f"Question {number}?",
+                    expected_answer=f"Answer {number}.",
+                    citation_numbers=(1,),
+                )
+                for number in range(1, 6)
+            ),
+            prompt_references=(system_prompt,),
+        ),
+    )
+    cache = RecordingQuestionBatchCache([cached_batch])
+    generator = SequentialQuestionGenerator(
+        [
+            QuestionGenerationResult(
+                questions=(
+                    GeneratedQuestionDraft(
+                        number=1,
+                        text="Question 6?",
+                        expected_answer="Answer 6.",
+                        citation_numbers=(1,),
+                    ),
+                ),
+                prompt_references=(system_prompt,),
+            ),
+        ]
+    )
+    banks = RecordingQuestionBankRepository()
+    progress_calls: list[tuple[str, int, int]] = []
+    service = QuestionBankService(
+        summaries=StaticSummaryLookup(summary),
+        generator=generator,
+        banks=banks,
+        identity_factory=lambda persisted_summary, question_count: identity,
+        max_new_tokens=256,
+        batch_size=5,
+        cache=cache,
+        progress=lambda phase, current, total: progress_calls.append((phase, current, total)),
+    )
+
+    bank = service.generate(
+        DOCUMENT_ID,
+        SUMMARY_IDENTITY,
+        question_count=6,
+    )
+
+    assert [question.number for question in bank.questions] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+    ]
+    assert len(generator.calls) == 1
+    assert "Create exactly 1 study questions." in generator.calls[0][0]
+    assert cache.find_calls == [
+        (identity.fingerprint, 1),
+        (identity.fingerprint, 2),
+    ]
+    assert progress_calls == [
+        ("cached", 1, 2),
+        ("generate", 2, 2),
+    ]
+    assert len(cache.saved) == 1
+    assert cache.saved[0].batch_number == 2
+    assert cache.saved[0].first_question_number == 6
+    assert cache.saved[0].last_question_number == 6
+    assert banks.saved == [bank]
+
+
+def test_generate_preserves_completed_batch_after_interruption() -> None:
+    summary = build_summary()
+    system_prompt = PromptReference(
+        name="question-generation.system-json",
+        version=1,
+        fingerprint="f" * 64,
+    )
+    identity = QuestionBankIdentity(
+        model_name="Qwen/Qwen3-1.7B",
+        model_revision="d" * 40,
+        prompt_references=(
+            QUESTION_BANK_PROMPT.reference,
+            system_prompt,
+        ),
+        question_count=6,
+        batch_size=5,
+        max_new_tokens=256,
+        summary_identity_fingerprint=SUMMARY_IDENTITY,
+    )
+    generator = InterruptingQuestionGenerator(
+        QuestionGenerationResult(
+            questions=tuple(
+                GeneratedQuestionDraft(
+                    number=number,
+                    text=f"Question {number}?",
+                    expected_answer=f"Answer {number}.",
+                    citation_numbers=(1,),
+                )
+                for number in range(1, 6)
+            ),
+            prompt_references=(system_prompt,),
+        )
+    )
+    cache = RecordingQuestionBatchCache()
+    service = QuestionBankService(
+        summaries=StaticSummaryLookup(summary),
+        generator=generator,
+        banks=RecordingQuestionBankRepository(),
+        identity_factory=lambda persisted_summary, question_count: identity,
+        max_new_tokens=256,
+        batch_size=5,
+        cache=cache,
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        service.generate(
+            DOCUMENT_ID,
+            SUMMARY_IDENTITY,
+            question_count=6,
+        )
+
+    assert generator.call_count == 2
+    assert len(cache.saved) == 1
+    assert cache.saved[0].batch_number == 1
+    assert cache.saved[0].first_question_number == 1
+    assert cache.saved[0].last_question_number == 5
+
+
+def test_generate_does_not_cache_duplicate_question_from_later_batch() -> None:
+    summary = build_summary()
+    system_prompt = PromptReference(
+        name="question-generation.system-json",
+        version=1,
+        fingerprint="f" * 64,
+    )
+    identity = QuestionBankIdentity(
+        model_name="Qwen/Qwen3-1.7B",
+        model_revision="d" * 40,
+        prompt_references=(
+            QUESTION_BANK_PROMPT.reference,
+            system_prompt,
+        ),
+        question_count=2,
+        batch_size=1,
+        max_new_tokens=256,
+        summary_identity_fingerprint=SUMMARY_IDENTITY,
+    )
+    generator = SequentialQuestionGenerator(
+        [
+            QuestionGenerationResult(
+                questions=(
+                    GeneratedQuestionDraft(
+                        number=1,
+                        text="What is an embedding?",
+                        expected_answer="A numeric representation.",
+                        citation_numbers=(1,),
+                    ),
+                ),
+                prompt_references=(system_prompt,),
+            ),
+            QuestionGenerationResult(
+                questions=(
+                    GeneratedQuestionDraft(
+                        number=1,
+                        text="  WHAT IS AN EMBEDDING?  ",
+                        expected_answer="A vector representation.",
+                        citation_numbers=(1,),
+                    ),
+                ),
+                prompt_references=(system_prompt,),
+            ),
+        ]
+    )
+    cache = RecordingQuestionBatchCache()
+    service = QuestionBankService(
+        summaries=StaticSummaryLookup(summary),
+        generator=generator,
+        banks=RecordingQuestionBankRepository(),
+        identity_factory=lambda persisted_summary, question_count: identity,
+        max_new_tokens=256,
+        batch_size=1,
+        cache=cache,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Question bank question texts must be unique",
+    ):
+        service.generate(
+            DOCUMENT_ID,
+            SUMMARY_IDENTITY,
+            question_count=2,
+        )
+
+    # Batch 1 remains resumable, while the invalid second batch must be
+    # regenerated on the next run instead of poisoning the cache.
+    assert [batch.batch_number for batch in cache.saved] == [1]
+
+
+def test_question_bank_prompt_has_explicit_version() -> None:
+    assert QUESTION_BANK_PROMPT.name == "question-bank.generate"
+    assert QUESTION_BANK_PROMPT.version == 2

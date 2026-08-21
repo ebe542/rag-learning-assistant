@@ -13,6 +13,7 @@ from rag_learning_assistant.interfaces.cli.parsers import (
 from rag_learning_assistant.interfaces.cli.parsing import (
     DEFAULT_MAX_CHARS,
     DEFAULT_OVERLAP_CHARS,
+    DEFAULT_QUESTION_BATCH_SIZE,
     DEFAULT_QUESTION_COUNT,
     DEFAULT_QUESTION_MAX_NEW_TOKENS,
     DEFAULT_RESULT_LIMIT,
@@ -32,6 +33,7 @@ from rag_learning_assistant.interfaces.cli.parsing import (
 __all__ = [
     "DEFAULT_MAX_CHARS",
     "DEFAULT_OVERLAP_CHARS",
+    "DEFAULT_QUESTION_BATCH_SIZE",
     "DEFAULT_QUESTION_COUNT",
     "DEFAULT_QUESTION_MAX_NEW_TOKENS",
     "DEFAULT_RESULT_LIMIT",

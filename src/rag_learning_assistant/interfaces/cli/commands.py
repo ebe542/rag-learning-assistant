@@ -51,6 +51,7 @@ from rag_learning_assistant.generation.huggingface import (
     QUESTION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
 )
+from rag_learning_assistant.generation.question_cache import SqliteQuestionBatchCache
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
 from rag_learning_assistant.interfaces.cli.error_reporting import (
@@ -60,6 +61,7 @@ from rag_learning_assistant.interfaces.cli.parsing import (
     DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS,
     DEFAULT_MAX_CHARS,
     DEFAULT_OVERLAP_CHARS,
+    DEFAULT_QUESTION_BATCH_SIZE,
     DEFAULT_QUESTION_MAX_NEW_TOKENS,
     DEFAULT_SUMMARY_MAX_BATCH_CHARS,
     DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS,
@@ -274,6 +276,27 @@ def build_learning_progress_service(
     )
 
 
+def write_question_generation_progress(
+    phase: str,
+    current: int,
+    total: int,
+) -> None:
+    """Write immediate progress for resumable question generation."""
+
+    if phase == "cached":
+        message = f"Using cached question batch {current}/{total}..."
+    else:
+        message = f"Generating question batch {current}/{total}..."
+
+    # A model call may take several minutes, so make the current batch
+    # visible immediately instead of waiting for the output buffer.
+    print(
+        message,
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def build_question_bank_service(
     index_directory: Path,
     max_new_tokens: int,
@@ -298,7 +321,7 @@ def build_question_bank_service(
                 QUESTION_JSON_REPAIR_PROMPT.reference,
             ),
             question_count=question_count,
-            batch_size=question_count,
+            batch_size=DEFAULT_QUESTION_BATCH_SIZE,
             max_new_tokens=max_new_tokens,
             summary_identity_fingerprint=(summary.identity_fingerprint),
         )
@@ -311,6 +334,9 @@ def build_question_bank_service(
         banks=SqliteQuestionBankRepository(database_path),
         identity_factory=build_identity,
         max_new_tokens=max_new_tokens,
+        batch_size=DEFAULT_QUESTION_BATCH_SIZE,
+        cache=SqliteQuestionBatchCache(database_path),
+        progress=write_question_generation_progress,
     )
 
 
