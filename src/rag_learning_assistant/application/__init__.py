@@ -17,6 +17,10 @@ from rag_learning_assistant.application.learning_package import (
     LearningPackageCatalog,
     LearningPackageService,
 )
+from rag_learning_assistant.application.learning_progress import (
+    LearningProgressReport,
+    LearningProgressService,
+)
 from rag_learning_assistant.application.library import (
     DocumentNotFoundError,
     DuplicateDocumentError,
@@ -84,4 +88,6 @@ __all__ = [
     "LearningPackageStudyService",
     "LearningPackageNotFoundError",
     "LearningPackageNotReadyError",
+    "LearningProgressReport",
+    "LearningProgressService",
 ]
