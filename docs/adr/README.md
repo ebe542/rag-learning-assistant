@@ -31,3 +31,4 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0023: Evaluate written study answers automatically](0023-evaluate-written-study-answers.md)
 - [0024: Prepare user-facing learning packages](0024-prepare-user-facing-learning-packages.md)
 - [0025: Select study sessions by learning-package name](0025-study-learning-packages-by-name.md)
+- [0026: Report learning-package progress from persisted study data](0026-report-learning-package-progress.md)

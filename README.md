@@ -272,6 +272,21 @@ form with library directory, document UUID, and question-bank fingerprint
 remains available for diagnostics and automation that must address an exact
 persisted question-bank version.
 
+Inspect current progress for the same package without loading an ML model:
+
+```bash
+rag-learn progress \
+  --library local-data/product-library \
+  --package "RAG Learning Assistant"
+```
+
+The JSON report separates distinct questions from attempts because one question
+may be answered repeatedly. It includes answered and due question counts,
+verdict counts, answer and correctness rates, the latest study time, the next
+due time, and concepts repeatedly reported as missing. Historical attempts that
+predate automatic evaluation remain visible as `unclassified` instead of being
+silently treated as correct or incorrect.
+
 The expected answer and trusted sources remain hidden until a written answer has
 been entered and evaluated by the local model. The model returns a validated
 verdict, score, feedback, and missing concepts. The application deterministically
@@ -346,9 +361,8 @@ maintained as a renderable [PlantUML class overview](docs/class-overview.puml).
 Planned next milestones:
 
 1. add manual correction for incorrectly evaluated study answers
-2. add progress analytics over study-attempt history
-3. generate detailed section-level learning material
-4. add optional Ollama and API model providers
+2. generate detailed section-level learning material
+3. add optional Ollama and API model providers
 
 ## Development
 

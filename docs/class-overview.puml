@@ -132,6 +132,10 @@ package "application" #FFE8E8 {
   interface PackageQuestionPreparer <<Protocol>>
   interface LearningPackageLookup <<Protocol>>
   interface PackageStudySession <<Protocol>>
+  interface LearningProgressPackageLookup <<Protocol>>
+  interface LearningProgressQuestionBankLookup <<Protocol>>
+  interface LearningProgressReader <<Protocol>>
+  interface LearningAttemptReader <<Protocol>>
 
   enum ImportStatus
   class ImportOutcome <<immutable model>>
@@ -155,6 +159,8 @@ package "application" #FFE8E8 {
   class LearningPackageCatalog
   class LearningPackageService
   class LearningPackageStudyService
+  class LearningProgressReport <<immutable model>>
+  class LearningProgressService
 }
 
 package "evaluation" #EFFFF4 {
@@ -298,6 +304,15 @@ StudySessionService ..|> PackageStudySession
 LearningPackageStudyService o-- LearningPackageLookup
 LearningPackageStudyService o-- PackageStudySession
 LearningPackageStudyService --> LearningPackage
+SqliteLearningPackageRepository ..|> LearningProgressPackageLookup
+QuestionBankCatalog ..|> LearningProgressQuestionBankLookup
+SqliteQuestionProgressRepository ..|> LearningProgressReader
+SqliteStudyAttemptRepository ..|> LearningAttemptReader
+LearningProgressService o-- LearningProgressPackageLookup
+LearningProgressService o-- LearningProgressQuestionBankLookup
+LearningProgressService o-- LearningProgressReader
+LearningProgressService o-- LearningAttemptReader
+LearningProgressService --> LearningProgressReport
 
 ' Learning progress and review scheduling
 QuestionProgress --> ReviewRating : changed by rating

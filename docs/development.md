@@ -286,6 +286,20 @@ technical provenance inside the application while normal learners select only a
 library and package name. The technical positional `study` form remains
 available for diagnostics and exact-version automation.
 
+`LearningProgressService` resolves the same ready package and aggregates its
+active question bank, current schedules, and immutable attempt histories. It
+counts answered questions separately from attempts, because spaced repetition
+can produce many attempts for one question. Verdict statistics use automatic
+evaluations; legacy attempts without one are reported as `unclassified` rather
+than inferred from self-ratings. Missing concepts are counted across evaluations
+and ordered by frequency. New questions have no persisted schedule and are
+therefore considered due at the report timestamp.
+
+The progress report is a read-only projection. Creating it does not update review
+schedules, persist derived analytics, or load embedding and generation models.
+This keeps repeated status queries cheap and prevents observation from changing
+the learning state.
+
 For multi-batch summaries, Reduce must cite supported evidence from every Map
 section. The application conservatively retains the complete validated Map
 citation union because citations are currently global rather than attached to
@@ -318,6 +332,7 @@ Current commands are:
 ```text
 prepare
 package-list
+progress
 extract
 index
 list
