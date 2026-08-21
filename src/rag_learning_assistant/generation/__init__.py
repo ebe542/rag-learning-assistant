@@ -23,6 +23,11 @@ from rag_learning_assistant.generation.prompts import (
     PromptReference,
     PromptTemplate,
 )
+from rag_learning_assistant.generation.question_cache import (
+    CachedQuestionBatch,
+    QuestionBatchCache,
+    SqliteQuestionBatchCache,
+)
 from rag_learning_assistant.generation.question_parser import (
     GeneratedQuestionDraft,
     QuestionGenerationResult,
@@ -54,4 +59,7 @@ __all__ = [
     "TextGenerator",
     "QuestionGenerationResult",
     "parse_answer_evaluation",
+    "CachedQuestionBatch",
+    "SqliteQuestionBatchCache",
+    "QuestionBatchCache",
 ]
