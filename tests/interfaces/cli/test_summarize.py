@@ -62,6 +62,7 @@ def test_summary_builder_configures_persistent_cache_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    diagnostics: list[tuple[str, str, dict[str, object]]] = []
     monkeypatch.setattr(
         commands,
         "SentenceTransformerEmbedder",
@@ -74,6 +75,11 @@ def test_summary_builder_configures_persistent_cache_identity(
         lambda database_path: object(),
     )
     monkeypatch.setattr(commands, "HuggingFaceTextGenerator", StubGenerator)
+    monkeypatch.setattr(
+        commands,
+        "write_diagnostic_log",
+        lambda message, *, source, context: diagnostics.append((message, source, context)),
+    )
 
     service = commands.build_document_summarization_service(
         index_directory=tmp_path,
@@ -106,7 +112,19 @@ def test_summary_builder_configures_persistent_cache_identity(
         "generation.system-json",
         "summarization.map",
         "summarization.reduce",
+        "summarization.reduce-coverage-repair",
     }
+    assert service.warning is not None
+
+    service.warning("Fallback used")
+
+    assert diagnostics == [
+        (
+            "Fallback used",
+            "summarization",
+            {"index_directory": tmp_path},
+        )
+    ]
 
 
 def test_parser_accepts_summarize_command() -> None:

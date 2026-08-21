@@ -33,6 +33,7 @@ from rag_learning_assistant.application.question_bank import (
 )
 from rag_learning_assistant.application.summarization import (
     SUMMARY_MAP_PROMPT,
+    SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT,
     SUMMARY_REDUCE_PROMPT,
 )
 from rag_learning_assistant.chunking import TextChunker
@@ -359,6 +360,7 @@ def build_document_summarization_service(
             prompt_references=(
                 SUMMARY_MAP_PROMPT.reference,
                 SUMMARY_REDUCE_PROMPT.reference,
+                SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT.reference,
                 SYSTEM_PROMPT.reference,
                 JSON_REPAIR_PROMPT.reference,
             ),
@@ -379,6 +381,11 @@ def build_document_summarization_service(
         cache=SqliteSummaryCache(database_path),
         identity_factory=build_identity,
         final_summaries=SqliteDocumentSummaryRepository(database_path),
+        warning=lambda message: write_diagnostic_log(
+            message,
+            source="summarization",
+            context={"index_directory": index_directory},
+        ),
     )
 
 

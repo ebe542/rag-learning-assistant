@@ -5,6 +5,7 @@ import pytest
 from rag_learning_assistant.application.library import DocumentNotFoundError
 from rag_learning_assistant.application.summarization import (
     SUMMARY_MAP_PROMPT,
+    SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT,
     SUMMARY_REDUCE_PROMPT,
     DocumentSummarizationService,
     DocumentSummary,
@@ -565,6 +566,12 @@ def test_summarization_prompts_have_explicit_versions() -> None:
     assert isinstance(SUMMARY_REDUCE_PROMPT, PromptTemplate)
     assert SUMMARY_REDUCE_PROMPT.name == "summarization.reduce"
     assert SUMMARY_REDUCE_PROMPT.version == 4
+    assert isinstance(
+        SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT,
+        PromptTemplate,
+    )
+    assert SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT.name == "summarization.reduce-coverage-repair"
+    assert SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT.version == 1
 
 
 def test_document_summary_records_used_prompts() -> None:
@@ -654,3 +661,135 @@ def test_reduction_preserves_all_partial_summary_citations() -> None:
     # Reduce only has to select supported evidence from every Map section.
     # The application retains the complete validated Map citation union.
     assert [citation.number for citation in summary.citations] == [1, 2, 3]
+
+
+def test_reduction_retries_once_when_section_evidence_is_missing() -> None:
+    document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    document = IndexedDocument(
+        id=document_id,
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=2,
+        chunk_count=2,
+    )
+    chunks = [
+        Chunk(
+            text="First section.",
+            source="course.pdf",
+            page_number=1,
+            index=0,
+            document_id=document_id,
+        ),
+        Chunk(
+            text="Second section.",
+            source="course.pdf",
+            page_number=2,
+            index=1,
+            document_id=document_id,
+        ),
+    ]
+    generator = SequentialSummaryGenerator(
+        [
+            GenerationResult(
+                text="First partial summary.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="Second partial summary.",
+                citation_numbers=(2,),
+            ),
+            GenerationResult(
+                text="Incomplete document summary.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="Repaired document-wide summary.",
+                citation_numbers=(1, 2),
+            ),
+        ]
+    )
+    service = DocumentSummarizationService(
+        documents=RecordingDocumentLookup(document),
+        chunks=RecordingChunkReader(chunks),
+        generator=generator,
+        max_batch_chars=15,
+    )
+
+    summary = service.summarize(document_id)
+
+    assert summary.text == ("Repaired document-wide summary.")
+    assert [citation.number for citation in summary.citations] == [1, 2]
+    assert len(generator.prompts) == 4
+
+    repair_prompt = generator.prompts[3]
+    assert SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT.text in repair_prompt
+    assert "Previous reduction text: Incomplete document summary." in repair_prompt
+    assert "Previous citation_numbers: 1" in repair_prompt
+    assert "required citation_numbers from each section" in (repair_prompt)
+    assert SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT.reference in summary.prompt_references
+
+
+def test_reduction_falls_back_after_one_incomplete_repair() -> None:
+    document_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    document = IndexedDocument(
+        id=document_id,
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=2,
+        chunk_count=2,
+    )
+    chunks = [
+        Chunk(
+            text="First section.",
+            source="course.pdf",
+            page_number=1,
+            index=0,
+            document_id=document_id,
+        ),
+        Chunk(
+            text="Second section.",
+            source="course.pdf",
+            page_number=2,
+            index=1,
+            document_id=document_id,
+        ),
+    ]
+    generator = SequentialSummaryGenerator(
+        [
+            GenerationResult(
+                text="First partial summary.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="Second partial summary.",
+                citation_numbers=(2,),
+            ),
+            GenerationResult(
+                text="Incomplete reduction.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="Still incomplete.",
+                citation_numbers=(1,),
+            ),
+        ]
+    )
+    warnings: list[str] = []
+    service = DocumentSummarizationService(
+        documents=RecordingDocumentLookup(document),
+        chunks=RecordingChunkReader(chunks),
+        generator=generator,
+        max_batch_chars=15,
+        warning=warnings.append,
+    )
+
+    summary = service.summarize(document_id)
+
+    assert summary.text == "First partial summary.\n\nSecond partial summary."
+    assert [citation.number for citation in summary.citations] == [1, 2]
+    assert len(generator.prompts) == 4
+    assert warnings == [
+        "Reduction coverage repair remained incomplete; "
+        "using ordered section summaries as a safe fallback "
+        "for document aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa (course.pdf)"
+    ]
