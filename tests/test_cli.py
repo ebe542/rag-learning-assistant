@@ -11,13 +11,26 @@ from rag_learning_assistant.application import (
 )
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.ingestion import Document, Page
-from rag_learning_assistant.interfaces.cli import commands, entrypoint
+from rag_learning_assistant.interfaces.cli import commands
 from rag_learning_assistant.interfaces.cli.parser import (
     build_parser,
     validate_index_directory,
 )
 from rag_learning_assistant.library import IndexedDocument
 from rag_learning_assistant.retrieval import SearchResult
+
+
+class FakePdfExtractor:
+    def __init__(self, document: Document) -> None:
+        self.document = document
+        self.paths: list[Path] = []
+
+    def extract(
+        self,
+        path: str | Path,
+    ) -> Document:
+        self.paths.append(Path(path))
+        return self.document
 
 
 class FakeDocumentSearchService:
@@ -73,7 +86,11 @@ def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) 
     pdf = tmp_path / "course.pdf"
     pdf.touch()
     document = Document("course.pdf", (Page(1, "Lesson", "course.pdf"),))
-    monkeypatch.setattr(entrypoint.PdfExtractor, "extract", lambda self, path: document)
+    monkeypatch.setattr(
+        commands,
+        "build_pdf_extractor",
+        lambda: FakePdfExtractor(document),
+    )
 
     assert cli.main(["extract", str(pdf)]) == 0
     assert json.loads(capsys.readouterr().out) == {
@@ -103,7 +120,11 @@ def test_cli_accepts_chunking_options(monkeypatch, tmp_path: Path, capsys) -> No
         "course.pdf",
         (Page(1, "one two three", "course.pdf"),),
     )
-    monkeypatch.setattr(entrypoint.PdfExtractor, "extract", lambda self, path: document)
+    monkeypatch.setattr(
+        commands,
+        "build_pdf_extractor",
+        lambda: FakePdfExtractor(document),
+    )
 
     result = cli.main(
         [
@@ -136,7 +157,11 @@ def test_cli_rejects_invalid_chunking_options(
         "course.pdf",
         (Page(1, "Lesson", "course.pdf"),),
     )
-    monkeypatch.setattr(entrypoint.PdfExtractor, "extract", lambda self, path: document)
+    monkeypatch.setattr(
+        commands,
+        "build_pdf_extractor",
+        lambda: FakePdfExtractor(document),
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(
@@ -266,15 +291,6 @@ def test_cli_index_registers_library_document(
         chunk_count=3,
     )
     library_service = FakeLibraryService(indexed_document)
-
-    def fail_if_entrypoint_extracts_pdf(self, path):
-        raise AssertionError("LibraryService must coordinate PDF extraction")
-
-    monkeypatch.setattr(
-        entrypoint.PdfExtractor,
-        "extract",
-        fail_if_entrypoint_extracts_pdf,
-    )
     monkeypatch.setattr(
         commands,
         "build_library_service",
@@ -753,13 +769,13 @@ def test_index_rejects_incomplete_index_directory(
     index_directory.mkdir()
     (index_directory / "vectors.faiss").touch()
 
-    def fail_if_pdf_is_opened(self, path):
-        raise AssertionError("PDF must not be opened for an invalid index directory")
+    def fail_if_library_is_built(*args, **kwargs):
+        raise AssertionError("Library service must not be built for an invalid index directory")
 
     monkeypatch.setattr(
-        entrypoint.PdfExtractor,
-        "extract",
-        fail_if_pdf_is_opened,
+        commands,
+        "build_library_service",
+        fail_if_library_is_built,
     )
 
     with pytest.raises(SystemExit) as exc_info:

@@ -15,7 +15,6 @@ from rag_learning_assistant.application import (
     StudyQuestionNotFoundError,
 )
 from rag_learning_assistant.chunking import TextChunker
-from rag_learning_assistant.ingestion import PdfExtractor
 from rag_learning_assistant.interfaces.cli import commands
 from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_MAX_CHARS,
@@ -339,5 +338,5 @@ def main(argv: Sequence[str] | None = None) -> int:
             index_directory=args.index_dir,
         )
 
-    document = PdfExtractor().extract(args.pdf)
+    document = commands.build_pdf_extractor().extract(args.pdf)
     return commands.run_extract(document, chunker)

@@ -78,3 +78,47 @@ def write_exception_log(
         logger.removeHandler(handler)
 
     return target
+
+
+def write_diagnostic_log(
+    message: str,
+    *,
+    source: str,
+    context: dict[str, object],
+    log_path: Path | None = None,
+) -> Path:
+    """Write one non-fatal diagnostic to the rotating user log."""
+
+    target = log_path if log_path is not None else default_log_path()
+    target.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    logger = logging.Logger(
+        "rag-learning-assistant.diagnostic",
+        level=logging.WARNING,
+    )
+    handler = RotatingFileHandler(
+        target,
+        maxBytes=_MAX_LOG_BYTES,
+        backupCount=_BACKUP_COUNT,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+
+    context_text = " ".join(f"{key}={value}" for key, value in sorted(context.items()))
+
+    try:
+        logger.warning(
+            "source=%s %s message=%s",
+            source,
+            context_text,
+            message,
+        )
+    finally:
+        handler.close()
+        logger.removeHandler(handler)
+
+    return target

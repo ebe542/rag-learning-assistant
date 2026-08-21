@@ -3,8 +3,10 @@ from pathlib import Path
 import pytest
 
 from rag_learning_assistant import cli
+from rag_learning_assistant.interfaces.cli import commands
 from rag_learning_assistant.interfaces.cli.error_reporting import (
     default_log_path,
+    write_diagnostic_log,
     write_exception_log,
 )
 
@@ -156,3 +158,78 @@ def test_console_entrypoint_preserves_parser_exit(
         cli.main(["unknown-command"])
 
     assert exc_info.value.code == 2
+
+
+def test_write_diagnostic_log_records_non_fatal_warning(
+    tmp_path: Path,
+) -> None:
+    log_path = tmp_path / "application.log"
+
+    result = write_diagnostic_log(
+        "cmsOpenProfileFromMem failed",
+        source="pymupdf",
+        context={
+            "document": "Dummy.pdf",
+        },
+        log_path=log_path,
+    )
+
+    content = log_path.read_text(encoding="utf-8")
+
+    assert result == log_path
+    assert "WARNING" in content
+    assert "source=pymupdf" in content
+    assert "document=Dummy.pdf" in content
+    assert "cmsOpenProfileFromMem failed" in content
+    assert "Traceback" not in content
+
+
+def test_pdf_extractor_builder_logs_mupdf_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+
+    def fake_write_diagnostic_log(
+        message: str,
+        *,
+        source: str,
+        context: dict[str, object],
+        log_path: Path | None = None,
+    ) -> Path:
+        calls.append(
+            (
+                message,
+                source,
+                context,
+            )
+        )
+        return Path("application.log")
+
+    monkeypatch.setattr(
+        commands,
+        "write_diagnostic_log",
+        fake_write_diagnostic_log,
+        raising=False,
+    )
+
+    extractor = commands.build_pdf_extractor()
+    handler = extractor.diagnostic_handler
+
+    assert handler is not None
+
+    document_path = Path("local-data/books/Dummy.pdf")
+
+    handler(
+        document_path,
+        "cmsOpenProfileFromMem failed",
+    )
+
+    assert calls == [
+        (
+            "cmsOpenProfileFromMem failed",
+            "pymupdf",
+            {
+                "document": str(document_path),
+            },
+        )
+    ]

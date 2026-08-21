@@ -52,6 +52,9 @@ from rag_learning_assistant.generation.huggingface import (
 )
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
+from rag_learning_assistant.interfaces.cli.error_reporting import (
+    write_diagnostic_log,
+)
 from rag_learning_assistant.interfaces.cli.parsing import (
     DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS,
     DEFAULT_MAX_CHARS,
@@ -124,6 +127,26 @@ def build_persistent_document_search(
     )
 
 
+def build_pdf_extractor() -> PdfExtractor:
+    """Build PDF extraction with central diagnostic logging."""
+
+    def log_diagnostic(
+        path: Path,
+        message: str,
+    ) -> None:
+        write_diagnostic_log(
+            message,
+            source="pymupdf",
+            context={
+                "document": str(path),
+            },
+        )
+
+    return PdfExtractor(
+        diagnostic_handler=log_diagnostic,
+    )
+
+
 def build_library_service(
     chunker: TextChunker,
     index_directory: Path,
@@ -135,7 +158,7 @@ def build_library_service(
 
     return LibraryService(
         repository=repository,
-        extractor=PdfExtractor(),
+        extractor=build_pdf_extractor(),
         indexer=build_persistent_document_search(
             chunker,
             index_directory,
