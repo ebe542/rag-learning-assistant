@@ -46,6 +46,8 @@ src/rag_learning_assistant/
 ├── chunking/
 ├── evaluation/
 ├── generation/
+│   ├── question_cache.py
+│   └── ...
 ├── ingestion/
 ├── interfaces/
 │   └── cli/
@@ -220,9 +222,27 @@ overview; its stored citations are the only permitted evidence. Model-returned
 citation numbers are resolved back to trusted `Citation` objects.
 
 A question-bank identity includes model revision, all available prompt versions,
-question count, token limit, and source-summary identity. Complete banks are
-persisted in SQLite. `QuestionBankCatalog` lists and retrieves them without
-loading generation dependencies.
+question count, batch size, token limit, and source-summary identity. Complete
+banks are persisted in SQLite. `QuestionBankCatalog` lists and retrieves them
+without loading generation dependencies.
+
+Question generation uses batches of five by default. `QuestionBankService`
+translates each independently parsed response into global question numbers and
+persists the validated result through `QuestionBatchCache` before starting the
+next model call. A compatible retry reuses cached batches by identity and batch
+number. Citation, prompt-provenance, numbering, and cross-batch uniqueness checks
+run before a new batch is saved. Earlier question texts are included in later
+prompts to discourage repetition. If normalized question text is nevertheless
+duplicated, the service makes exactly one semantic repair attempt for the
+complete current batch. Its versioned prompt explicitly forbids both accepted
+earlier texts and the rejected batch texts. The repaired result passes the same
+citation, provenance, count, and uniqueness checks; otherwise the batch fails
+without entering the resume cache.
+
+The optional progress callback distinguishes `generate` from `cached` batches.
+The CLI writes these messages to standard error and flushes before expensive
+model calls. `force=True` bypasses intermediate cache reads and writes, while a
+normal interruption leaves completed batches available for the next run.
 
 Question banks currently produce document-overview questions. Detailed
 section- or chunk-level learning material is a separate future capability.
@@ -370,8 +390,9 @@ local-data/
 
 `vectors.faiss` contains vector IDs and normalized embeddings.
 `metadata.sqlite3` contains document and chunk metadata, embedding identity,
-summary map cache entries, final summaries, question banks, current question
-progress, and immutable study attempts with optional automatic feedback. The
+summary map cache entries, final summaries, question-generation batch entries,
+question banks, current question progress, and immutable study attempts with
+optional automatic feedback. The
 nullable evaluation column migrates libraries created before automatic feedback.
 Persistent formats validate identities when reopened so incompatible
 models or generation configurations are not silently mixed.

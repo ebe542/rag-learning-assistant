@@ -62,16 +62,19 @@ package "generation" #FFF4D9 {
   class GeneratedQuestionDraft <<immutable model>>
   class QuestionGenerationResult <<immutable model>>
   class CachedSummaryBatch <<immutable model>>
+  class CachedQuestionBatch <<immutable model>>
   class PersistedDocumentSummary <<immutable model>>
 
   interface TextGenerator <<Protocol>>
   interface SummaryBatchCache <<Protocol>>
+  interface QuestionBatchCache <<Protocol>>
   interface DocumentSummaryRepository <<Protocol>>
   interface PipelineGenerationConfig <<Protocol>>
   interface ChatPipeline <<Protocol>>
 
   class HuggingFaceTextGenerator
   class SqliteSummaryCache
+  class SqliteQuestionBatchCache
   class SqliteDocumentSummaryRepository
 }
 
@@ -282,9 +285,12 @@ QuestionBankCatalog ..|> StudySessionQuestionBankLookup
 QuestionBankService o-- DocumentSummaryLookup
 QuestionBankService o-- QuestionGenerator
 QuestionBankService o-- QuestionBankRepository
+QuestionBankService o-- QuestionBatchCache
 QuestionBankService --> QuestionBankIdentity
 QuestionBankService --> QuestionBank
 QuestionBankService ..|> PackageQuestionPreparer
+CachedQuestionBatch *-- QuestionGenerationResult
+SqliteQuestionBatchCache ..|> QuestionBatchCache
 DocumentSummarizationService ..|> PackageSummaryPreparer
 LibraryService ..|> PackageDocumentImporter
 

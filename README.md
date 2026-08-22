@@ -41,6 +41,16 @@ persisted question bank, and records a checkpoint after every expensive phase.
 Repeating the command resumes an interrupted package or immediately reuses a
 package that is already ready.
 
+Question generation uses batches of five by default. Each validated batch is
+stored in the library database before the next model call starts. Progress is
+written as `Generating question batch N/M...`; a resumed run reports compatible
+entries as `Using cached question batch N/M...`. Pressing `Ctrl+C` therefore
+keeps completed batches, and repeating the same command continues with the
+first missing batch. If a new batch repeats an earlier question, the application
+makes one focused regeneration attempt with the accepted and rejected question
+texts marked as forbidden. A still-duplicate batch is rejected and never cached,
+so another run can safely resume from the preceding valid batch.
+
 List packages without loading embedding or generation models:
 
 ```bash
@@ -218,6 +228,11 @@ The selected summary supplies the document overview and the trusted source
 citations. Repeating the same configuration reuses the stored bank; add `--force`
 to regenerate and replace it. List all banks for a document or retrieve one full
 bank without loading the generation model:
+
+Question-bank identity includes the batch size as well as the requested count,
+model revision, prompt versions, token limit, and exact persisted summary.
+Changing any of these inputs selects a different cache identity. `--force`
+regenerates the complete bank without reading or writing intermediate batches.
 
 ```bash
 rag-learn question-list \
