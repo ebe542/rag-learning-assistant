@@ -47,9 +47,10 @@ written as `Generating question batch N/M...`; a resumed run reports compatible
 entries as `Using cached question batch N/M...`. Pressing `Ctrl+C` therefore
 keeps completed batches, and repeating the same command continues with the
 first missing batch. If a new batch repeats an earlier question, the application
-makes one focused regeneration attempt with the accepted and rejected question
-texts marked as forbidden. A still-duplicate batch is rejected and never cached,
-so another run can safely resume from the preceding valid batch.
+keeps its unique candidates and makes one focused generation attempt for only
+the missing replacements. Accepted and rejected question texts are marked as
+forbidden. A still-duplicate result is rejected and never cached, so another run
+can safely resume from the preceding valid batch.
 
 List packages without loading embedding or generation models:
 

@@ -233,10 +233,11 @@ next model call. A compatible retry reuses cached batches by identity and batch
 number. Citation, prompt-provenance, numbering, and cross-batch uniqueness checks
 run before a new batch is saved. Earlier question texts are included in later
 prompts to discourage repetition. If normalized question text is nevertheless
-duplicated, the service makes exactly one semantic repair attempt for the
-complete current batch. Its versioned prompt explicitly forbids both accepted
-earlier texts and the rejected batch texts. The repaired result passes the same
-citation, provenance, count, and uniqueness checks; otherwise the batch fails
+duplicated, the service retains the current batch's unique candidates and makes
+exactly one semantic repair attempt for only the missing replacements. Its
+versioned prompt explicitly forbids accepted earlier texts, accepted candidates,
+and rejected duplicates. The repaired result passes the same citation,
+provenance, count, and uniqueness checks; otherwise the complete batch fails
 without entering the resume cache.
 
 The optional progress callback distinguishes `generate` from `cached` batches.

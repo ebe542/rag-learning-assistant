@@ -32,11 +32,13 @@ rejected.
 Validate citation numbers, prompt provenance, numbering, and normalized
 question-text uniqueness before a new batch is cached. Supply earlier question
 texts to later prompts so the model can avoid repetition. If a generated batch
-still duplicates accepted or internally repeated text, make exactly one
-semantic repair attempt. The versioned repair prompt treats the accepted and
-rejected texts as forbidden questions. Validate the complete replacement batch
-through the same boundary and cache only a valid result. Only after every batch
-is present does the application assemble and persist the final question bank.
+still duplicates accepted or internally repeated text, retain its unique
+candidates and make exactly one semantic repair attempt for only the number of
+missing replacements. The versioned repair prompt treats accepted earlier
+questions, accepted candidates, and rejected duplicates as forbidden. Validate
+the replacements through the same boundary and cache only the complete valid
+batch. Only after every batch is present does the application assemble and
+persist the final question bank.
 
 Report generated and reused batches through an application callback. The CLI
 writes progress to standard error, preserving machine-readable JSON on standard
@@ -51,7 +53,8 @@ intermediate cache reads and writes and replaces only the completed bank.
   the whole question bank.
 - Smaller JSON responses reduce truncation risk but require more model calls.
 - Previously generated questions increase later prompt size slightly.
-- A duplicate batch costs at most one additional model call before it fails.
+- A duplicate batch costs at most one additional, smaller model call before it
+  fails.
 - Invalid citations, prompt provenance, numbering, or duplicate text cannot
   poison a new resume entry.
 - Obsolete batch identities may remain in SQLite until an explicit cache-cleanup
