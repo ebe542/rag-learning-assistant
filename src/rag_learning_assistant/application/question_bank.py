@@ -41,14 +41,14 @@ QUESTION_BANK_PROMPT = PromptTemplate(
 
 QUESTION_BANK_DUPLICATE_REPAIR_PROMPT = PromptTemplate(
     name="question-bank.duplicate-repair",
-    version=1,
+    version=2,
     text=(
-        "Regenerate the complete current question batch. "
+        "Generate only the requested number of replacement questions. "
         "Every new question must have a unique meaning and wording. "
         "Do not repeat or paraphrase any forbidden question supplied "
         "by the application. "
         "Use only the supplied summary and contexts. "
-        "Preserve the requested question count and return valid JSON. "
+        "Return the requested question count as valid JSON. "
         "Do not invent citation numbers or source facts."
     ),
 )
@@ -308,22 +308,17 @@ class QuestionBankService:
                         f"expected {questions_in_batch}"
                     )
 
-                # Each model response starts locally at one. Cache only the
-                # translated bank-wide numbering used by final question banks.
-                generated = QuestionGenerationResult(
-                    questions=tuple(
-                        GeneratedQuestionDraft(
-                            number=first_question_number + offset,
-                            text=draft.text,
-                            expected_answer=draft.expected_answer,
-                            citation_numbers=draft.citation_numbers,
-                        )
-                        for offset, draft in enumerate(local_result.questions)
-                    ),
-                    prompt_references=local_result.prompt_references,
-                )
+                if len(set(local_result.prompt_references)) != len(
+                    local_result.prompt_references
+                ) or any(
+                    reference not in identity.prompt_references
+                    for reference in local_result.prompt_references
+                ):
+                    raise RuntimeError(
+                        "Generator prompt references do not match question bank identity"
+                    )
 
-                for draft in generated.questions:
+                for draft in local_result.questions:
                     unavailable_number = next(
                         (
                             number
@@ -337,65 +332,67 @@ class QuestionBankService:
                             f"Citation number {unavailable_number} is not available in the summary"
                         )
 
-                if len(set(generated.prompt_references)) != len(generated.prompt_references) or any(
-                    reference not in identity.prompt_references
-                    for reference in generated.prompt_references
-                ):
-                    raise RuntimeError(
-                        "Generator prompt references do not match question bank identity"
-                    )
+                # Keep every valid unique candidate. A duplicate should cost only
+                # the missing replacement questions, not another complete batch.
+                seen_question_texts = {
+                    question.text.strip().casefold() for question in generated_questions
+                }
+                accepted_drafts: list[GeneratedQuestionDraft] = []
+                rejected_drafts: list[GeneratedQuestionDraft] = []
 
-                combined_question_texts = [
-                    question.text.strip().casefold()
-                    for question in (
-                        *generated_questions,
-                        *generated.questions,
-                    )
-                ]
-                if len(set(combined_question_texts)) != len(combined_question_texts):
-                    # Give the model one focused repair attempt before rejecting the
-                    # batch. The invalid result is never written to the resume cache.
+                for draft in local_result.questions:
+                    normalized_text = draft.text.strip().casefold()
+                    if normalized_text in seen_question_texts:
+                        rejected_drafts.append(draft)
+                        continue
+
+                    seen_question_texts.add(normalized_text)
+                    accepted_drafts.append(draft)
+
+                batch_prompt_references = list(local_result.prompt_references)
+
+                if rejected_drafts:
                     application_prompt_references.append(
                         QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.reference,
                     )
+                    missing_question_count = questions_in_batch - len(accepted_drafts)
                     repair_prompt = self._build_duplicate_repair_prompt(
                         summary,
-                        questions_in_batch,
+                        missing_question_count,
                         previous_question_texts=tuple(
-                            question.text for question in generated_questions
+                            question.text
+                            for question in (
+                                *generated_questions,
+                                *accepted_drafts,
+                            )
                         ),
                         rejected_question_texts=tuple(
-                            question.text for question in generated.questions
+                            question.text for question in rejected_drafts
                         ),
                     )
-                    repaired_local_result = self.generator.generate_questions(
+                    repaired_result = self.generator.generate_questions(
                         repair_prompt,
                         max_new_tokens=self.max_new_tokens,
                     )
 
-                    if len(repaired_local_result.questions) != questions_in_batch:
+                    if len(repaired_result.questions) != missing_question_count:
                         raise ValueError(
                             f"Generator returned "
-                            f"{len(repaired_local_result.questions)} questions; "
-                            f"expected {questions_in_batch}"
+                            f"{len(repaired_result.questions)} questions; "
+                            f"expected {missing_question_count}"
                         )
 
-                    generated = QuestionGenerationResult(
-                        questions=tuple(
-                            GeneratedQuestionDraft(
-                                number=first_question_number + offset,
-                                text=draft.text,
-                                expected_answer=draft.expected_answer,
-                                citation_numbers=draft.citation_numbers,
-                            )
-                            for offset, draft in enumerate(
-                                repaired_local_result.questions,
-                            )
-                        ),
-                        prompt_references=repaired_local_result.prompt_references,
-                    )
+                    if len(set(repaired_result.prompt_references)) != len(
+                        repaired_result.prompt_references
+                    ) or any(
+                        reference not in identity.prompt_references
+                        for reference in repaired_result.prompt_references
+                    ):
+                        raise RuntimeError(
+                            "Generator prompt references do not match question bank identity"
+                        )
 
-                    for draft in generated.questions:
+                    for draft in repaired_result.questions:
                         unavailable_number = next(
                             (
                                 number
@@ -410,25 +407,29 @@ class QuestionBankService:
                                 "is not available in the summary"
                             )
 
-                    if len(set(generated.prompt_references)) != len(
-                        generated.prompt_references
-                    ) or any(
-                        reference not in identity.prompt_references
-                        for reference in generated.prompt_references
-                    ):
-                        raise RuntimeError(
-                            "Generator prompt references do not match question bank identity"
-                        )
+                        normalized_text = draft.text.strip().casefold()
+                        if normalized_text in seen_question_texts:
+                            raise ValueError("Question bank question texts must be unique")
 
-                    repaired_question_texts = [
-                        question.text.strip().casefold()
-                        for question in (
-                            *generated_questions,
-                            *generated.questions,
+                        seen_question_texts.add(normalized_text)
+                        accepted_drafts.append(draft)
+
+                    batch_prompt_references.extend(repaired_result.prompt_references)
+
+                # Model responses use local numbering. Assign stable global numbers
+                # only after the complete unique batch has been assembled.
+                generated = QuestionGenerationResult(
+                    questions=tuple(
+                        GeneratedQuestionDraft(
+                            number=first_question_number + offset,
+                            text=draft.text,
+                            expected_answer=draft.expected_answer,
+                            citation_numbers=draft.citation_numbers,
                         )
-                    ]
-                    if len(set(repaired_question_texts)) != len(repaired_question_texts):
-                        raise ValueError("Question bank question texts must be unique")
+                        for offset, draft in enumerate(accepted_drafts)
+                    ),
+                    prompt_references=tuple(dict.fromkeys(batch_prompt_references)),
+                )
 
                 if not force and self.cache is not None:
                     self.cache.save_batch(

@@ -144,7 +144,7 @@ def test_question_bank_prompt_has_explicit_version() -> None:
 
 def test_question_bank_duplicate_repair_prompt_has_explicit_version() -> None:
     assert QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.name == "question-bank.duplicate-repair"
-    assert QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.version == 1
+    assert QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.version == 2
 
 
 def test_generate_returns_matching_persisted_question_bank() -> None:
@@ -1300,3 +1300,95 @@ def test_generate_retries_duplicate_question_batch_once() -> None:
     assert "WHAT IS AN EMBEDDING?" in repair_prompt
     assert [batch.batch_number for batch in cache.saved] == [1, 2]
     assert QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.reference in bank.prompt_references
+
+
+def test_generate_refills_only_missing_questions_from_duplicate_batch() -> None:
+    summary = build_summary()
+    system_prompt = PromptReference(
+        name="question-generation.system-json",
+        version=1,
+        fingerprint="f" * 64,
+    )
+    identity = QuestionBankIdentity(
+        model_name="Qwen/Qwen3-1.7B",
+        model_revision="d" * 40,
+        prompt_references=(
+            QUESTION_BANK_PROMPT.reference,
+            QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.reference,
+            system_prompt,
+        ),
+        question_count=3,
+        batch_size=3,
+        max_new_tokens=256,
+        summary_identity_fingerprint=SUMMARY_IDENTITY,
+    )
+    generator = SequentialQuestionGenerator(
+        [
+            QuestionGenerationResult(
+                questions=(
+                    GeneratedQuestionDraft(
+                        number=1,
+                        text="What is an embedding?",
+                        expected_answer="A numeric representation.",
+                        citation_numbers=(1,),
+                    ),
+                    GeneratedQuestionDraft(
+                        number=2,
+                        text="  WHAT IS AN EMBEDDING?  ",
+                        expected_answer="A vector representation.",
+                        citation_numbers=(1,),
+                    ),
+                    GeneratedQuestionDraft(
+                        number=3,
+                        text="How are embeddings compared?",
+                        expected_answer="With a similarity measure.",
+                        citation_numbers=(1,),
+                    ),
+                ),
+                prompt_references=(system_prompt,),
+            ),
+            QuestionGenerationResult(
+                questions=(
+                    GeneratedQuestionDraft(
+                        number=1,
+                        text="Why are embeddings useful?",
+                        expected_answer="They support semantic comparison.",
+                        citation_numbers=(1,),
+                    ),
+                ),
+                prompt_references=(system_prompt,),
+            ),
+        ]
+    )
+    cache = RecordingQuestionBatchCache()
+    service = QuestionBankService(
+        summaries=StaticSummaryLookup(summary),
+        generator=generator,
+        banks=RecordingQuestionBankRepository(),
+        identity_factory=lambda persisted_summary, question_count: identity,
+        max_new_tokens=256,
+        batch_size=3,
+        cache=cache,
+    )
+
+    bank = service.generate(
+        DOCUMENT_ID,
+        SUMMARY_IDENTITY,
+        question_count=3,
+    )
+
+    assert [question.text for question in bank.questions] == [
+        "What is an embedding?",
+        "How are embeddings compared?",
+        "Why are embeddings useful?",
+    ]
+    assert len(generator.calls) == 2
+
+    repair_prompt = generator.calls[1][0]
+    assert "Create exactly 1 study questions." in repair_prompt
+    assert "What is an embedding?" in repair_prompt
+    assert "WHAT IS AN EMBEDDING?" in repair_prompt
+    assert "How are embeddings compared?" in repair_prompt
+
+    assert len(cache.saved) == 1
+    assert [question.number for question in cache.saved[0].result.questions] == [1, 2, 3]
