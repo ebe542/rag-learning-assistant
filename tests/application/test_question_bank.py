@@ -430,7 +430,15 @@ def test_generate_splits_questions_into_configured_batches() -> None:
         ]
     )
     banks = RecordingQuestionBankRepository()
-    progress_calls: list[tuple[str, int, int]] = []
+    progress_calls: list[tuple[str, int, int, float | None]] = []
+    clock_values = iter(
+        (
+            100.0,
+            112.5,
+            200.0,
+            203.25,
+        )
+    )
     service = QuestionBankService(
         summaries=StaticSummaryLookup(summary),
         generator=generator,
@@ -438,7 +446,10 @@ def test_generate_splits_questions_into_configured_batches() -> None:
         identity_factory=lambda persisted_summary, question_count: identity,
         max_new_tokens=256,
         batch_size=5,
-        progress=lambda phase, current, total: progress_calls.append((phase, current, total)),
+        progress=lambda phase, current, total, elapsed: progress_calls.append(
+            (phase, current, total, elapsed)
+        ),
+        clock=lambda: next(clock_values),
     )
 
     bank = service.generate(
@@ -457,8 +468,10 @@ def test_generate_splits_questions_into_configured_batches() -> None:
     ]
     assert len(generator.calls) == 2
     assert progress_calls == [
-        ("generate", 1, 2),
-        ("generate", 2, 2),
+        ("generate", 1, 2, None),
+        ("completed", 1, 2, 12.5),
+        ("generate", 2, 2, None),
+        ("completed", 2, 2, 3.25),
     ]
     assert "Create exactly 5 study questions." in generator.calls[0][0]
     assert "Create exactly 1 study questions." in generator.calls[1][0]
@@ -1030,7 +1043,8 @@ def test_generate_resumes_after_cached_question_batch() -> None:
         ]
     )
     banks = RecordingQuestionBankRepository()
-    progress_calls: list[tuple[str, int, int]] = []
+    progress_calls: list[tuple[str, int, int, float | None]] = []
+    clock_values = iter((50.0, 54.5))
     service = QuestionBankService(
         summaries=StaticSummaryLookup(summary),
         generator=generator,
@@ -1039,7 +1053,10 @@ def test_generate_resumes_after_cached_question_batch() -> None:
         max_new_tokens=256,
         batch_size=5,
         cache=cache,
-        progress=lambda phase, current, total: progress_calls.append((phase, current, total)),
+        progress=lambda phase, current, total, elapsed: progress_calls.append(
+            (phase, current, total, elapsed)
+        ),
+        clock=lambda: next(clock_values),
     )
 
     bank = service.generate(
@@ -1063,8 +1080,9 @@ def test_generate_resumes_after_cached_question_batch() -> None:
         (identity.fingerprint, 2),
     ]
     assert progress_calls == [
-        ("cached", 1, 2),
-        ("generate", 2, 2),
+        ("cached", 1, 2, None),
+        ("generate", 2, 2, None),
+        ("completed", 2, 2, 4.5),
     ]
     assert len(cache.saved) == 1
     assert cache.saved[0].batch_number == 2

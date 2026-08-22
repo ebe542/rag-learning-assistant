@@ -281,16 +281,21 @@ def write_question_generation_progress(
     phase: str,
     current: int,
     total: int,
+    elapsed_seconds: float | None,
 ) -> None:
     """Write immediate progress for resumable question generation."""
 
     if phase == "cached":
         message = f"Using cached question batch {current}/{total}..."
+    elif phase == "completed":
+        if elapsed_seconds is None:
+            raise ValueError("Completed question batch requires elapsed time")
+        message = f"Generated question batch {current}/{total} in {elapsed_seconds:.1f} seconds."
     else:
         message = f"Generating question batch {current}/{total}..."
 
-    # A model call may take several minutes, so make the current batch
-    # visible immediately instead of waiting for the output buffer.
+    # A model call may take several minutes, so make progress visible
+    # immediately instead of waiting for the output buffer.
     print(
         message,
         file=sys.stderr,

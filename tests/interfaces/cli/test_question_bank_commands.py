@@ -710,20 +710,28 @@ def test_library_builder_registers_all_derived_data_cleaners(
 
 
 @pytest.mark.parametrize(
-    ("phase", "expected"),
+    ("phase", "elapsed_seconds", "expected"),
     [
         (
             "generate",
+            None,
             "Generating question batch 2/4...",
         ),
         (
             "cached",
+            None,
             "Using cached question batch 2/4...",
+        ),
+        (
+            "completed",
+            83.74,
+            "Generated question batch 2/4 in 83.7 seconds.",
         ),
     ],
 )
 def test_question_generation_progress_is_human_readable(
     phase: str,
+    elapsed_seconds: float | None,
     expected: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -731,6 +739,7 @@ def test_question_generation_progress_is_human_readable(
         phase,
         2,
         4,
+        elapsed_seconds,
     )
 
     captured = capsys.readouterr()

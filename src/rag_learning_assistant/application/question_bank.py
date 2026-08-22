@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from time import perf_counter
 from typing import Protocol
 from uuid import UUID
 
@@ -170,7 +171,8 @@ class QuestionBankService:
         max_new_tokens: int,
         batch_size: int = 1,
         cache: QuestionBatchCache | None = None,
-        progress: Callable[[str, int, int], None] | None = None,
+        progress: (Callable[[str, int, int, float | None], None] | None) = None,
+        clock: Callable[[], float] = perf_counter,
     ) -> None:
         if max_new_tokens < 1:
             raise ValueError("max_new_tokens must be positive")
@@ -184,6 +186,7 @@ class QuestionBankService:
         self.batch_size = batch_size
         self.cache = cache
         self.progress = progress
+        self.clock = clock
 
     def prepare_questions(
         self,
@@ -271,6 +274,7 @@ class QuestionBankService:
                         "cached",
                         batch_number,
                         total_batches,
+                        None,
                     )
 
                 if (
@@ -281,12 +285,15 @@ class QuestionBankService:
 
                 generated = cached_batch.result
             else:
+                batch_started_at = self.clock()
+
                 if self.progress is not None:
                     # Report immediately before the potentially long model call.
                     self.progress(
                         "generate",
                         batch_number,
                         total_batches,
+                        None,
                     )
 
                 prompt = self._build_prompt(
@@ -440,6 +447,13 @@ class QuestionBankService:
                             last_question_number=last_question_number,
                             result=generated,
                         )
+                    )
+                if self.progress is not None:
+                    self.progress(
+                        "completed",
+                        batch_number,
+                        total_batches,
+                        self.clock() - batch_started_at,
                     )
 
             generated_questions.extend(generated.questions)
