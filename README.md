@@ -50,7 +50,10 @@ first missing batch. If a new batch repeats an earlier question, the application
 keeps its unique candidates and makes one focused generation attempt for only
 the missing replacements. Accepted and rejected question texts are marked as
 forbidden. A still-duplicate result is rejected and never cached, so another run
-can safely resume from the preceding valid batch.
+can safely resume from the preceding valid batch. After validation and
+persistence, each newly generated batch reports its total elapsed time as
+`Generated question batch N/M in S.S seconds.`; this duration includes a
+possible replacement call.
 
 List packages without loading embedding or generation models:
 

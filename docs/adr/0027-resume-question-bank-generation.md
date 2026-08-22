@@ -44,10 +44,15 @@ Report generated and reused batches through an application callback. The CLI
 writes progress to standard error, preserving machine-readable JSON on standard
 output. Normal runs resume from compatible cached batches. `force=True` ignores
 intermediate cache reads and writes and replaces only the completed bank.
+Measure each newly generated batch with a monotonic clock and report its elapsed
+time only after validation and optional persistence. The measurement includes a
+duplicate-replacement call. Reused batches have no generated duration.
 
 ## Consequences
 
 - Long question-generation runs expose real batch progress.
+- Completed new batches expose comparable elapsed times without contaminating
+  machine-readable output.
 - Interrupting between model calls preserves every completed valid batch.
 - A repeated command starts with the first missing batch instead of restarting
   the whole question bank.

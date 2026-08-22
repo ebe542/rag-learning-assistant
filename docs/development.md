@@ -242,8 +242,12 @@ without entering the resume cache.
 
 The optional progress callback distinguishes `generate` from `cached` batches.
 The CLI writes these messages to standard error and flushes before expensive
-model calls. `force=True` bypasses intermediate cache reads and writes, while a
-normal interruption leaves completed batches available for the next run.
+model calls. A `completed` event reports monotonic elapsed time only after a new
+batch has passed validation and optional persistence. Its duration covers the
+complete batch operation, including a duplicate-replacement call when required.
+Cached batches do not report an artificial duration. `force=True` bypasses
+intermediate cache reads and writes, while a normal interruption leaves
+completed batches available for the next run.
 
 Question banks currently produce document-overview questions. Detailed
 section- or chunk-level learning material is a separate future capability.
