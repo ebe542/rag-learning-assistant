@@ -29,6 +29,7 @@ from rag_learning_assistant.application import (
     StudySessionService,
 )
 from rag_learning_assistant.application.question_bank import (
+    QUESTION_BANK_DUPLICATE_REPAIR_PROMPT,
     QUESTION_BANK_PROMPT,
 )
 from rag_learning_assistant.application.summarization import (
@@ -317,6 +318,7 @@ def build_question_bank_service(
             model_revision=generator.model_revision,
             prompt_references=(
                 QUESTION_BANK_PROMPT.reference,
+                QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.reference,
                 QUESTION_SYSTEM_PROMPT.reference,
                 QUESTION_JSON_REPAIR_PROMPT.reference,
             ),

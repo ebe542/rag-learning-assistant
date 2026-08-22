@@ -9,6 +9,7 @@ from rag_learning_assistant.application import (
     QuestionBankService,
 )
 from rag_learning_assistant.application.question_bank import (
+    QUESTION_BANK_DUPLICATE_REPAIR_PROMPT,
     QUESTION_BANK_PROMPT,
 )
 from rag_learning_assistant.chunking import TextChunker
@@ -109,6 +110,7 @@ def test_question_bank_builder_versions_all_generation_inputs(
 
     assert identity.prompt_references == (
         QUESTION_BANK_PROMPT.reference,
+        QUESTION_BANK_DUPLICATE_REPAIR_PROMPT.reference,
         QUESTION_SYSTEM_PROMPT.reference,
         QUESTION_JSON_REPAIR_PROMPT.reference,
     )
