@@ -19,6 +19,11 @@ def test_write_exception_log_preserves_technical_details(
     try:
         raise ValueError("Reduction must be supported by every section summary")
     except ValueError as error:
+        error.add_note(
+            "phase=question-json-repair\n"
+            "initial_model_response=not JSON\n"
+            "repaired_model_response=still not JSON"
+        )
         result = write_exception_log(
             error,
             command="prepare",
@@ -36,6 +41,9 @@ def test_write_exception_log_preserves_technical_details(
     assert "ValueError" in content
     assert "Reduction must be supported by every section summary" in content
     assert "Traceback (most recent call last)" in content
+    assert "phase=question-json-repair" in content
+    assert "initial_model_response=not JSON" in content
+    assert "repaired_model_response=still not JSON" in content
 
 
 def test_default_log_path_honors_environment_override(

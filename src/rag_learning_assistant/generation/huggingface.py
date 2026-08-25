@@ -124,6 +124,7 @@ Do not wrap the JSON object in Markdown code fences.
 """.strip(),
 )
 
+_MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS = 4_000
 
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
@@ -157,6 +158,21 @@ class ChatPipeline(Protocol):
         """Generate a chat continuation."""
 
         ...
+
+
+def _add_model_failure_diagnostic(
+    error: ValueError,
+    *,
+    phase: str,
+    responses: tuple[tuple[str, str], ...],
+) -> None:
+    """Attach bounded model output to a terminal parsing error."""
+
+    diagnostic_lines = [f"phase={phase}"]
+    diagnostic_lines.extend(
+        f"{name}={response[:_MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS]}" for name, response in responses
+    )
+    error.add_note("\n".join(diagnostic_lines))
 
 
 class HuggingFaceTextGenerator:
@@ -294,9 +310,26 @@ class HuggingFaceTextGenerator:
                 max_new_tokens=effective_max_new_tokens,
             )
 
-        questions = parse_question_generation_response(
-            repaired_response,
-        )
+        try:
+            questions = parse_question_generation_response(
+                repaired_response,
+            )
+        except ValueError as error:
+            _add_model_failure_diagnostic(
+                error,
+                phase="question-json-repair",
+                responses=(
+                    (
+                        "initial_model_response",
+                        raw_response,
+                    ),
+                    (
+                        "repaired_model_response",
+                        repaired_response,
+                    ),
+                ),
+            )
+            raise
         return QuestionGenerationResult(
             questions=questions,
             prompt_references=(

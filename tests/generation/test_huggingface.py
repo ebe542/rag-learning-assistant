@@ -476,11 +476,21 @@ def test_generate_questions_stops_after_one_failed_repair() -> None:
     with pytest.raises(
         ValueError,
         match="Question response must be valid JSON",
-    ):
+    ) as exc_info:
         generator.generate_questions(
             "Summary and grounded contexts",
         )
 
+    notes = getattr(
+        exc_info.value,
+        "__notes__",
+        [],
+    )
+    diagnostic = "\n".join(notes)
+
+    assert "phase=question-json-repair" in diagnostic
+    assert "initial_model_response=not JSON" in diagnostic
+    assert "repaired_model_response=still not JSON" in diagnostic
     assert len(pipeline.calls) == 2
 
 

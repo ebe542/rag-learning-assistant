@@ -727,6 +727,12 @@ def test_library_builder_registers_all_derived_data_cleaners(
             83.74,
             "Generated question batch 2/4 in 83.7 seconds.",
         ),
+        (
+            "shortfall",
+            None,
+            "Generated 2 unique questions; requested 4. "
+            "The available evidence did not support another distinct question.",
+        ),
     ],
 )
 def test_question_generation_progress_is_human_readable(

@@ -39,7 +39,7 @@ def add_question_commands(commands: SubcommandCollection) -> None:
         type=positive_int,
         default=DEFAULT_QUESTION_MAX_NEW_TOKENS,
         help=(
-            "Maximum tokens generated for the complete question bank "
+            "Maximum tokens generated for each question batch "
             f"(default: {DEFAULT_QUESTION_MAX_NEW_TOKENS})"
         ),
     )

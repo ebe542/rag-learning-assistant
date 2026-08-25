@@ -287,6 +287,11 @@ def write_question_generation_progress(
 
     if phase == "cached":
         message = f"Using cached question batch {current}/{total}..."
+    elif phase == "shortfall":
+        message = (
+            f"Generated {current} unique questions; requested {total}. "
+            "The available evidence did not support another distinct question."
+        )
     elif phase == "completed":
         if elapsed_seconds is None:
             raise ValueError("Completed question batch requires elapsed time")

@@ -217,40 +217,71 @@ grounded result without loading the model.
 ### Grounded question banks
 
 `QuestionBankService` generates a requested number of free-response questions
-from one explicitly selected persisted summary. The summary provides the
-overview; its stored citations are the only permitted evidence. Model-returned
-citation numbers are resolved back to trusted `Citation` objects.
+from one explicitly selected persisted summary. The summary identity selects
+the exact source state, while its stored citations are the only permitted
+evidence. The generated summary text is deliberately omitted from question
+prompts because a small deterministic model otherwise repeats global topics
+across batches. Model-returned citation numbers are resolved back to trusted
+`Citation` objects.
 
 A question-bank identity includes model revision, all available prompt versions,
 question count, batch size, token limit, and source-summary identity. Complete
 banks are persisted in SQLite. `QuestionBankCatalog` lists and retrieves them
 without loading generation dependencies.
 
-Question generation uses batches of five by default. `QuestionBankService`
+Question generation uses batches of three by default. `QuestionBankService`
 translates each independently parsed response into global question numbers and
 persists the validated result through `QuestionBatchCache` before starting the
 next model call. A compatible retry reuses cached batches by identity and batch
 number. Citation, prompt-provenance, numbering, and cross-batch uniqueness checks
 run before a new batch is saved. Earlier question texts are included in later
 prompts to discourage repetition. If normalized question text is nevertheless
-duplicated, the service retains the current batch's unique candidates and makes
-exactly one semantic repair attempt for only the missing replacements. Its
-versioned prompt explicitly forbids accepted earlier texts, accepted candidates,
-and rejected duplicates. The repaired result passes the same citation,
-provenance, count, and uniqueness checks; otherwise the complete batch fails
-without entering the resume cache.
+duplicated, the service retains the current batch's unique candidates and
+generates every missing replacement in a separate semantic repair call. Each
+call receives a distinct, balanced subset of the batch evidence. Its versioned
+prompt explicitly forbids accepted earlier texts, accepted candidates, rejected
+duplicates, and replacements already accepted in the same repair sequence. Each
+replacement has at most three attempts. An exact duplicate from a failed attempt
+is added to the following prompt's forbidden list. Because generation is
+deterministic, the attempts also use different focus instructions: concrete
+detail, process or cause, then limitation or comparison. Each repaired result
+passes the same citation, provenance, and uniqueness checks. The requested count
+is a target upper bound. If bounded repair cannot produce another distinct
+question, the incomplete batch is not cached, the smaller valid final bank is
+persisted, and a `shortfall` progress event reports actual and requested counts.
+
+The default of three balances resumability against the local model's output
+budget. Expected answers are limited by prompt to two sentences so one batch can
+normally finish within 512 new tokens. Larger batches had repeatedly truncated
+the fifth question in real German-language document runs.
+
+The service deterministically partitions the persisted summary's trusted
+citations into balanced, contiguous evidence ranges for the configured batch
+plan. Each prompt contains only its batch's assigned contexts. Both initial and
+replacement questions may cite only that range. When a request has more batches
+than citations, citations are reused cyclically so no batch is generated without
+evidence. The prompt version records this changed generation strategy and
+therefore separates its cache identity from older all-context or full-summary
+batches.
 
 The optional progress callback distinguishes `generate` from `cached` batches.
 The CLI writes these messages to standard error and flushes before expensive
 model calls. A `completed` event reports monotonic elapsed time only after a new
 batch has passed validation and optional persistence. Its duration covers the
-complete batch operation, including a duplicate-replacement call when required.
+complete batch operation, including duplicate-replacement calls when required.
 Cached batches do not report an artificial duration. `force=True` bypasses
 intermediate cache reads and writes, while a normal interruption leaves
 completed batches available for the next run.
 
-Question banks currently produce document-overview questions. Detailed
-section- or chunk-level learning material is a separate future capability.
+Terminal JSON-repair failures attach bounded diagnostics to the raised
+exception and record up to 4,000 characters from each model response. The
+central exception logger preserves these notes while the
+console remains concise. Because the rotating per-user log may therefore contain
+source-derived text, it must be treated as private diagnostic data and must not
+be committed or shared without review.
+
+Question banks distribute source evidence to cover multiple document sections.
+Dedicated section-level learning units remain a separate future capability.
 
 ### Spaced review
 

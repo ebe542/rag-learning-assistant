@@ -41,19 +41,35 @@ persisted question bank, and records a checkpoint after every expensive phase.
 Repeating the command resumes an interrupted package or immediately reuses a
 package that is already ready.
 
-Question generation uses batches of five by default. Each validated batch is
+Question generation uses batches of three by default. Each validated batch is
 stored in the library database before the next model call starts. Progress is
 written as `Generating question batch N/M...`; a resumed run reports compatible
 entries as `Using cached question batch N/M...`. Pressing `Ctrl+C` therefore
 keeps completed batches, and repeating the same command continues with the
 first missing batch. If a new batch repeats an earlier question, the application
-keeps its unique candidates and makes one focused generation attempt for only
-the missing replacements. Accepted and rejected question texts are marked as
-forbidden. A still-duplicate result is rejected and never cached, so another run
-can safely resume from the preceding valid batch. After validation and
+keeps its unique candidates and generates each missing replacement in a separate
+focused call with its own evidence subset. Accepted and rejected question texts
+are marked as forbidden. Each replacement has at most three attempts, and every
+failed text is added to the next attempt's forbidden list. Successive attempts
+also change their required focus from a concrete example to a process and then
+to a limitation or comparison. The requested question count is a target upper
+bound: if no distinct replacement can be grounded after this limit, the
+application persists the smaller valid bank and reports the shortfall instead
+of discarding all generated learning material. After validation and
 persistence, each newly generated batch reports its total elapsed time as
 `Generated question batch N/M in S.S seconds.`; this duration includes a
-possible replacement call.
+possible replacement calls.
+
+Three questions keep the default 512-token response budget reliable for concise
+expected answers on the local model. Smaller batches require more calls but
+reduce truncated JSON and narrow each call to fewer source contexts.
+
+The persisted summary selects the trusted citations and remains part of the
+question-bank identity, but its complete generated text is not sent to question
+batches. The citations are distributed into stable, balanced evidence ranges,
+and a question may cite only contexts assigned to its batch. This encourages
+coverage of different document sections and prevents later batches from
+repeatedly using the same easiest passages.
 
 List packages without loading embedding or generation models:
 
@@ -228,10 +244,12 @@ rag-learn question-generate \
   --count 5
 ```
 
-The selected summary supplies the document overview and the trusted source
-citations. Repeating the same configuration reuses the stored bank; add `--force`
-to regenerate and replace it. List all banks for a document or retrieve one full
-bank without loading the generation model:
+The selected summary supplies the trusted source citations and exact generation
+identity. Its generated overview text is intentionally omitted from question
+prompts so batches remain focused on their assigned evidence. Repeating the same
+configuration reuses the stored bank; add `--force` to regenerate and replace
+it. List all banks for a document or retrieve one full bank without loading the
+generation model:
 
 Question-bank identity includes the batch size as well as the requested count,
 model revision, prompt versions, token limit, and exact persisted summary.
