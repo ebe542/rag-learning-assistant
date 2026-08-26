@@ -76,6 +76,10 @@ List packages without loading embedding or generation models:
 rag-learn package-list
 ```
 
+The product commands print concise, human-readable output by default. Add
+`--json` to `package-list`, `package-show`, or `progress` when consuming their
+stable machine-readable output from a script.
+
 Show one package by its user-facing name:
 
 ```bash

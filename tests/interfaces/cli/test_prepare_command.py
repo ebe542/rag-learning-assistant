@@ -359,7 +359,7 @@ def test_run_package_list_outputs_available_packages(
         raising=False,
     )
 
-    result = commands.run_package_list(library_directory)
+    result = commands.run_package_list(library_directory, json_output=True)
 
     assert result == 0
     assert json.loads(capsys.readouterr().out) == {
@@ -396,7 +396,10 @@ def test_entrypoint_dispatches_package_list(
 
     def fake_run_package_list(
         directory: Path,
+        *,
+        json_output: bool,
     ) -> int:
+        assert json_output is False
         calls.append(directory)
         return 0
 
@@ -435,6 +438,17 @@ def test_parser_accepts_named_package_commands(command: str) -> None:
     assert args.package == "Python Basics"
 
 
+@pytest.mark.parametrize("command", ["package-list", "package-show"])
+def test_package_read_commands_accept_json_output(command: str) -> None:
+    arguments = [command, "--json"]
+    if command == "package-show":
+        arguments.extend(["--package", "Python Basics"])
+
+    args = build_parser().parse_args(arguments)
+
+    assert args.json_output is True
+
+
 def test_run_package_show_outputs_selected_package(
     tmp_path: Path,
     monkeypatch,
@@ -452,8 +466,56 @@ def test_run_package_show_outputs_selected_package(
         lambda directory: StaticLearningPackageCatalog([package]),
     )
 
-    assert commands.run_package_show(tmp_path, "Python Basics") == 0
+    assert commands.run_package_show(tmp_path, "Python Basics", json_output=True) == 0
     assert json.loads(capsys.readouterr().out)["package"]["name"] == "Python Basics"
+
+
+def test_package_list_is_human_readable_by_default(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.READY,
+        summary_identity_fingerprint="c" * 64,
+        question_bank_identity_fingerprint="d" * 64,
+    )
+    monkeypatch.setattr(
+        commands,
+        "build_learning_package_catalog",
+        lambda directory: StaticLearningPackageCatalog([package]),
+    )
+
+    assert commands.run_package_list(tmp_path) == 0
+    assert capsys.readouterr().out == "Learning packages:\n- Python Basics (ready)\n"
+
+
+def test_package_show_is_human_readable_by_default(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.READY,
+        summary_identity_fingerprint="c" * 64,
+        question_bank_identity_fingerprint="d" * 64,
+    )
+    monkeypatch.setattr(
+        commands,
+        "build_learning_package_catalog",
+        lambda directory: StaticLearningPackageCatalog([package]),
+    )
+
+    assert commands.run_package_show(tmp_path, "Python Basics") == 0
+    assert capsys.readouterr().out == (
+        "Package: Python Basics\nStatus: ready\nSummary: available\nQuestions: available\n"
+    )
 
 
 def test_run_package_remove_uses_product_service(

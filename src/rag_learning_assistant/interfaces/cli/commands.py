@@ -536,13 +536,26 @@ def run_prepare(
 
 def run_package_list(
     library_directory: Path,
+    *,
+    json_output: bool = False,
 ) -> int:
-    """List learning packages without loading model dependencies."""
+    """List learning packages in human-readable or JSON form."""
 
     catalog = build_learning_package_catalog(library_directory)
+    packages = catalog.list_packages()
+    if not json_output:
+        if not packages:
+            print("No learning packages found.")
+            return 0
+
+        print("Learning packages:")
+        for package in packages:
+            print(f"- {package.name} ({package.status.value})")
+        return 0
+
     payload = {
         "library_directory": str(library_directory),
-        "packages": [_serialize_learning_package(package) for package in catalog.list_packages()],
+        "packages": [_serialize_learning_package(package) for package in packages],
     }
     print(
         json.dumps(
@@ -557,10 +570,29 @@ def run_package_list(
 def run_package_show(
     library_directory: Path,
     package_name: str,
+    *,
+    json_output: bool = False,
 ) -> int:
-    """Show one learning package without loading model dependencies."""
+    """Show one learning package in human-readable or JSON form."""
 
     package = build_learning_package_catalog(library_directory).get_package(package_name)
+    if not json_output:
+        print(f"Package: {package.name}")
+        print(f"Status: {package.status.value}")
+        print(
+            "Summary: "
+            + ("available" if package.summary_identity_fingerprint is not None else "not available")
+        )
+        print(
+            "Questions: "
+            + (
+                "available"
+                if package.question_bank_identity_fingerprint is not None
+                else "not available"
+            )
+        )
+        return 0
+
     payload = {
         "library_directory": str(library_directory),
         "package": _serialize_learning_package(package),
@@ -589,8 +621,9 @@ def run_progress(
     package_name: str,
     *,
     as_of: datetime | None = None,
+    json_output: bool = False,
 ) -> int:
-    """Output current learning progress for one package as JSON."""
+    """Output current learning progress in human-readable or JSON form."""
 
     report_time = as_of if as_of is not None else datetime.now(UTC)
     service = build_learning_progress_service(library_directory)
@@ -598,6 +631,40 @@ def run_progress(
         package_name,
         as_of=report_time,
     )
+
+    if not json_output:
+        print(f"Package: {report.package_name}")
+        print(
+            f"Questions: {report.answered_question_count}/{report.total_question_count} "
+            f"answered ({report.answered_rate:.0%}), {report.due_question_count} due"
+        )
+        print(
+            f"Attempts: {report.attempt_count} total, "
+            f"{report.correct_attempt_count} correct ({report.correct_attempt_rate:.0%}), "
+            f"{report.partially_correct_attempt_count} partially correct, "
+            f"{report.incorrect_attempt_count} incorrect"
+        )
+        if report.unclassified_attempt_count:
+            print(f"Unclassified attempts: {report.unclassified_attempt_count}")
+        if report.difficult_concepts:
+            print("Difficult concepts:")
+            for concept, missing_count in report.difficult_concepts:
+                print(f"- {concept} ({missing_count})")
+        else:
+            print("Difficult concepts: none")
+        print(
+            "Last studied: "
+            + (
+                report.last_studied_at.isoformat()
+                if report.last_studied_at is not None
+                else "never"
+            )
+        )
+        print(
+            "Next due: "
+            + (report.next_due_at.isoformat() if report.next_due_at is not None else "none")
+        )
+        return 0
 
     payload = {
         "library_directory": str(library_directory),

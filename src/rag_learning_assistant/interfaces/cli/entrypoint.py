@@ -57,7 +57,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
 
-        return commands.run_package_list(args.library)
+        return commands.run_package_list(
+            args.library,
+            json_output=args.json_output,
+        )
 
     if args.command in {"package-show", "package-remove"}:
         try:
@@ -70,6 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return commands.run_package_show(
                     library_directory=args.library,
                     package_name=args.package,
+                    json_output=args.json_output,
                 )
             return commands.run_package_remove(
                 library_directory=args.library,
@@ -88,6 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return commands.run_progress(
                 library_directory=args.library,
                 package_name=args.package,
+                json_output=args.json_output,
             )
         except (
             LearningPackageNotFoundError,

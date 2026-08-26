@@ -53,6 +53,12 @@ def add_package_commands(
         default=default_library_directory(),
         help="Personal learning library (default: platform user-data directory)",
     )
+    list_parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Output machine-readable JSON",
+    )
     show_parser = commands.add_parser(
         "package-show",
         help="Show one learning package selected by name",
@@ -68,6 +74,12 @@ def add_package_commands(
         type=non_blank_text,
         required=True,
         help="Name of the learning package to show",
+    )
+    show_parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Output machine-readable JSON",
     )
     remove_parser = commands.add_parser(
         "package-remove",
@@ -100,4 +112,10 @@ def add_package_commands(
         type=non_blank_text,
         required=True,
         help="Name of the learning package to report",
+    )
+    progress_parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Output machine-readable JSON",
     )

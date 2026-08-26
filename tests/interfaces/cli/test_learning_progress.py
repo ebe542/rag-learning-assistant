@@ -39,6 +39,7 @@ def test_parser_accepts_learning_progress_command() -> None:
     assert args.command == "progress"
     assert args.library == Path("product-library")
     assert args.package == "RAG Learning Assistant"
+    assert args.json_output is False
 
 
 def test_learning_progress_builder_uses_persistent_library_storage(
@@ -119,6 +120,7 @@ def test_run_progress_outputs_machine_readable_report(
         library_directory=tmp_path,
         package_name="RAG Learning Assistant",
         as_of=AS_OF,
+        json_output=True,
     )
 
     assert exit_code == 0
@@ -160,6 +162,50 @@ def test_run_progress_outputs_machine_readable_report(
     }
 
 
+def test_run_progress_is_human_readable_by_default(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    report = LearningProgressReport(
+        package_name="RAG Learning Assistant",
+        total_question_count=10,
+        answered_question_count=4,
+        due_question_count=3,
+        attempt_count=6,
+        incorrect_attempt_count=2,
+        partially_correct_attempt_count=1,
+        correct_attempt_count=3,
+        difficult_concepts=(("document identity", 2),),
+        last_studied_at=AS_OF,
+        next_due_at=AS_OF,
+        unclassified_attempt_count=0,
+    )
+    monkeypatch.setattr(
+        commands,
+        "build_learning_progress_service",
+        lambda library_directory: RecordingLearningProgressService(report),
+    )
+
+    assert (
+        commands.run_progress(
+            library_directory=tmp_path,
+            package_name="RAG Learning Assistant",
+            as_of=AS_OF,
+        )
+        == 0
+    )
+    assert capsys.readouterr().out == (
+        "Package: RAG Learning Assistant\n"
+        "Questions: 4/10 answered (40%), 3 due\n"
+        "Attempts: 6 total, 3 correct (50%), 1 partially correct, 2 incorrect\n"
+        "Difficult concepts:\n"
+        "- document identity (2)\n"
+        f"Last studied: {AS_OF.isoformat()}\n"
+        f"Next due: {AS_OF.isoformat()}\n"
+    )
+
+
 def test_entrypoint_dispatches_learning_progress_command(
     tmp_path: Path,
     monkeypatch,
@@ -170,7 +216,10 @@ def test_entrypoint_dispatches_learning_progress_command(
     def fake_run_progress(
         library_directory: Path,
         package_name: str,
+        *,
+        json_output: bool,
     ) -> int:
+        assert json_output is False
         calls.append(
             (
                 library_directory,
@@ -222,7 +271,10 @@ def test_entrypoint_reports_learning_progress_errors_as_cli_errors(
     def fail_progress(
         library_directory: Path,
         package_name: str,
+        *,
+        json_output: bool,
     ) -> int:
+        assert json_output is False
         raise error
 
     monkeypatch.setattr(
