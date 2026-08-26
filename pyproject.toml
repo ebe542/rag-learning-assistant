@@ -6,8 +6,11 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "MIT"
 authors = [{ name = "RAG Learning Assistant contributors" }]
+keywords = ["education", "local-llm", "rag", "retrieval-augmented-generation"]
 classifiers = [
   "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
 ]
@@ -15,6 +18,12 @@ dependencies = [
   "pymupdf>=1.24,<2",
   "python-dotenv>=1,<2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ebe542/rag-learning-assistant"
+Documentation = "https://github.com/ebe542/rag-learning-assistant#readme"
+Issues = "https://github.com/ebe542/rag-learning-assistant/issues"
+Repository = "https://github.com/ebe542/rag-learning-assistant"
 
 [project.scripts]
 rag-learn = "rag_learning_assistant.cli:main"
@@ -35,6 +44,13 @@ generation = [
 ]
 storage = [
   "faiss-cpu>=1.14,<2",
+]
+local = [
+  "accelerate>=1,<2",
+  "faiss-cpu>=1.14,<2",
+  "sentence-transformers>=5,<6",
+  "torch>=2.6,<3",
+  "transformers>=5,<6",
 ]
 
 [build-system]

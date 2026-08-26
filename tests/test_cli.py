@@ -1,4 +1,5 @@
 import json
+from importlib.metadata import version
 from pathlib import Path
 from uuid import UUID
 
@@ -31,6 +32,14 @@ class FakePdfExtractor:
     ) -> Document:
         self.paths.append(Path(path))
         return self.document
+
+
+def test_cli_reports_installed_package_version(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--version"])
+
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out.strip() == (f"rag-learn {version('rag-learning-assistant')}")
 
 
 class FakeDocumentSearchService:

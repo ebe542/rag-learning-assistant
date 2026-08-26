@@ -2,9 +2,10 @@
 
 An open-source learning assistant that turns your PDF documents into source-grounded learning material, questions, and interactive tutoring sessions.
 
-The project is at an early MVP stage.
-It extracts text page by page, preserves citation metadata, creates configurable paragraph-aware chunks, and provides the foundations for local semantic retrieval.
-Question generation and learning-progress tracking will build on this foundation.
+The project is an early local-first alpha. It can turn a text-based PDF into a
+resumable learning package, conduct source-grounded written-answer sessions,
+schedule reviews, and report learning progress. Its interfaces and stored-data
+format may still change before a stable release.
 
 ## Current features
 
@@ -136,7 +137,7 @@ pytest
 Install the optional local embedding, generation, and persistent-storage support:
 
 ```powershell
-python -m pip install -e ".[dev,embeddings,generation,storage]"
+python -m pip install -e ".[dev,local]"
 ```
 
 ### NVIDIA GPU support on Windows
@@ -148,7 +149,7 @@ The following setup was verified with Python 3.13, PyTorch 2.13.0, CUDA 13.2, an
 ```bash
 py -3.13 -m venv .venv && source .venv/Scripts/activate
 python -m pip install --upgrade pip && python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu132
-python -m pip install -e ".[dev,embeddings,generation,storage]"
+python -m pip install -e ".[dev,local]"
 ```
 
 Verify that PyTorch can use the GPU:

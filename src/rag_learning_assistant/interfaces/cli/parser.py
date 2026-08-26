@@ -1,6 +1,7 @@
 """Compose the command-line parser while preserving its public API."""
 
 import argparse
+from importlib.metadata import PackageNotFoundError, version
 
 from rag_learning_assistant.interfaces.cli.parsers import (
     add_document_commands,
@@ -60,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build learning material from PDF documents",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"rag-learn {_package_version()}",
+    )
     commands = parser.add_subparsers(
         dest="command",
         required=True,
@@ -73,3 +79,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_package_commands(commands)
 
     return parser
+
+
+def _package_version() -> str:
+    """Read the installed distribution version without duplicating metadata."""
+
+    try:
+        return version("rag-learning-assistant")
+    except PackageNotFoundError:
+        return "unknown"

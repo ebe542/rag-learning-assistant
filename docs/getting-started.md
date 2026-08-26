@@ -13,7 +13,7 @@ environment:
 py -3.13 -m venv .venv
 source .venv/Scripts/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[embeddings,generation,storage]"
+python -m pip install -e ".[local]"
 ```
 
 The local models are downloaded only when they are first needed. NVIDIA users
