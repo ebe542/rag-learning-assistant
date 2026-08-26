@@ -23,6 +23,13 @@ Question generation and learning-progress tracking will build on this foundation
 
 Scanned documents do not yet support OCR.
 
+## Start here
+
+New users should follow the concise
+[alpha getting-started guide](docs/getting-started.md). It covers installation,
+environment diagnosis, preparing the first PDF, studying, progress reporting,
+and package removal with the user-facing commands.
+
 ## Product workflow
 
 Turn one PDF into a ready-to-study package without copying document UUIDs or
