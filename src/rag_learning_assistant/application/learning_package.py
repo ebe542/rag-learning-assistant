@@ -12,9 +12,13 @@ from rag_learning_assistant.learning import (
 )
 from rag_learning_assistant.library import IndexedDocument
 
+from .package_study import LearningPackageNotFoundError
+
 
 class LearningPackageReader(Protocol):
     """Read the user-facing learning packages of one library."""
+
+    def find_by_name(self, name: str) -> LearningPackage | None: ...
 
     def list_all(self) -> list[LearningPackage]: ...
 
@@ -39,6 +43,8 @@ class PackageDocumentImporter(Protocol):
     """Import one source document into the persistent library."""
 
     def add_document(self, path: Path) -> IndexedDocument: ...
+
+    def remove_document(self, document_id: UUID) -> IndexedDocument: ...
 
 
 class PackageSummaryPreparer(Protocol):
@@ -72,6 +78,14 @@ class LearningPackageCatalog:
         """Return packages in repository-defined display order."""
 
         return self.packages.list_all()
+
+    def get_package(self, name: str) -> LearningPackage:
+        """Return one package selected by its user-facing name."""
+
+        package = self.packages.find_by_name(name)
+        if package is None:
+            raise LearningPackageNotFoundError(f"Learning package not found: {name}")
+        return package
 
 
 class LearningPackageService:
@@ -150,6 +164,16 @@ class LearningPackageService:
             self.packages.replace(package)
 
         self._report_progress("ready")
+        return package
+
+    def remove(self, name: str) -> LearningPackage:
+        """Remove a package and all data derived from its source document."""
+
+        package = self.packages.find_by_name(name)
+        if package is None:
+            raise LearningPackageNotFoundError(f"Learning package not found: {name}")
+
+        self.documents.remove_document(package.document_id)
         return package
 
     def _report_progress(self, phase: str) -> None:

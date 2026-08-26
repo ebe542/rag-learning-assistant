@@ -52,6 +52,38 @@ def add_package_commands(
         required=True,
         help="Directory containing the personal learning library",
     )
+    show_parser = commands.add_parser(
+        "package-show",
+        help="Show one learning package selected by name",
+    )
+    show_parser.add_argument(
+        "--library",
+        type=Path,
+        required=True,
+        help="Directory containing the personal learning library",
+    )
+    show_parser.add_argument(
+        "--package",
+        type=non_blank_text,
+        required=True,
+        help="Name of the learning package to show",
+    )
+    remove_parser = commands.add_parser(
+        "package-remove",
+        help="Remove one learning package and its learning data",
+    )
+    remove_parser.add_argument(
+        "--library",
+        type=Path,
+        required=True,
+        help="Directory containing the personal learning library",
+    )
+    remove_parser.add_argument(
+        "--package",
+        type=non_blank_text,
+        required=True,
+        help="Name of the learning package to remove",
+    )
     progress_parser = commands.add_parser(
         "progress",
         help="Show learning progress for one ready package",

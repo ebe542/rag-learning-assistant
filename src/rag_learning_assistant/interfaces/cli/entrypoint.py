@@ -58,6 +58,25 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return commands.run_package_list(args.library)
 
+    if args.command in {"package-show", "package-remove"}:
+        try:
+            validate_library_directory(args.library)
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        try:
+            if args.command == "package-show":
+                return commands.run_package_show(
+                    library_directory=args.library,
+                    package_name=args.package,
+                )
+            return commands.run_package_remove(
+                library_directory=args.library,
+                package_name=args.package,
+            )
+        except LearningPackageNotFoundError as exc:
+            parser.error(str(exc))
+
     if args.command == "progress":
         try:
             validate_library_directory(args.library)

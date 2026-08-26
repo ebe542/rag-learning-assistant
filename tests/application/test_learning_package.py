@@ -46,9 +46,14 @@ class RecordingDocumentImporter:
     def __init__(self, document: IndexedDocument) -> None:
         self.document = document
         self.paths: list[Path] = []
+        self.removed_document_ids: list[UUID] = []
 
     def add_document(self, path: Path) -> IndexedDocument:
         self.paths.append(path)
+        return self.document
+
+    def remove_document(self, document_id: UUID) -> IndexedDocument:
+        self.removed_document_ids.append(document_id)
         return self.document
 
 
@@ -283,6 +288,36 @@ def test_prepare_reuses_ready_learning_package() -> None:
     assert questions.calls == []
     assert packages.saved == []
     assert packages.replaced == []
+
+
+def test_remove_learning_package_removes_its_source_document() -> None:
+    document_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=document_id,
+        status=LearningPackageStatus.READY,
+        summary_identity_fingerprint="d" * 64,
+        question_bank_identity_fingerprint="e" * 64,
+    )
+    documents = RecordingDocumentImporter(
+        IndexedDocument(
+            id=document_id,
+            source="python-book.pdf",
+            content_sha256="c" * 64,
+            page_count=100,
+            chunk_count=200,
+        )
+    )
+    service = LearningPackageService(
+        packages=RecordingPackageRepository(package),
+        documents=documents,
+        summaries=RecordingSummaryPreparer(),
+        questions=RecordingQuestionPreparer(),
+    )
+
+    assert service.remove("python basics") == package
+    assert documents.removed_document_ids == [document_id]
 
 
 def test_prepare_resumes_indexed_learning_package() -> None:

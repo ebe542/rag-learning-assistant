@@ -105,6 +105,7 @@ class RecordingLearningPackageService:
     def __init__(self, result: LearningPackage) -> None:
         self.result = result
         self.calls: list[tuple[str, Path, int]] = []
+        self.remove_calls: list[str] = []
 
     def prepare(
         self,
@@ -114,6 +115,10 @@ class RecordingLearningPackageService:
         question_count: int,
     ) -> LearningPackage:
         self.calls.append((name, pdf_path, question_count))
+        return self.result
+
+    def remove(self, name: str) -> LearningPackage:
+        self.remove_calls.append(name)
         return self.result
 
 
@@ -298,6 +303,9 @@ class StaticLearningPackageCatalog:
     def list_packages(self) -> list[LearningPackage]:
         return list(self.packages)
 
+    def get_package(self, name: str) -> LearningPackage:
+        return next(package for package in self.packages if package.name == name)
+
 
 def test_run_package_list_outputs_available_packages(
     tmp_path: Path,
@@ -385,3 +393,64 @@ def test_entrypoint_dispatches_package_list(
 
     assert result == 0
     assert calls == [library_directory]
+
+
+@pytest.mark.parametrize("command", ["package-show", "package-remove"])
+def test_parser_accepts_named_package_commands(command: str) -> None:
+    args = build_parser().parse_args(
+        [
+            command,
+            "--library",
+            "local-data/library",
+            "--package",
+            "Python Basics",
+        ]
+    )
+
+    assert args.command == command
+    assert args.library == Path("local-data/library")
+    assert args.package == "Python Basics"
+
+
+def test_run_package_show_outputs_selected_package(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.INDEXED,
+    )
+    monkeypatch.setattr(
+        commands,
+        "build_learning_package_catalog",
+        lambda directory: StaticLearningPackageCatalog([package]),
+    )
+
+    assert commands.run_package_show(tmp_path, "Python Basics") == 0
+    assert json.loads(capsys.readouterr().out)["package"]["name"] == "Python Basics"
+
+
+def test_run_package_remove_uses_product_service(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.INDEXED,
+    )
+    service = RecordingLearningPackageService(package)
+    monkeypatch.setattr(
+        commands,
+        "build_learning_package_service",
+        lambda directory: service,
+    )
+
+    assert commands.run_package_remove(tmp_path, "Python Basics") == 0
+    assert service.remove_calls == ["Python Basics"]
+    assert json.loads(capsys.readouterr().out)["removed_package"]["name"] == "Python Basics"

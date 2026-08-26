@@ -77,6 +77,23 @@ List packages without loading embedding or generation models:
 rag-learn package-list --library local-data/library
 ```
 
+Show one package by its user-facing name:
+
+```bash
+rag-learn package-show \
+  --library local-data/library \
+  --package "Python Basics"
+```
+
+Remove a package together with its indexed document, generated learning
+material, review schedule, and study history:
+
+```bash
+rag-learn package-remove \
+  --library local-data/library \
+  --package "Python Basics"
+```
+
 UUIDs and SHA-256 identities remain in the JSON output for provenance and
 automation, but they are not required for the product-level workflow.
 

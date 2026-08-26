@@ -554,6 +554,36 @@ def run_package_list(
     return 0
 
 
+def run_package_show(
+    library_directory: Path,
+    package_name: str,
+) -> int:
+    """Show one learning package without loading model dependencies."""
+
+    package = build_learning_package_catalog(library_directory).get_package(package_name)
+    payload = {
+        "library_directory": str(library_directory),
+        "package": _serialize_learning_package(package),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_package_remove(
+    library_directory: Path,
+    package_name: str,
+) -> int:
+    """Remove one package and all data associated with its document."""
+
+    package = build_learning_package_service(library_directory).remove(package_name)
+    payload = {
+        "library_directory": str(library_directory),
+        "removed_package": _serialize_learning_package(package),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def run_progress(
     library_directory: Path,
     package_name: str,
