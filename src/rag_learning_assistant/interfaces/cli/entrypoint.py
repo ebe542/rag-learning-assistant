@@ -38,6 +38,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "doctor":
+        return commands.run_doctor(
+            library_directory=args.library,
+            json_output=args.json_output,
+        )
+
     if args.command == "prepare":
         try:
             validate_index_directory(args.library)

@@ -55,6 +55,7 @@ from rag_learning_assistant.generation.huggingface import (
 from rag_learning_assistant.generation.question_cache import SqliteQuestionBatchCache
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
 from rag_learning_assistant.ingestion import Document, PdfExtractor
+from rag_learning_assistant.interfaces.cli.doctor import build_doctor_report
 from rag_learning_assistant.interfaces.cli.error_reporting import (
     write_diagnostic_log,
 )
@@ -565,6 +566,34 @@ def run_package_list(
         )
     )
     return 0
+
+
+def run_doctor(
+    library_directory: Path,
+    *,
+    json_output: bool = False,
+) -> int:
+    """Report whether the complete local learning workflow is available."""
+
+    report = build_doctor_report(library_directory)
+    if json_output:
+        print(json.dumps(report.as_json(), ensure_ascii=False, indent=2))
+        return 0 if report.ready else 1
+
+    python_status = "supported" if report.python_supported else "unsupported"
+    print("RAG Learning Assistant diagnostics")
+    print(f"Python: {report.python_version} ({python_status})")
+    print(f"Library: {report.library_directory} ({report.library_status})")
+    print("Dependencies:")
+    for dependency in report.dependencies:
+        status = "available" if dependency.available else "missing"
+        print(f"- {dependency.name}: {status}")
+    if report.cuda_available:
+        print(f"GPU: {report.gpu_name} (CUDA available)")
+    else:
+        print("GPU: CUDA unavailable; generation will use the CPU")
+    print("Status: ready" if report.ready else "Status: action required")
+    return 0 if report.ready else 1
 
 
 def run_package_show(

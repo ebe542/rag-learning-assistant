@@ -101,6 +101,16 @@ directory by default. On Windows this is
 different library, or set `RAG_LEARN_LIBRARY` to change the default for all
 product commands.
 
+Check whether Python, the local library, optional ML dependencies, and CUDA are
+ready without downloading a model or changing application data:
+
+```bash
+rag-learn doctor
+```
+
+Add `--json` for a machine-readable support report. The command exits with
+status 1 when the full local learning workflow needs attention.
+
 UUIDs and SHA-256 identities remain in the JSON output for provenance and
 automation, but they are not required for the product-level workflow.
 

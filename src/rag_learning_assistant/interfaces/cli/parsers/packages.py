@@ -119,3 +119,19 @@ def add_package_commands(
         action="store_true",
         help="Output machine-readable JSON",
     )
+    doctor_parser = commands.add_parser(
+        "doctor",
+        help="Check whether the local learning environment is ready",
+    )
+    doctor_parser.add_argument(
+        "--library",
+        type=Path,
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Output machine-readable JSON",
+    )
