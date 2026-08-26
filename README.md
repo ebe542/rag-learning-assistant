@@ -468,6 +468,19 @@ matrix version, select its interpreter explicitly, for example:
 python scripts/check_ci_environment.py --python python3.12
 ```
 
+Before publishing a release, install the release tooling and verify both built
+distributions plus a clean wheel installation:
+
+```bash
+python -m pip install -e ".[release]"
+python scripts/check_release_package.py
+```
+
+The release check builds into a temporary directory, validates package metadata,
+installs the wheel with its base dependencies in a fresh virtual environment,
+and runs the installed CLI version and help commands. It leaves no `dist`
+directory or test environment in the repository.
+
 Contributions are welcome.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md).
 For architecture and extension guidance, see the [development guide](docs/development.md) and [architecture decisions](docs/adr/README.md).
