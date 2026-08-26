@@ -51,6 +51,29 @@ def test_prepare_parser_accepts_product_options() -> None:
     assert args.question_count == 25
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["prepare", "books/python-basics.pdf"],
+        ["package-list"],
+        ["package-show", "--package", "Python Basics"],
+        ["package-remove", "--package", "Python Basics"],
+        ["progress", "--package", "Python Basics"],
+    ],
+)
+def test_product_commands_use_configured_default_library(
+    arguments: list[str],
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    library_directory = tmp_path / "personal-library"
+    monkeypatch.setenv("RAG_LEARN_LIBRARY", str(library_directory))
+
+    args = build_parser().parse_args(arguments)
+
+    assert args.library == library_directory
+
+
 def test_entrypoint_dispatches_prepare_with_default_name(
     tmp_path: Path,
     monkeypatch,

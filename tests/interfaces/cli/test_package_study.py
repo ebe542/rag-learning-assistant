@@ -87,6 +87,33 @@ def test_parser_accepts_study_by_learning_package_name() -> None:
     assert args.question_bank_identity_fingerprint is None
 
 
+def test_entrypoint_uses_default_library_for_package_study(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    (tmp_path / "metadata.sqlite3").write_bytes(b"")
+    calls: list[tuple[Path, str]] = []
+    monkeypatch.setenv("RAG_LEARN_LIBRARY", str(tmp_path))
+    monkeypatch.setattr(
+        commands,
+        "run_package_study",
+        lambda library_directory, package_name: (
+            calls.append((library_directory, package_name)) or 0
+        ),
+    )
+
+    exit_code = entrypoint.main(
+        [
+            "study",
+            "--package",
+            "RAG Learning Assistant",
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == [(tmp_path, "RAG Learning Assistant")]
+
+
 def test_entrypoint_dispatches_study_by_package_name(
     tmp_path: Path,
     monkeypatch,
@@ -272,7 +299,6 @@ def test_run_package_study_records_written_answer(
     "arguments",
     [
         ["study", "--library", "product-library"],
-        ["study", "--package", "RAG Learning Assistant"],
     ],
 )
 def test_entrypoint_rejects_incomplete_package_selection(
@@ -282,7 +308,7 @@ def test_entrypoint_rejects_incomplete_package_selection(
     with pytest.raises(SystemExit):
         entrypoint.main(arguments)
 
-    assert "--library and --package must be used together" in capsys.readouterr().err
+    assert "--library requires --package" in capsys.readouterr().err
 
 
 def test_entrypoint_rejects_mixed_study_selection(

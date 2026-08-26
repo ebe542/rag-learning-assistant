@@ -20,6 +20,7 @@ from rag_learning_assistant.interfaces.cli.parser import (
     DEFAULT_MAX_CHARS,
     DEFAULT_OVERLAP_CHARS,
     build_parser,
+    default_library_directory,
     validate_existing_index_directory,
     validate_index_directory,
     validate_library_directory,
@@ -209,28 +210,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(str(exc))
 
     if args.command == "study":
-        package_arguments_present = args.library is not None or args.package is not None
         technical_arguments_present = (
             args.index_dir is not None
             or args.document_id is not None
             or args.question_bank_identity_fingerprint is not None
+        )
+        package_arguments_present = args.package is not None or (
+            args.library is not None and not technical_arguments_present
         )
 
         if package_arguments_present and technical_arguments_present:
             parser.error("Package and technical study arguments must not be mixed")
 
         if package_arguments_present:
-            if args.library is None or args.package is None:
-                parser.error("--library and --package must be used together")
+            if args.package is None:
+                parser.error("--library requires --package")
+
+            library_directory = args.library or default_library_directory()
 
             try:
-                validate_library_directory(args.library)
+                validate_library_directory(library_directory)
             except ValueError as exc:
                 parser.error(str(exc))
 
             try:
                 return commands.run_package_study(
-                    library_directory=args.library,
+                    library_directory=library_directory,
                     package_name=args.package,
                 )
             except (

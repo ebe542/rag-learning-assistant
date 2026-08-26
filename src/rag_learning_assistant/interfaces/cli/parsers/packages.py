@@ -5,6 +5,7 @@ from pathlib import Path
 from rag_learning_assistant.interfaces.cli.parsing import (
     DEFAULT_QUESTION_COUNT,
     SubcommandCollection,
+    default_library_directory,
     non_blank_text,
     positive_int,
 )
@@ -27,8 +28,8 @@ def add_package_commands(
     prepare_parser.add_argument(
         "--library",
         type=Path,
-        required=True,
-        help="Directory containing the personal learning library",
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
     )
     prepare_parser.add_argument(
         "--name",
@@ -49,8 +50,8 @@ def add_package_commands(
     list_parser.add_argument(
         "--library",
         type=Path,
-        required=True,
-        help="Directory containing the personal learning library",
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
     )
     show_parser = commands.add_parser(
         "package-show",
@@ -59,8 +60,8 @@ def add_package_commands(
     show_parser.add_argument(
         "--library",
         type=Path,
-        required=True,
-        help="Directory containing the personal learning library",
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
     )
     show_parser.add_argument(
         "--package",
@@ -75,8 +76,8 @@ def add_package_commands(
     remove_parser.add_argument(
         "--library",
         type=Path,
-        required=True,
-        help="Directory containing the personal learning library",
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
     )
     remove_parser.add_argument(
         "--package",
@@ -91,8 +92,8 @@ def add_package_commands(
     progress_parser.add_argument(
         "--library",
         type=Path,
-        required=True,
-        help="Directory containing the personal learning library",
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
     )
     progress_parser.add_argument(
         "--package",

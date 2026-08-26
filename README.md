@@ -30,7 +30,6 @@ generation fingerprints:
 
 ```bash
 rag-learn prepare books/python-basics.pdf \
-  --library local-data/library \
   --name "Python Basics" \
   --questions 20
 ```
@@ -74,14 +73,13 @@ repeatedly using the same easiest passages.
 List packages without loading embedding or generation models:
 
 ```bash
-rag-learn package-list --library local-data/library
+rag-learn package-list
 ```
 
 Show one package by its user-facing name:
 
 ```bash
 rag-learn package-show \
-  --library local-data/library \
   --package "Python Basics"
 ```
 
@@ -90,9 +88,14 @@ material, review schedule, and study history:
 
 ```bash
 rag-learn package-remove \
-  --library local-data/library \
   --package "Python Basics"
 ```
+
+Product commands store learning data in the platform-specific user-data
+directory by default. On Windows this is
+`%LOCALAPPDATA%\rag-learning-assistant\library`. Pass `--library PATH` for a
+different library, or set `RAG_LEARN_LIBRARY` to change the default for all
+product commands.
 
 UUIDs and SHA-256 identities remain in the JSON output for provenance and
 automation, but they are not required for the product-level workflow.
@@ -317,7 +320,6 @@ in a ready learning package:
 
 ```bash
 rag-learn study \
-  --library local-data/product-library \
   --package "RAG Learning Assistant"
 ```
 
@@ -330,7 +332,6 @@ Inspect current progress for the same package without loading an ML model:
 
 ```bash
 rag-learn progress \
-  --library local-data/product-library \
   --package "RAG Learning Assistant"
 ```
 

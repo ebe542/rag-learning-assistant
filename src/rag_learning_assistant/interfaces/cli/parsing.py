@@ -1,6 +1,8 @@
 """Shared CLI parsing constants, validators, and options."""
 
 import argparse
+import os
+import sys
 from pathlib import Path
 from typing import Protocol
 
@@ -15,6 +17,28 @@ DEFAULT_QUESTION_BATCH_SIZE = 3
 DEFAULT_QUESTION_MAX_NEW_TOKENS = 512
 DEFAULT_REVIEW_LIMIT = 10
 DEFAULT_ANSWER_EVALUATION_MAX_NEW_TOKENS = 256
+
+
+def default_library_directory() -> Path:
+    """Return the configurable per-user directory for learning data."""
+
+    configured_directory = os.environ.get("RAG_LEARN_LIBRARY")
+    if configured_directory:
+        return Path(configured_directory).expanduser()
+
+    if os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+        return root / "rag-learning-assistant" / "library"
+
+    if sys.platform == "darwin":
+        return (
+            Path.home() / "Library" / "Application Support" / "rag-learning-assistant" / "library"
+        )
+
+    data_home = os.environ.get("XDG_DATA_HOME")
+    root = Path(data_home) if data_home else Path.home() / ".local" / "share"
+    return root / "rag-learning-assistant" / "library"
 
 
 class SubcommandCollection(Protocol):
