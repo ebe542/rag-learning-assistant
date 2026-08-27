@@ -428,8 +428,10 @@ local-data/
 `vectors.faiss` contains vector IDs and normalized embeddings.
 `metadata.sqlite3` contains document and chunk metadata, embedding identity,
 summary map cache entries, final summaries, question-generation batch entries,
-question banks, current question progress, and immutable study attempts with
-optional automatic feedback. The
+question banks, learning packages, current question progress, and immutable
+study attempts with optional automatic feedback. Its complete
+[SQLite data model](database-overview.svg) documents columns, keys,
+and logical relationships. The
 nullable evaluation column migrates libraries created before automatic feedback.
 Persistent formats validate identities when reopened so incompatible
 models or generation configurations are not silently mixed.

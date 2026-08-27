@@ -9,13 +9,12 @@ import subprocess
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DIAGRAM_DIRECTORY = PROJECT_ROOT / "docs" / "diagrams"
 DIAGRAM_SOURCES = (
-    PROJECT_ROOT / "docs" / "class-overview.puml",
-    PROJECT_ROOT / "docs" / "diagrams" / "ingestion-retrieval-library.puml",
-    PROJECT_ROOT / "docs" / "diagrams" / "generation-summaries.puml",
-    PROJECT_ROOT / "docs" / "diagrams" / "question-banks-packages.puml",
-    PROJECT_ROOT / "docs" / "diagrams" / "study-progress.puml",
-    PROJECT_ROOT / "docs" / "diagrams" / "evaluation-interfaces.puml",
+    *sorted((PROJECT_ROOT / "docs").glob("*-overview.puml")),
+    *sorted(
+        source for source in DIAGRAM_DIRECTORY.glob("*.puml") if not source.name.startswith("_")
+    ),
 )
 
 

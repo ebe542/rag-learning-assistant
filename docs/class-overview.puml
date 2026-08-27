@@ -1,45 +1,60 @@
 @startuml
-title RAG Learning Assistant - Architecture Overview
+title RAG Learning Assistant - Software and Data Overview
 !include diagrams/_theme.puml
 left to right direction
+
+package "[[diagrams/evaluation-interfaces.svg Interfaces and quality]]" as Interfaces #EFFFF4 {
+  [cli.py]
+  [interfaces]
+  [evaluation]
+}
 
 package "[[diagrams/ingestion-retrieval-library.svg Document processing]]" as Documents #E8F4FD {
   [ingestion]
   [chunking]
   [retrieval]
   [library]
-}
-package "[[diagrams/generation-summaries.svg Grounded generation]]" as Generation #FFF4D9 {
-  [question answering]
-  [summarization]
-  [generation adapters]
-}
-package "[[diagrams/question-banks-packages.svg Learning material]]" as Material #F3E8FF {
-  [question banks]
-  [learning packages]
-}
-package "[[diagrams/study-progress.svg Study workflow]]" as Study #FFE8E8 {
-  [answer evaluation]
-  [study sessions]
-  [review and progress]
-}
-package "[[diagrams/evaluation-interfaces.svg Quality and interfaces]]" as Interfaces #EFFFF4 {
-  [grounded evaluation]
-  [interfaces.cli]
-  [interfaces.web]
+  [application]
 }
 
+package "[[diagrams/generation-summaries.svg Grounded generation]]" as Generation #FFF4D9 {
+  [generation]
+  [application]
+}
+
+package "[[diagrams/question-banks-packages.svg Learning material]]" as Material #F3E8FF {
+  [generation]
+  [learning]
+  [application]
+}
+
+package "[[diagrams/study-progress.svg Study workflow]]" as Study #FFE8E8 {
+  [generation]
+  [learning]
+  [application]
+}
+
+package "[[database-overview.svg Persistence]]" as Persistence #F2F2F2 {
+  database "metadata.sqlite3" as SQLite
+  file "vectors.faiss" as Faiss
+}
+
+Interfaces --> Documents
+Interfaces --> Generation
+Interfaces --> Material
+Interfaces --> Study
 Documents --> Generation : trusted chunks
 Generation --> Material : summaries and questions
 Material --> Study : ready packages
-Generation --> Study : grounded evaluation
-Interfaces ..> Documents
-Interfaces ..> Generation
-Interfaces ..> Material
-Interfaces ..> Study
+Documents --> Persistence
+Generation --> Persistence
+Material --> Persistence
+Study --> Persistence
 
 note bottom
-  Select a colored area in rendered SVG output to open its detailed class view.
-  Source links are also listed in docs/diagrams/README.md.
+  Select an underlined module area in the rendered SVG to open its complete
+  detail view. Package names inside an area are orientation labels and are not
+  linked individually. A package may occur in multiple views when it supports
+  more than one workflow. Persistence opens the database schema.
 end note
 @enduml

@@ -33,6 +33,11 @@ environment diagnosis, preparing the first PDF, studying, progress reporting,
 and package removal with the user-facing commands. Release changes are recorded
 in the [changelog](CHANGELOG.md).
 
+For technical orientation, open the interactive
+[software and data overview](docs/class-overview.svg). It links every module to
+its focused dependency view and links persistence directly to the
+[SQLite data model](docs/database-overview.svg).
+
 Install the GUI dependencies with the application extras and start the local
 interface:
 
@@ -445,9 +450,10 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
                                                         -> questions and progress
 ```
 
-The architecture is documented as a small, linked
-[SVG overview](docs/class-overview.svg) with editable PlantUML sources and
-focused [class diagrams](docs/diagrams/README.md) for each functional area.
+Start with the linked [software and data overview](docs/class-overview.svg).
+It shows every top-level module and both persistence files, then opens the
+focused [class diagrams](docs/diagrams/README.md) or the complete
+[SQLite data model](docs/database-overview.svg).
 
 Planned next milestones:
 

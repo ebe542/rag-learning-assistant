@@ -1,6 +1,7 @@
-# Architecture diagrams
+# Architecture and data diagrams
 
 The class model is split into bounded views so each diagram remains readable.
+The SQLite view documents the physical tables and their logical relationships.
 Open the SVG links for browser navigation or the PlantUML links to edit sources:
 
 | View | Diagram | Source |
@@ -10,7 +11,8 @@ Open the SVG links for browser navigation or the PlantUML links to edit sources:
 | Grounded generation and summaries | [SVG](generation-summaries.svg) | [PlantUML](generation-summaries.puml) |
 | Question banks and learning packages | [SVG](question-banks-packages.svg) | [PlantUML](question-banks-packages.puml) |
 | Study sessions, review, and progress | [SVG](study-progress.svg) | [PlantUML](study-progress.puml) |
-| Evaluation and CLI boundary | [SVG](evaluation-interfaces.svg) | [PlantUML](evaluation-interfaces.puml) |
+| Evaluation and interface boundaries | [SVG](evaluation-interfaces.svg) | [PlantUML](evaluation-interfaces.puml) |
+| SQLite data model | [SVG](../database-overview.svg) | [PlantUML](../database-overview.puml) |
 
 All diagrams include the shared `_theme.puml`. Cross-boundary classes may occur
 in more than one view when necessary for a complete runtime relationship.

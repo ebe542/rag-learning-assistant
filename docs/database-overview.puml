@@ -1,0 +1,154 @@
+@startuml
+title RAG Learning Assistant - SQLite Data Model
+left to right direction
+
+skinparam linetype ortho
+skinparam shadowing false
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #52706A
+}
+
+package "Library and retrieval" #E8F4FD {
+  entity documents {
+    * id : TEXT <<PK>>
+    --
+    * source : TEXT
+    * content_sha256 : TEXT <<UQ>>
+    * page_count : INTEGER
+    * chunk_count : INTEGER
+  }
+
+  entity chunks {
+    * id : INTEGER <<PK, auto>>
+    --
+    * text : TEXT
+    * source : TEXT
+    * page_number : INTEGER
+    * chunk_index : INTEGER
+    document_id : TEXT
+  }
+
+  entity index_metadata {
+    * id : INTEGER <<PK, singleton>>
+    --
+    * model_name : TEXT
+    * model_revision : TEXT
+    embedding_dimension : INTEGER
+  }
+}
+
+package "Generated material" #FFF4D9 {
+  entity summary_batches {
+    * identity_fingerprint : TEXT <<PK>>
+    * batch_number : INTEGER <<PK>>
+    --
+    * first_context_number : INTEGER
+    * last_context_number : INTEGER
+    * summary_text : TEXT
+    * citation_numbers : TEXT <<JSON>>
+    * prompt_references : TEXT <<JSON>>
+  }
+
+  entity document_summaries {
+    * document_id : TEXT <<PK>>
+    * identity_fingerprint : TEXT <<PK>>
+    --
+    * source : TEXT
+    * text : TEXT
+    * citations_json : TEXT <<JSON>>
+    * prompt_references_json : TEXT <<JSON>>
+  }
+
+  entity question_batches {
+    * identity_fingerprint : TEXT <<PK>>
+    * batch_number : INTEGER <<PK>>
+    --
+    * first_question_number : INTEGER
+    * last_question_number : INTEGER
+    * questions : TEXT <<JSON>>
+    * prompt_references : TEXT <<JSON>>
+  }
+
+  entity question_banks {
+    * document_id : TEXT <<PK>>
+    * identity_fingerprint : TEXT <<PK>>
+    --
+    * source : TEXT
+    * questions_json : TEXT <<JSON>>
+    * prompt_references_json : TEXT <<JSON>>
+  }
+}
+
+package "Learning workflow" #FFE8E8 {
+  entity learning_packages {
+    * id : TEXT <<PK>>
+    --
+    * name : TEXT <<UQ, NOCASE>>
+    * document_id : TEXT <<UQ>>
+    * status : TEXT
+    summary_identity_fingerprint : TEXT
+    question_bank_identity_fingerprint : TEXT
+  }
+
+  entity question_progress {
+    * document_id : TEXT <<PK>>
+    * question_bank_identity_fingerprint : TEXT <<PK>>
+    * question_number : INTEGER <<PK>>
+    --
+    * repetition_count : INTEGER
+    * interval_days : INTEGER
+    * ease_factor : REAL
+    * due_at : TEXT <<ISO datetime>>
+    last_reviewed_at : TEXT <<ISO datetime>>
+  }
+
+  entity study_attempts {
+    * id : TEXT <<PK>>
+    --
+    * document_id : TEXT
+    * question_bank_identity_fingerprint : TEXT
+    * question_number : INTEGER
+    * question_text : TEXT
+    * answer_text : TEXT
+    * expected_answer : TEXT
+    * citations_json : TEXT <<JSON>>
+    * rating : TEXT
+    * answered_at : TEXT <<ISO datetime>>
+    * repetition_count : INTEGER
+    * interval_days : INTEGER
+    * ease_factor : REAL
+    * due_at : TEXT <<ISO datetime>>
+    last_reviewed_at : TEXT <<ISO datetime>>
+    evaluation_json : TEXT <<JSON>>
+  }
+}
+
+documents ||..o{ chunks : document_id
+index_metadata ||..o{ chunks : configures FAISS index
+documents ||..o{ document_summaries : document_id
+documents ||..o{ question_banks : document_id
+documents ||..o| learning_packages : document_id
+document_summaries |o..o{ summary_batches : identity_fingerprint
+question_banks |o..o{ question_batches : identity_fingerprint
+document_summaries |o..o{ learning_packages : summary identity
+question_banks |o..o{ learning_packages : question-bank identity
+question_banks ||..o{ question_progress : document, bank, question
+question_banks ||..o{ study_attempts : document, bank, question
+question_progress |o..o{ study_attempts : resulting schedule snapshot
+
+legend bottom
+  |= Notation |= Meaning |
+  | PK | Primary-key column |
+  | UQ | SQLite unique constraint |
+  | JSON | JSON serialized into a TEXT column |
+  | dotted relationship | Logical application relationship, not a SQLite foreign key |
+endlegend
+
+note bottom
+  All tables live in one library's metadata.sqlite3. vectors.faiss stores the
+  vectors separately and uses chunk IDs as the mapping back to SQLite metadata.
+  The schema currently declares no FOREIGN KEY constraints; services preserve
+  the dotted relationships and derived-data lifecycle.
+end note
+@enduml
