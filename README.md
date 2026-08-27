@@ -479,7 +479,9 @@ python scripts/check_release_package.py
 The release check builds into a temporary directory, validates package metadata,
 installs the wheel with its base dependencies in a fresh virtual environment,
 and runs the installed CLI version and help commands. It leaves no `dist`
-directory or test environment in the repository.
+directory or test environment in the repository. The `package` job in the
+GitHub Actions `Release Package` workflow runs the same check when started
+manually and whenever a version tag matching `v*` is pushed.
 
 Contributions are welcome.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md).
