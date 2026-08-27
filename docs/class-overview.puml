@@ -1,373 +1,44 @@
 @startuml
-title RAG Learning Assistant - Class Overview
-
+title RAG Learning Assistant - Architecture Overview
+!include diagrams/_theme.puml
 left to right direction
-skinparam packageStyle rectangle
-skinparam classAttributeIconSize 0
-skinparam linetype ortho
-hide empty members
 
-legend left
-  |= Notation |= Meaning |
-  | <&caret-right> solid | Inheritance |
-  | <&caret-right> dashed | Structural protocol implementation |
-  | filled diamond | Composition / owned part |
-  | empty diamond | Aggregation / stored reference |
-  | arrow | Runtime dependency |
-endlegend
-
-package "Python standard types" #EEEEEE {
-  abstract class ValueError <<stdlib>>
-  abstract class LookupError <<stdlib>>
-  abstract class StrEnum <<stdlib>>
+package "[[diagrams/ingestion-retrieval-library.svg Document processing]]" as Documents #E8F4FD {
+  [ingestion]
+  [chunking]
+  [retrieval]
+  [library]
+}
+package "[[diagrams/generation-summaries.svg Grounded generation]]" as Generation #FFF4D9 {
+  [question answering]
+  [summarization]
+  [generation adapters]
+}
+package "[[diagrams/question-banks-packages.svg Learning material]]" as Material #F3E8FF {
+  [question banks]
+  [learning packages]
+}
+package "[[diagrams/study-progress.svg Study workflow]]" as Study #FFE8E8 {
+  [answer evaluation]
+  [study sessions]
+  [review and progress]
+}
+package "[[diagrams/evaluation-interfaces.svg Quality and interfaces]]" as Interfaces #EFFFF4 {
+  [grounded evaluation]
+  [interfaces.cli]
 }
 
-package "ingestion" #E8F4FD {
-  class Page <<immutable model>>
-  class Document <<immutable model>>
-  interface PdfPage <<Protocol>>
-  interface PdfHandle <<Protocol>>
-  class PdfExtractor
-}
+Documents --> Generation : trusted chunks
+Generation --> Material : summaries and questions
+Material --> Study : ready packages
+Generation --> Study : grounded evaluation
+Interfaces ..> Documents
+Interfaces ..> Generation
+Interfaces ..> Material
+Interfaces ..> Study
 
-package "chunking" #E8F4FD {
-  class Chunk <<immutable model>>
-  class TextChunker
-}
-
-package "retrieval" #E8F4FD {
-  class SearchResult <<immutable model>>
-  interface Embedder <<Protocol>>
-  interface VectorStore <<Protocol>>
-  interface SentenceTransformerModel <<Protocol>>
-  class SentenceTransformerEmbedder
-  class InMemoryVectorStore
-  class FaissVectorStore
-  class RetrievalService
-}
-
-package "library" #EAF7EA {
-  class IndexedDocument <<immutable model>>
-  interface DocumentRepository <<Protocol>>
-  class SqliteDocumentRepository
-}
-
-package "generation" #FFF4D9 {
-  class Citation <<immutable model>>
-  class GroundedAnswer <<immutable model>>
-  class GenerationResult <<immutable model>>
-  class PromptReference <<immutable model>>
-  class PromptTemplate <<immutable model>>
-  class GenerationIdentity <<immutable model>>
-  class GeneratedQuestionDraft <<immutable model>>
-  class QuestionGenerationResult <<immutable model>>
-  class CachedSummaryBatch <<immutable model>>
-  class CachedQuestionBatch <<immutable model>>
-  class PersistedDocumentSummary <<immutable model>>
-
-  interface TextGenerator <<Protocol>>
-  interface SummaryBatchCache <<Protocol>>
-  interface QuestionBatchCache <<Protocol>>
-  interface DocumentSummaryRepository <<Protocol>>
-  interface PipelineGenerationConfig <<Protocol>>
-  interface ChatPipeline <<Protocol>>
-
-  class HuggingFaceTextGenerator
-  class SqliteSummaryCache
-  class SqliteQuestionBatchCache
-  class SqliteDocumentSummaryRepository
-}
-
-package "learning" #F3E8FF {
-  class StudyQuestion <<immutable model>>
-  class QuestionBank <<immutable model>>
-  class QuestionBankIdentity <<immutable model>>
-  enum ReviewRating
-  class QuestionProgress <<immutable model>>
-  class StudyAttempt <<immutable model>>
-  enum AnswerVerdict
-  class AnswerEvaluation <<immutable model>>
-  enum LearningPackageStatus
-  class LearningPackage <<immutable model>>
-
-  interface QuestionBankRepository <<Protocol>>
-  interface QuestionProgressRepository <<Protocol>>
-  interface StudyAttemptRepository <<Protocol>>
-  class SqliteQuestionBankRepository
-  class SqliteQuestionProgressRepository
-  class SqliteStudyAttemptRepository
-  class SqliteLearningPackageRepository
-}
-
-package "application" #FFE8E8 {
-  class DuplicateDocumentError
-  class DocumentNotFoundError
-  class DocumentSummaryNotFoundError
-  class QuestionBankNotFoundError
-  class StudyQuestionNotFoundError
-  class LearningPackageNotFoundError
-  class LearningPackageNotReadyError
-
-  interface DocumentExtractor <<Protocol>>
-  interface DocumentIndexer <<Protocol>>
-  interface DocumentDerivedDataCleaner <<Protocol>>
-  interface DocumentLibrary <<Protocol>>
-  interface RetrievalGateway <<Protocol>>
-  interface SearchGateway <<Protocol>>
-  interface SummaryDocumentLookup <<Protocol>>
-  interface DocumentChunkReader <<Protocol>>
-  interface DocumentSummaryReader <<Protocol>>
-  interface DocumentSummaryLookup <<Protocol>>
-  interface QuestionGenerator <<Protocol>>
-  interface QuestionBankDocumentLookup <<Protocol>>
-  interface QuestionBankReader <<Protocol>>
-  interface ReviewQuestionBankLookup <<Protocol>>
-  interface ReviewProgressRepository <<Protocol>>
-  interface StudySessionQuestionBankLookup <<Protocol>>
-  interface StudySessionReviewer <<Protocol>>
-  interface StudySessionRecorder <<Protocol>>
-  interface AnswerEvaluationGenerator <<Protocol>>
-  interface StudyAnswerEvaluator <<Protocol>>
-  interface LearningPackageReader <<Protocol>>
-  interface LearningPackageRepository <<Protocol>>
-  interface PackageDocumentImporter <<Protocol>>
-  interface PackageSummaryPreparer <<Protocol>>
-  interface PackageQuestionPreparer <<Protocol>>
-  interface LearningPackageLookup <<Protocol>>
-  interface PackageStudySession <<Protocol>>
-  interface LearningProgressPackageLookup <<Protocol>>
-  interface LearningProgressQuestionBankLookup <<Protocol>>
-  interface LearningProgressReader <<Protocol>>
-  interface LearningAttemptReader <<Protocol>>
-
-  enum ImportStatus
-  class ImportOutcome <<immutable model>>
-  class "DocumentSummary" as ApplicationDocumentSummary <<immutable model>>
-  class DueQuestion <<immutable model>>
-
-  class LibraryCatalog
-  class LibraryService
-  class BatchImportService
-  class DocumentSearchService
-  class QuestionAnsweringService
-  class DocumentSummarizationService
-  class DocumentSummaryCatalog
-  class QuestionBankCatalog
-  class QuestionBankService
-  class ReviewScheduler
-  class ReviewService
-  class StudySessionService
-  class EvaluatedStudyAnswer <<immutable model>>
-  class AnswerEvaluationService
-  class LearningPackageCatalog
-  class LearningPackageService
-  class LearningPackageStudyService
-  class LearningProgressReport <<immutable model>>
-  class LearningProgressService
-}
-
-package "evaluation" #EFFFF4 {
-  class ExpectedCitation <<immutable model>>
-  class ExpectedConcept <<immutable model>>
-  class GroundedEvaluationCase <<immutable model>>
-  class GroundedEvaluationResult <<immutable model>>
-  class GroundedEvaluationReport <<immutable model>>
-  class GroundedGenerationEvaluator
-}
-
-package "interfaces.cli" #F2F2F2 {
-  interface SubcommandCollection <<Protocol>>
-}
-
-' Explicit inheritance
-LibraryService --|> LibraryCatalog
-DuplicateDocumentError --|> ValueError
-DocumentNotFoundError --|> LookupError
-DocumentSummaryNotFoundError --|> LookupError
-QuestionBankNotFoundError --|> LookupError
-StudyQuestionNotFoundError --|> LookupError
-LearningPackageNotFoundError --|> LookupError
-LearningPackageNotReadyError --|> ValueError
-ImportStatus --|> StrEnum
-ReviewRating --|> StrEnum
-AnswerVerdict --|> StrEnum
-
-' Ingestion and chunking
-Document *-- "1..*" Page
-PdfHandle o-- "1..*" PdfPage
-PdfExtractor --> PdfHandle : opens
-PdfExtractor ..|> DocumentExtractor
-TextChunker --> Page : processes
-TextChunker --> Chunk : creates
-
-' Retrieval and indexing
-SentenceTransformerEmbedder ..|> Embedder
-SentenceTransformerEmbedder --> SentenceTransformerModel
-InMemoryVectorStore ..|> VectorStore
-FaissVectorStore ..|> VectorStore
-RetrievalService o-- Embedder
-RetrievalService o-- VectorStore
-RetrievalService --> SearchResult : returns
-SearchResult *-- Chunk
-RetrievalService ..|> RetrievalGateway
-RetrievalService ..|> SearchGateway
-FaissVectorStore ..|> DocumentChunkReader
-DocumentSearchService ..|> DocumentIndexer
-DocumentSearchService o-- TextChunker
-DocumentSearchService o-- RetrievalGateway
-DocumentSearchService --> Document
-DocumentSearchService --> Chunk
-
-' Library and document lifecycle
-SqliteDocumentRepository ..|> DocumentRepository
-SqliteDocumentRepository ..|> SummaryDocumentLookup
-SqliteDocumentRepository ..|> QuestionBankDocumentLookup
-LibraryCatalog o-- DocumentRepository
-LibraryService o-- DocumentExtractor
-LibraryService o-- DocumentIndexer
-LibraryService o-- "0..*" DocumentDerivedDataCleaner
-LibraryService ..|> DocumentLibrary
-BatchImportService o-- DocumentLibrary
-BatchImportService --> ImportOutcome
-ImportOutcome o-- IndexedDocument
-
-' Generation models and persistence
-GroundedAnswer *-- "0..*" Citation
-GroundedAnswer o-- "0..*" PromptReference
-GenerationResult o-- "0..*" PromptReference
-PromptTemplate --> PromptReference : creates
-GenerationIdentity o-- "1..*" PromptReference
-QuestionGenerationResult *-- "1..*" GeneratedQuestionDraft
-QuestionGenerationResult o-- "1..*" PromptReference
-CachedSummaryBatch *-- GenerationResult
-PersistedDocumentSummary *-- "1..*" Citation
-PersistedDocumentSummary o-- "1..*" PromptReference
-ApplicationDocumentSummary *-- "1..*" Citation
-ApplicationDocumentSummary o-- "0..*" PromptReference
-
-HuggingFaceTextGenerator ..|> TextGenerator
-HuggingFaceTextGenerator ..|> QuestionGenerator
-HuggingFaceTextGenerator ..|> AnswerEvaluationGenerator
-HuggingFaceTextGenerator o-- ChatPipeline
-ChatPipeline o-- PipelineGenerationConfig
-SqliteSummaryCache ..|> SummaryBatchCache
-SqliteDocumentSummaryRepository ..|> DocumentSummaryRepository
-SqliteDocumentSummaryRepository ..|> DocumentSummaryReader
-SqliteDocumentSummaryRepository ..|> DocumentDerivedDataCleaner
-
-' Grounded QA and summaries
-QuestionAnsweringService o-- SearchGateway
-QuestionAnsweringService o-- TextGenerator
-QuestionAnsweringService --> GroundedAnswer
-DocumentSummarizationService o-- SummaryDocumentLookup
-DocumentSummarizationService o-- DocumentChunkReader
-DocumentSummarizationService o-- TextGenerator
-DocumentSummarizationService o-- SummaryBatchCache
-DocumentSummarizationService o-- DocumentSummaryRepository
-DocumentSummarizationService --> GenerationIdentity
-DocumentSummarizationService --> ApplicationDocumentSummary
-DocumentSummaryCatalog o-- DocumentRepository : document validation
-DocumentSummaryCatalog o-- DocumentSummaryReader
-DocumentSummaryCatalog ..|> DocumentSummaryLookup
-
-' Question banks
-StudyQuestion *-- "1..*" Citation
-QuestionBank *-- "1..*" StudyQuestion
-QuestionBank o-- "1..*" PromptReference
-QuestionBankIdentity o-- "1..*" PromptReference
-SqliteQuestionBankRepository ..|> QuestionBankRepository
-SqliteQuestionBankRepository ..|> QuestionBankReader
-SqliteQuestionBankRepository ..|> DocumentDerivedDataCleaner
-QuestionBankCatalog o-- QuestionBankDocumentLookup
-QuestionBankCatalog o-- QuestionBankReader
-QuestionBankCatalog ..|> ReviewQuestionBankLookup
-QuestionBankCatalog ..|> StudySessionQuestionBankLookup
-QuestionBankService o-- DocumentSummaryLookup
-QuestionBankService o-- QuestionGenerator
-QuestionBankService o-- QuestionBankRepository
-QuestionBankService o-- QuestionBatchCache
-QuestionBankService --> QuestionBankIdentity
-QuestionBankService --> QuestionBank
-QuestionBankService ..|> PackageQuestionPreparer
-CachedQuestionBatch *-- QuestionGenerationResult
-SqliteQuestionBatchCache ..|> QuestionBatchCache
-DocumentSummarizationService ..|> PackageSummaryPreparer
-LibraryService ..|> PackageDocumentImporter
-
-' User-facing learning packages
-LearningPackage --> LearningPackageStatus
-SqliteLearningPackageRepository ..|> LearningPackageRepository
-SqliteLearningPackageRepository ..|> LearningPackageReader
-SqliteLearningPackageRepository ..|> DocumentDerivedDataCleaner
-LearningPackageCatalog o-- LearningPackageReader
-LearningPackageService o-- LearningPackageRepository
-LearningPackageService o-- PackageDocumentImporter
-LearningPackageService o-- PackageSummaryPreparer
-LearningPackageService o-- PackageQuestionPreparer
-LearningPackageService --> LearningPackage
-SqliteLearningPackageRepository ..|> LearningPackageLookup
-StudySessionService ..|> PackageStudySession
-LearningPackageStudyService o-- LearningPackageLookup
-LearningPackageStudyService o-- PackageStudySession
-LearningPackageStudyService --> LearningPackage
-SqliteLearningPackageRepository ..|> LearningProgressPackageLookup
-QuestionBankCatalog ..|> LearningProgressQuestionBankLookup
-SqliteQuestionProgressRepository ..|> LearningProgressReader
-SqliteStudyAttemptRepository ..|> LearningAttemptReader
-LearningProgressService o-- LearningProgressPackageLookup
-LearningProgressService o-- LearningProgressQuestionBankLookup
-LearningProgressService o-- LearningProgressReader
-LearningProgressService o-- LearningAttemptReader
-LearningProgressService --> LearningProgressReport
-
-' Learning progress and review scheduling
-QuestionProgress --> ReviewRating : changed by rating
-SqliteQuestionProgressRepository ..|> QuestionProgressRepository
-SqliteQuestionProgressRepository ..|> ReviewProgressRepository
-SqliteQuestionProgressRepository ..|> DocumentDerivedDataCleaner
-DueQuestion *-- StudyQuestion
-DueQuestion o-- "0..1" QuestionProgress
-ReviewScheduler --> ReviewRating
-ReviewScheduler --> QuestionProgress
-ReviewService o-- ReviewQuestionBankLookup
-ReviewService o-- ReviewProgressRepository
-ReviewService o-- ReviewScheduler
-ReviewService --> DueQuestion
-ReviewService ..|> StudySessionReviewer
-StudyAttempt *-- "1..*" Citation
-StudyAttempt *-- QuestionProgress : resulting snapshot
-StudyAttempt --> ReviewRating
-StudyAttempt o-- "0..1" AnswerEvaluation
-AnswerEvaluation --> AnswerVerdict
-AnswerEvaluation o-- "0..*" PromptReference
-SqliteStudyAttemptRepository ..|> StudyAttemptRepository
-SqliteStudyAttemptRepository ..|> StudySessionRecorder
-SqliteStudyAttemptRepository ..|> DocumentDerivedDataCleaner
-StudySessionService o-- StudySessionQuestionBankLookup
-StudySessionService o-- StudySessionReviewer
-StudySessionService o-- StudySessionRecorder
-StudySessionService o-- StudyAnswerEvaluator
-StudySessionService --> DueQuestion
-StudySessionService --> StudyAttempt
-AnswerEvaluationService o-- AnswerEvaluationGenerator
-AnswerEvaluationService --> EvaluatedStudyAnswer
-EvaluatedStudyAnswer *-- AnswerEvaluation
-EvaluatedStudyAnswer --> ReviewRating
-
-' Evaluation
-GroundedEvaluationCase *-- "1..*" ExpectedCitation
-GroundedEvaluationCase *-- "0..*" ExpectedConcept
-GroundedEvaluationResult o-- "0..*" ExpectedCitation
-GroundedEvaluationReport *-- "1..*" GroundedEvaluationResult
-GroundedGenerationEvaluator --> GroundedEvaluationCase
-GroundedGenerationEvaluator --> GroundedAnswer
-GroundedGenerationEvaluator --> GroundedEvaluationResult
-GroundedGenerationEvaluator --> GroundedEvaluationReport
-
-note as StructuralTyping
-  Python protocols are implemented structurally; dashed arrows therefore do
-  not represent an explicit base class in the source code. CLI registrars are
-  functions and consequently do not appear as classes in this diagram.
+note bottom
+  Select a colored area in rendered SVG output to open its detailed class view.
+  Source links are also listed in docs/diagrams/README.md.
 end note
-
 @enduml

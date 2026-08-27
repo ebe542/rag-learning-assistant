@@ -1,0 +1,78 @@
+@startuml
+title Grounded Generation and Summaries
+!include _theme.puml
+left to right direction
+
+package "Python standard types" #EEEEEE {
+  abstract class LookupError <<stdlib>>
+}
+
+package "generation" #FFF4D9 {
+  class Citation <<immutable model>>
+  class GroundedAnswer <<immutable model>>
+  class GenerationResult <<immutable model>>
+  class PromptReference <<immutable model>>
+  class PromptTemplate <<immutable model>>
+  class GenerationIdentity <<immutable model>>
+  class CachedSummaryBatch <<immutable model>>
+  class PersistedDocumentSummary <<immutable model>>
+  interface TextGenerator <<Protocol>>
+  interface SummaryBatchCache <<Protocol>>
+  interface DocumentSummaryRepository <<Protocol>>
+  interface PipelineGenerationConfig <<Protocol>>
+  interface ChatPipeline <<Protocol>>
+  class HuggingFaceTextGenerator
+  class SqliteSummaryCache
+  class SqliteDocumentSummaryRepository
+}
+package "application" #FFE8E8 {
+  interface SearchGateway <<Protocol>>
+  interface SummaryDocumentLookup <<Protocol>>
+  interface DocumentChunkReader <<Protocol>>
+  interface DocumentSummaryReader <<Protocol>>
+  interface DocumentSummaryLookup <<Protocol>>
+  interface PackageSummaryPreparer <<Protocol>>
+  interface DocumentDerivedDataCleaner <<Protocol>>
+  class QuestionAnsweringService
+  class DocumentSummarizationService
+  class DocumentSummaryCatalog
+  class "DocumentSummary" as ApplicationDocumentSummary <<immutable model>>
+  class DocumentSummaryNotFoundError
+}
+package "library" #EAF7EA {
+  interface DocumentRepository <<Protocol>>
+}
+
+GroundedAnswer *-- "0..*" Citation
+GroundedAnswer o-- "0..*" PromptReference
+GenerationResult o-- "0..*" PromptReference
+PromptTemplate --> PromptReference : creates
+GenerationIdentity o-- "1..*" PromptReference
+CachedSummaryBatch *-- GenerationResult
+PersistedDocumentSummary *-- "1..*" Citation
+PersistedDocumentSummary o-- "1..*" PromptReference
+ApplicationDocumentSummary *-- "1..*" Citation
+ApplicationDocumentSummary o-- "0..*" PromptReference
+HuggingFaceTextGenerator ..|> TextGenerator
+HuggingFaceTextGenerator o-- ChatPipeline
+ChatPipeline o-- PipelineGenerationConfig
+SqliteSummaryCache ..|> SummaryBatchCache
+SqliteDocumentSummaryRepository ..|> DocumentSummaryRepository
+SqliteDocumentSummaryRepository ..|> DocumentSummaryReader
+SqliteDocumentSummaryRepository ..|> DocumentDerivedDataCleaner
+QuestionAnsweringService o-- SearchGateway
+QuestionAnsweringService o-- TextGenerator
+QuestionAnsweringService --> GroundedAnswer
+DocumentSummarizationService o-- SummaryDocumentLookup
+DocumentSummarizationService o-- DocumentChunkReader
+DocumentSummarizationService o-- TextGenerator
+DocumentSummarizationService o-- SummaryBatchCache
+DocumentSummarizationService o-- DocumentSummaryRepository
+DocumentSummarizationService --> GenerationIdentity
+DocumentSummarizationService --> ApplicationDocumentSummary
+DocumentSummarizationService ..|> PackageSummaryPreparer
+DocumentSummaryCatalog o-- DocumentRepository : validates
+DocumentSummaryCatalog o-- DocumentSummaryReader
+DocumentSummaryCatalog ..|> DocumentSummaryLookup
+DocumentSummaryNotFoundError --|> LookupError
+@enduml

@@ -433,8 +433,9 @@ PDF -> page extraction -> semantic chunks -> embeddings -> vector search
                                                         -> questions and progress
 ```
 
-The package-level classes, protocols, inheritance, and runtime relationships are
-maintained as a renderable [PlantUML class overview](docs/class-overview.puml).
+The architecture is documented as a small, linked
+[SVG overview](docs/class-overview.svg) with editable PlantUML sources and
+focused [class diagrams](docs/diagrams/README.md) for each functional area.
 
 Planned next milestones:
 

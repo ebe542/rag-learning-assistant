@@ -1,0 +1,110 @@
+@startuml
+title Study Sessions, Review, and Progress
+!include _theme.puml
+left to right direction
+
+package "Python standard types" #EEEEEE {
+  abstract class LookupError <<stdlib>>
+  abstract class StrEnum <<stdlib>>
+}
+
+package "generation" #FFF4D9 {
+  class Citation <<immutable model>>
+  class PromptReference <<immutable model>>
+  class HuggingFaceTextGenerator
+}
+package "learning" #F3E8FF {
+  class StudyQuestion <<immutable model>>
+  class QuestionProgress <<immutable model>>
+  class StudyAttempt <<immutable model>>
+  class AnswerEvaluation <<immutable model>>
+  class LearningPackage <<immutable model>>
+  enum ReviewRating
+  enum AnswerVerdict
+  interface QuestionProgressRepository <<Protocol>>
+  interface StudyAttemptRepository <<Protocol>>
+  class SqliteQuestionProgressRepository
+  class SqliteStudyAttemptRepository
+  class SqliteLearningPackageRepository
+}
+package "application" #FFE8E8 {
+  interface ReviewQuestionBankLookup <<Protocol>>
+  interface ReviewProgressRepository <<Protocol>>
+  interface StudySessionQuestionBankLookup <<Protocol>>
+  interface StudySessionReviewer <<Protocol>>
+  interface StudySessionRecorder <<Protocol>>
+  interface AnswerEvaluationGenerator <<Protocol>>
+  interface StudyAnswerEvaluator <<Protocol>>
+  interface LearningPackageLookup <<Protocol>>
+  interface PackageStudySession <<Protocol>>
+  interface LearningProgressPackageLookup <<Protocol>>
+  interface LearningProgressQuestionBankLookup <<Protocol>>
+  interface LearningProgressReader <<Protocol>>
+  interface LearningAttemptReader <<Protocol>>
+  interface DocumentDerivedDataCleaner <<Protocol>>
+  class DueQuestion <<immutable model>>
+  class EvaluatedStudyAnswer <<immutable model>>
+  class LearningProgressReport <<immutable model>>
+  class ReviewScheduler
+  class ReviewService
+  class StudySessionService
+  class AnswerEvaluationService
+  class LearningPackageStudyService
+  class LearningProgressService
+  class QuestionBankCatalog
+  class StudyQuestionNotFoundError
+}
+
+QuestionProgress --> ReviewRating : changed by rating
+SqliteQuestionProgressRepository ..|> QuestionProgressRepository
+SqliteQuestionProgressRepository ..|> ReviewProgressRepository
+SqliteQuestionProgressRepository ..|> LearningProgressReader
+SqliteQuestionProgressRepository ..|> DocumentDerivedDataCleaner
+DueQuestion *-- StudyQuestion
+DueQuestion o-- "0..1" QuestionProgress
+ReviewScheduler --> ReviewRating
+ReviewScheduler --> QuestionProgress
+ReviewService o-- ReviewQuestionBankLookup
+ReviewService o-- ReviewProgressRepository
+ReviewService o-- ReviewScheduler
+ReviewService --> DueQuestion
+ReviewService ..|> StudySessionReviewer
+QuestionBankCatalog ..|> ReviewQuestionBankLookup
+QuestionBankCatalog ..|> StudySessionQuestionBankLookup
+QuestionBankCatalog ..|> LearningProgressQuestionBankLookup
+StudyAttempt *-- "1..*" Citation
+StudyAttempt *-- QuestionProgress : resulting snapshot
+StudyAttempt --> ReviewRating
+StudyAttempt o-- "0..1" AnswerEvaluation
+AnswerEvaluation --> AnswerVerdict
+AnswerEvaluation o-- "0..*" PromptReference
+SqliteStudyAttemptRepository ..|> StudyAttemptRepository
+SqliteStudyAttemptRepository ..|> StudySessionRecorder
+SqliteStudyAttemptRepository ..|> LearningAttemptReader
+SqliteStudyAttemptRepository ..|> DocumentDerivedDataCleaner
+StudySessionService o-- StudySessionQuestionBankLookup
+StudySessionService o-- StudySessionReviewer
+StudySessionService o-- StudySessionRecorder
+StudySessionService o-- StudyAnswerEvaluator
+StudySessionService --> DueQuestion
+StudySessionService --> StudyAttempt
+StudySessionService ..|> PackageStudySession
+HuggingFaceTextGenerator ..|> AnswerEvaluationGenerator
+AnswerEvaluationService o-- AnswerEvaluationGenerator
+AnswerEvaluationService --> EvaluatedStudyAnswer
+EvaluatedStudyAnswer *-- AnswerEvaluation
+EvaluatedStudyAnswer --> ReviewRating
+SqliteLearningPackageRepository ..|> LearningPackageLookup
+SqliteLearningPackageRepository ..|> LearningProgressPackageLookup
+LearningPackageStudyService o-- LearningPackageLookup
+LearningPackageStudyService o-- PackageStudySession
+LearningPackageStudyService --> LearningPackage
+LearningProgressService o-- LearningProgressPackageLookup
+LearningProgressService o-- LearningProgressQuestionBankLookup
+LearningProgressService o-- LearningProgressReader
+LearningProgressService o-- LearningAttemptReader
+LearningProgressService --> LearningProgressReport
+ReviewRating --|> StrEnum
+AnswerVerdict --|> StrEnum
+StudyQuestionNotFoundError --|> LookupError
+@enduml

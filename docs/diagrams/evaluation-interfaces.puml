@@ -1,0 +1,60 @@
+@startuml
+title Evaluation and CLI Boundary
+!include _theme.puml
+left to right direction
+
+package "generation" #FFF4D9 {
+  class GroundedAnswer <<immutable model>>
+}
+package "evaluation" #EFFFF4 {
+  class ExpectedCitation <<immutable model>>
+  class ExpectedConcept <<immutable model>>
+  class GroundedEvaluationCase <<immutable model>>
+  class GroundedEvaluationResult <<immutable model>>
+  class GroundedEvaluationReport <<immutable model>>
+  class GroundedGenerationEvaluator
+}
+package "interfaces.cli" #F2F2F2 {
+  interface SubcommandCollection <<Protocol>>
+  class "parser.build_parser" as CliParser <<function>>
+  class "entrypoint.main" as CliEntrypoint <<function>>
+  class "commands" as CliCommands <<module>>
+  class "doctor" as Doctor <<module>>
+  class "error_reporting" as ErrorReporting <<module>>
+}
+package "application services" #FFE8E8 {
+  class LibraryService
+  class QuestionAnsweringService
+  class DocumentSummarizationService
+  class QuestionBankService
+  class LearningPackageService
+  class LearningPackageStudyService
+  class LearningProgressService
+}
+
+GroundedEvaluationCase *-- "1..*" ExpectedCitation
+GroundedEvaluationCase *-- "0..*" ExpectedConcept
+GroundedEvaluationResult o-- "0..*" ExpectedCitation
+GroundedEvaluationReport *-- "1..*" GroundedEvaluationResult
+GroundedGenerationEvaluator --> GroundedEvaluationCase
+GroundedGenerationEvaluator --> GroundedAnswer
+GroundedGenerationEvaluator --> GroundedEvaluationResult
+GroundedGenerationEvaluator --> GroundedEvaluationReport
+CliParser --> SubcommandCollection
+CliEntrypoint --> CliParser
+CliEntrypoint --> CliCommands
+CliCommands --> LibraryService
+CliCommands --> QuestionAnsweringService
+CliCommands --> DocumentSummarizationService
+CliCommands --> QuestionBankService
+CliCommands --> LearningPackageService
+CliCommands --> LearningPackageStudyService
+CliCommands --> LearningProgressService
+CliEntrypoint --> Doctor
+CliEntrypoint --> ErrorReporting
+
+note bottom
+  CLI registrars and entry points are functions or modules rather than classes;
+  they are shown here because this view documents the external runtime boundary.
+end note
+@enduml

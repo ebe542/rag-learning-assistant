@@ -1,0 +1,89 @@
+@startuml
+title Question Banks and Learning Packages
+!include _theme.puml
+left to right direction
+
+package "Python standard types" #EEEEEE {
+  abstract class ValueError <<stdlib>>
+  abstract class LookupError <<stdlib>>
+  abstract class StrEnum <<stdlib>>
+}
+
+package "generation" #FFF4D9 {
+  class Citation <<immutable model>>
+  class PromptReference <<immutable model>>
+  class GeneratedQuestionDraft <<immutable model>>
+  class QuestionGenerationResult <<immutable model>>
+  class CachedQuestionBatch <<immutable model>>
+  interface QuestionBatchCache <<Protocol>>
+  class SqliteQuestionBatchCache
+  class HuggingFaceTextGenerator
+}
+package "learning" #F3E8FF {
+  class StudyQuestion <<immutable model>>
+  class QuestionBank <<immutable model>>
+  class QuestionBankIdentity <<immutable model>>
+  enum LearningPackageStatus
+  class LearningPackage <<immutable model>>
+  interface QuestionBankRepository <<Protocol>>
+  class SqliteQuestionBankRepository
+  class SqliteLearningPackageRepository
+}
+package "application" #FFE8E8 {
+  interface DocumentSummaryLookup <<Protocol>>
+  interface QuestionGenerator <<Protocol>>
+  interface QuestionBankDocumentLookup <<Protocol>>
+  interface QuestionBankReader <<Protocol>>
+  interface DocumentDerivedDataCleaner <<Protocol>>
+  interface LearningPackageReader <<Protocol>>
+  interface LearningPackageRepository <<Protocol>>
+  interface PackageDocumentImporter <<Protocol>>
+  interface PackageSummaryPreparer <<Protocol>>
+  interface PackageQuestionPreparer <<Protocol>>
+  class QuestionBankCatalog
+  class QuestionBankService
+  class LearningPackageCatalog
+  class LearningPackageService
+  class LibraryService
+  class QuestionBankNotFoundError
+  class LearningPackageNotFoundError
+  class LearningPackageNotReadyError
+}
+
+QuestionGenerationResult *-- "1..*" GeneratedQuestionDraft
+QuestionGenerationResult o-- "1..*" PromptReference
+CachedQuestionBatch *-- QuestionGenerationResult
+SqliteQuestionBatchCache ..|> QuestionBatchCache
+HuggingFaceTextGenerator ..|> QuestionGenerator
+StudyQuestion *-- "1..*" Citation
+QuestionBank *-- "1..*" StudyQuestion
+QuestionBank o-- "1..*" PromptReference
+QuestionBankIdentity o-- "1..*" PromptReference
+SqliteQuestionBankRepository ..|> QuestionBankRepository
+SqliteQuestionBankRepository ..|> QuestionBankReader
+SqliteQuestionBankRepository ..|> DocumentDerivedDataCleaner
+QuestionBankCatalog o-- QuestionBankDocumentLookup
+QuestionBankCatalog o-- QuestionBankReader
+QuestionBankService o-- DocumentSummaryLookup
+QuestionBankService o-- QuestionGenerator
+QuestionBankService o-- QuestionBankRepository
+QuestionBankService o-- QuestionBatchCache
+QuestionBankService --> QuestionBankIdentity
+QuestionBankService --> QuestionBank
+QuestionBankService ..|> PackageQuestionPreparer
+LearningPackage --> LearningPackageStatus
+SqliteLearningPackageRepository ..|> LearningPackageRepository
+SqliteLearningPackageRepository ..|> LearningPackageReader
+SqliteLearningPackageRepository ..|> DocumentDerivedDataCleaner
+LearningPackageCatalog o-- LearningPackageReader
+LearningPackageService o-- LearningPackageRepository
+LearningPackageService o-- PackageDocumentImporter
+LearningPackageService o-- PackageSummaryPreparer
+LearningPackageService o-- PackageQuestionPreparer
+LearningPackageService --> LearningPackage
+LibraryService ..|> PackageDocumentImporter
+LearningPackageStatus --|> StrEnum
+QuestionBankNotFoundError --|> LookupError
+LearningPackageNotFoundError --|> LookupError
+LearningPackageNotReadyError --|> ValueError
+@enduml

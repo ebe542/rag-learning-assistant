@@ -25,7 +25,8 @@ PDF
 ```
 
 The detailed classes, protocols, inheritance, and runtime relationships are
-maintained in the renderable [PlantUML class overview](class-overview.puml).
+maintained in a renderable [PlantUML overview](class-overview.puml) and focused
+[class diagrams](diagrams/README.md).
 
 ## Source responsibilities
 
@@ -654,7 +655,7 @@ ADRs explain why durable choices were made. `development.md` describes the
 current integrated system. Code comments explain non-obvious local constraints,
 and tests remain the executable behavior specification.
 
-Update the [PlantUML class overview](class-overview.puml) whenever classes,
+Update the relevant [PlantUML class diagram](diagrams/README.md) whenever classes,
 protocols, inheritance, or major runtime relationships change.
 
 ## Near-term roadmap

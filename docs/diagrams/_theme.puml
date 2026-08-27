@@ -1,0 +1,14 @@
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam shadowing false
+hide empty members
+
+legend left
+  |= Notation |= Meaning |
+  | <&caret-right> solid | Inheritance |
+  | <&caret-right> dashed | Structural protocol implementation |
+  | filled diamond | Composition / owned part |
+  | empty diamond | Aggregation / stored reference |
+  | arrow | Runtime dependency |
+endlegend

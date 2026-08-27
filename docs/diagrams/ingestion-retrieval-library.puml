@@ -1,0 +1,95 @@
+@startuml
+title Ingestion, Retrieval, and Library
+!include _theme.puml
+left to right direction
+
+package "Python standard types" #EEEEEE {
+  abstract class ValueError <<stdlib>>
+  abstract class LookupError <<stdlib>>
+  abstract class StrEnum <<stdlib>>
+}
+
+package "ingestion" #E8F4FD {
+  class Page <<immutable model>>
+  class Document <<immutable model>>
+  interface PdfPage <<Protocol>>
+  interface PdfHandle <<Protocol>>
+  class PdfExtractor
+}
+package "chunking" #E8F4FD {
+  class Chunk <<immutable model>>
+  class TextChunker
+}
+package "retrieval" #E8F4FD {
+  class SearchResult <<immutable model>>
+  interface Embedder <<Protocol>>
+  interface VectorStore <<Protocol>>
+  interface SentenceTransformerModel <<Protocol>>
+  class SentenceTransformerEmbedder
+  class InMemoryVectorStore
+  class FaissVectorStore
+  class RetrievalService
+}
+package "library" #EAF7EA {
+  class IndexedDocument <<immutable model>>
+  interface DocumentRepository <<Protocol>>
+  class SqliteDocumentRepository
+}
+package "application" #FFE8E8 {
+  interface DocumentExtractor <<Protocol>>
+  interface DocumentIndexer <<Protocol>>
+  interface DocumentDerivedDataCleaner <<Protocol>>
+  interface DocumentLibrary <<Protocol>>
+  interface RetrievalGateway <<Protocol>>
+  interface SearchGateway <<Protocol>>
+  interface DocumentChunkReader <<Protocol>>
+  interface SummaryDocumentLookup <<Protocol>>
+  interface QuestionBankDocumentLookup <<Protocol>>
+  class LibraryCatalog
+  class LibraryService
+  class BatchImportService
+  class DocumentSearchService
+  enum ImportStatus
+  class ImportOutcome <<immutable model>>
+  class DuplicateDocumentError
+  class DocumentNotFoundError
+}
+
+Document *-- "1..*" Page
+PdfHandle o-- "1..*" PdfPage
+PdfExtractor --> PdfHandle : opens
+PdfExtractor ..|> DocumentExtractor
+TextChunker --> Page : processes
+TextChunker --> Chunk : creates
+SentenceTransformerEmbedder ..|> Embedder
+SentenceTransformerEmbedder --> SentenceTransformerModel
+InMemoryVectorStore ..|> VectorStore
+FaissVectorStore ..|> VectorStore
+FaissVectorStore ..|> DocumentChunkReader
+RetrievalService o-- Embedder
+RetrievalService o-- VectorStore
+RetrievalService --> SearchResult : returns
+RetrievalService ..|> RetrievalGateway
+RetrievalService ..|> SearchGateway
+SearchResult *-- Chunk
+DocumentSearchService ..|> DocumentIndexer
+DocumentSearchService o-- TextChunker
+DocumentSearchService o-- RetrievalGateway
+DocumentSearchService --> Document
+DocumentSearchService --> Chunk
+SqliteDocumentRepository ..|> DocumentRepository
+SqliteDocumentRepository ..|> SummaryDocumentLookup
+SqliteDocumentRepository ..|> QuestionBankDocumentLookup
+LibraryCatalog o-- DocumentRepository
+LibraryService --|> LibraryCatalog
+LibraryService o-- DocumentExtractor
+LibraryService o-- DocumentIndexer
+LibraryService o-- "0..*" DocumentDerivedDataCleaner
+LibraryService ..|> DocumentLibrary
+BatchImportService o-- DocumentLibrary
+BatchImportService --> ImportOutcome
+ImportOutcome o-- IndexedDocument
+DuplicateDocumentError --|> ValueError
+DocumentNotFoundError --|> LookupError
+ImportStatus --|> StrEnum
+@enduml
