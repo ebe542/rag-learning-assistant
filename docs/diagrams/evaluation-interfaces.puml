@@ -1,5 +1,5 @@
 @startuml
-title Evaluation and CLI Boundary
+title Evaluation and Interface Boundaries
 !include _theme.puml
 left to right direction
 
@@ -21,6 +21,11 @@ package "interfaces.cli" #F2F2F2 {
   class "commands" as CliCommands <<module>>
   class "doctor" as Doctor <<module>>
   class "error_reporting" as ErrorReporting <<module>>
+}
+package "interfaces.web" #E8F4FD {
+  class "application.create_app" as WebApplication <<function>>
+  class "server.run_server" as WebServer <<function>>
+  class "home.html" as HomeTemplate <<template>>
 }
 package "application services" #FFE8E8 {
   class LibraryService
@@ -52,9 +57,13 @@ CliCommands --> LearningPackageStudyService
 CliCommands --> LearningProgressService
 CliEntrypoint --> Doctor
 CliEntrypoint --> ErrorReporting
+CliCommands --> WebServer
+WebServer --> WebApplication
+WebApplication --> HomeTemplate
 
 note bottom
-  CLI registrars and entry points are functions or modules rather than classes;
-  they are shown here because this view documents the external runtime boundary.
+  Interface registrars and entry points are functions or modules rather than
+  classes; they are shown here because this view documents external runtime
+  boundaries.
 end note
 @enduml

@@ -26,6 +26,7 @@ package "[[diagrams/study-progress.svg Study workflow]]" as Study #FFE8E8 {
 package "[[diagrams/evaluation-interfaces.svg Quality and interfaces]]" as Interfaces #EFFFF4 {
   [grounded evaluation]
   [interfaces.cli]
+  [interfaces.web]
 }
 
 Documents --> Generation : trusted chunks

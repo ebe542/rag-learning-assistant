@@ -1401,3 +1401,19 @@ def run_review_record(
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
+
+
+def run_gui(port: int, *, open_browser: bool = True) -> int:
+    """Start the optional local browser interface."""
+
+    try:
+        from rag_learning_assistant.interfaces.web.server import run_server
+    except ModuleNotFoundError as error:
+        if error.name in {"fastapi", "jinja2", "uvicorn"}:
+            raise RuntimeError(
+                "GUI dependencies are not installed; install the project with the gui extra"
+            ) from error
+        raise
+
+    run_server(port=port, open_browser=open_browser)
+    return 0

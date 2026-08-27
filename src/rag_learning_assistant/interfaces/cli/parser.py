@@ -5,6 +5,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from rag_learning_assistant.interfaces.cli.parsers import (
     add_document_commands,
+    add_gui_command,
     add_package_commands,
     add_question_commands,
     add_retrieval_commands,
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_question_commands(commands)
     add_review_commands(commands)
     add_package_commands(commands)
+    add_gui_command(commands)
 
     return parser
 

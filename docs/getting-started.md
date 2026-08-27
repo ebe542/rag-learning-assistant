@@ -13,7 +13,7 @@ environment:
 py -3.13 -m venv .venv
 source .venv/Scripts/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[local]"
+python -m pip install -e ".[local,gui]"
 ```
 
 The local models are downloaded only when they are first needed. NVIDIA users
@@ -45,6 +45,17 @@ export RAG_LEARN_LIBRARY="local-data/product-library"
 ```
 
 Run `rag-learn doctor` again to confirm the selected path.
+
+Start the local browser interface:
+
+```bash
+rag-learn gui
+```
+
+The current GUI preview confirms that the local interface is installed. Keep
+the terminal open while using it and press `Ctrl+C` there to stop the server.
+The complete package and study workflow remains available through the commands
+below while those screens are added incrementally.
 
 ## 3. Prepare the first PDF
 

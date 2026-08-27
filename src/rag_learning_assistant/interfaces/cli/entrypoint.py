@@ -38,6 +38,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "gui":
+        return commands.run_gui(
+            port=args.port,
+            open_browser=not args.no_browser,
+        )
+
     if args.command == "doctor":
         return commands.run_doctor(
             library_directory=args.library,

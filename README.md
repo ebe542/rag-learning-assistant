@@ -21,6 +21,7 @@ format may still change before a stable release.
 - build source-grounded answers through an optional local Qwen3 generator
 - prepare resumable learning packages containing an indexed document, a
   grounded summary, and a grounded question bank
+- open an optional local browser interface through `rag-learn gui`
 
 Scanned documents do not yet support OCR.
 
@@ -31,6 +32,17 @@ New users should follow the concise
 environment diagnosis, preparing the first PDF, studying, progress reporting,
 and package removal with the user-facing commands. Release changes are recorded
 in the [changelog](CHANGELOG.md).
+
+Install the GUI dependencies with the application extras and start the local
+interface:
+
+```bash
+python -m pip install -e ".[local,gui]"
+rag-learn gui
+```
+
+The preview listens only on `127.0.0.1`. Its first page establishes the local
+interface; package discovery and study workflows follow in the next milestones.
 
 ## Product workflow
 
@@ -439,9 +451,10 @@ focused [class diagrams](docs/diagrams/README.md) for each functional area.
 
 Planned next milestones:
 
-1. add manual correction for incorrectly evaluated study answers
-2. generate detailed section-level learning material
-3. add optional Ollama and API model providers
+1. add a local web interface for package discovery and study workflows
+2. add manual correction for incorrectly evaluated study answers
+3. generate detailed section-level learning material
+4. add optional Ollama and API model providers
 
 ## Development
 

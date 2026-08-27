@@ -660,7 +660,8 @@ protocols, inheritance, or major runtime relationships change.
 
 ## Near-term roadmap
 
-1. Add manual correction for incorrectly evaluated study answers.
-2. Add progress analytics over the append-only attempt history.
-3. Generate detailed section-level learning material.
-4. Add optional Ollama and remote API generation providers.
+1. Add a local web interface for package discovery and study workflows.
+2. Add manual correction for incorrectly evaluated study answers.
+3. Add progress analytics over the append-only attempt history.
+4. Generate detailed section-level learning material.
+5. Add optional Ollama and remote API generation providers.
