@@ -7,10 +7,18 @@ import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DISTRIBUTION_NAME = "rag-learning-assistant"
+
+
+def project_version() -> str:
+    """Read the single release version declared in project metadata."""
+
+    configuration = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return str(configuration["project"]["version"])
 
 
 def environment_python(environment: Path) -> Path:
@@ -55,6 +63,7 @@ def main() -> None:
     """Build wheel and sdist, validate metadata, and smoke-test the wheel."""
 
     args = build_parser().parse_args()
+    expected_version = project_version()
     with tempfile.TemporaryDirectory(prefix="rag-learning-assistant-release-") as directory:
         temporary_root = Path(directory)
         distribution_directory = temporary_root / "dist"
@@ -93,6 +102,16 @@ def main() -> None:
                 "install",
                 "--disable-pip-version-check",
                 str(wheel),
+            ]
+        )
+        run(
+            [
+                str(python),
+                "-c",
+                (
+                    "from importlib.metadata import version; "
+                    f"assert version('{DISTRIBUTION_NAME}') == '{expected_version}'"
+                ),
             ]
         )
         run([str(python), "-m", "rag_learning_assistant.cli", "--version"])

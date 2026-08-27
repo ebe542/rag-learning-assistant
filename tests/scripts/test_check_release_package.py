@@ -14,6 +14,10 @@ def test_build_backend_is_bounded_to_twine_compatible_metadata() -> None:
     assert configuration["build-system"]["requires"] == ["hatchling>=1.27,<1.28"]
 
 
+def test_project_version_reads_package_metadata() -> None:
+    assert check_release_package.project_version() == "0.3.0a1"
+
+
 def test_environment_python_uses_platform_layout(monkeypatch) -> None:
     environment = Path("clean-environment")
 
@@ -41,8 +45,8 @@ def test_parser_accepts_explicit_python() -> None:
 @pytest.mark.parametrize(
     ("filename", "suffix"),
     [
-        ("rag_learning_assistant-0.2.0-py3-none-any.whl", ".whl"),
-        ("rag_learning_assistant-0.2.0.tar.gz", ".tar.gz"),
+        ("rag_learning_assistant-0.3.0a1-py3-none-any.whl", ".whl"),
+        ("rag_learning_assistant-0.3.0a1.tar.gz", ".tar.gz"),
     ],
 )
 def test_find_distribution_returns_only_matching_file(

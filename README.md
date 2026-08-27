@@ -29,7 +29,8 @@ Scanned documents do not yet support OCR.
 New users should follow the concise
 [alpha getting-started guide](docs/getting-started.md). It covers installation,
 environment diagnosis, preparing the first PDF, studying, progress reporting,
-and package removal with the user-facing commands.
+and package removal with the user-facing commands. Release changes are recorded
+in the [changelog](CHANGELOG.md).
 
 ## Product workflow
 
