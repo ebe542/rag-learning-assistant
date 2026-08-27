@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CI_EXTRAS = "dev,storage"
+CI_EXTRAS = "dev,gui,storage"
 
 
 def environment_python(environment: Path) -> Path:
@@ -63,8 +63,10 @@ def main() -> None:
             ],
             python_path=python,
         )
-        # CI intentionally omits large local-model dependencies. Importing
-        # project tooling must therefore not require Torch during collection.
+        # CI includes the lightweight GUI and storage adapters exercised by the
+        # suite, but intentionally omits the large local-model dependencies.
+        # Importing project tooling must therefore not require Torch during
+        # collection.
         run(
             [
                 "{python}",

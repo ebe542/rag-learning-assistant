@@ -3,6 +3,10 @@ from pathlib import Path
 from scripts import check_ci_environment
 
 
+def test_ci_extras_include_every_adapter_exercised_by_milestone_tests() -> None:
+    assert check_ci_environment.CI_EXTRAS == "dev,gui,storage"
+
+
 def test_environment_python_uses_platform_layout(monkeypatch) -> None:
     environment = Path("clean-environment")
 
