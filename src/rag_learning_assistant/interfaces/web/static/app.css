@@ -223,6 +223,96 @@ h2 {
   margin-top: 1rem;
 }
 
+.study-link {
+  margin: 0.5rem 0 1rem;
+}
+
+.study-panel,
+.feedback-panel {
+  display: block;
+}
+
+form,
+form label {
+  display: block;
+}
+
+form label {
+  margin: 1.5rem 0 0.5rem;
+  font-weight: 750;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.9rem;
+  border: 1px solid #9eb6af;
+  border-radius: 0.7rem;
+  color: inherit;
+  background: #ffffff;
+  font: inherit;
+  line-height: 1.55;
+}
+
+textarea:focus {
+  outline: 3px solid rgba(38, 116, 95, 0.22);
+  border-color: #26745f;
+}
+
+button {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.75rem;
+  color: #ffffff;
+  background: #17664f;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0d4938;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.submission-status {
+  position: relative;
+  margin: 1rem 0 0;
+  padding-left: 1.6rem;
+  color: #4f655f;
+  line-height: 1.5;
+}
+
+.submission-status::before {
+  position: absolute;
+  top: 0.2rem;
+  left: 0;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid #b6cbc4;
+  border-top-color: #17664f;
+  border-radius: 50%;
+  content: "";
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .submission-status::before {
+    animation: none;
+  }
+}
+
 .summary-text {
   color: #344b45;
   line-height: 1.75;

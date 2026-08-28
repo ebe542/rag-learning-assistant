@@ -31,6 +31,12 @@
         </div>
       </dl>
 
+      {% if package.status.value == "ready" %}
+      <a class="primary-link study-link" href="{{ url_for('study_question') }}?package={{ package.name | urlencode }}">
+        Study now
+      </a>
+      {% endif %}
+
       <section class="panel summary-panel" aria-labelledby="summary-heading">
         <p class="section-label">Grounded material</p>
         <h2 id="summary-heading">Summary</h2>

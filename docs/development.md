@@ -425,6 +425,23 @@ library state. A package detail route uses the active persisted identities with
 and question count. Unknown names return a user-facing HTTP 404 page. Templates
 and CSS are served from the installed package without external browser assets.
 
+Ready package details link to a server-rendered study form. Its GET route asks
+`LearningPackageStudyService` for the highest-priority due question without
+revealing the expected answer. The POST route requires the request origin to
+match the loopback application, verifies that the submitted question is still
+the current due question, and then records the answer through the same atomic
+evaluation and scheduling workflow as the CLI. Feedback reveals the expected
+answer only after persistence succeeds. Trusted-host middleware rejects hosts
+outside `127.0.0.1`, `localhost`, and the isolated test client.
+
+Persisted review timestamps remain timezone-aware UTC values. The web result
+converts the next review to the server machine's local timezone and labels it
+as local time. UTC values remain available only in storage and technical output.
+
+A small local progressive-enhancement script disables the submitted answer
+button and exposes an ARIA live status while model evaluation is running. The
+server-rendered form remains functional when browser scripting is unavailable.
+
 ## Persistence layout
 
 Private documents and generated libraries belong under ignored local paths:

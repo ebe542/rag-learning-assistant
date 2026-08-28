@@ -55,9 +55,11 @@ rag-learn gui
 The current GUI preview lists the learning packages in the default library.
 Select a package to inspect its status, document ID, stored summary, and question
 count. Use `rag-learn gui --library PATH` to open another library. Keep the
-terminal open while using it and press `Ctrl+C` there to stop the server. The
-complete study workflow remains available through the commands below while its
-screens are added incrementally.
+terminal open while using it and press `Ctrl+C` there to stop the server. A ready
+package can also start one due-question study session through **Study now**.
+Submitting an answer runs the same local grounded evaluation and review
+scheduling as the CLI workflow below. The submit button remains disabled and a
+status message stays visible while the local model is evaluating the answer.
 
 ## 3. Prepare the first PDF
 

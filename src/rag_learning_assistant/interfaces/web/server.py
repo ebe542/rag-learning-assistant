@@ -3,19 +3,30 @@
 import threading
 import webbrowser
 from pathlib import Path
+from uuid import uuid4
 
 import uvicorn
 
 from rag_learning_assistant.application import (
+    AnswerEvaluationService,
     DocumentSummaryCatalog,
     LearningPackageCatalog,
+    LearningPackageStudyService,
     QuestionBankCatalog,
+    ReviewScheduler,
+    ReviewService,
+    StudySessionService,
 )
-from rag_learning_assistant.generation import SqliteDocumentSummaryRepository
+from rag_learning_assistant.generation import (
+    HuggingFaceTextGenerator,
+    SqliteDocumentSummaryRepository,
+)
 from rag_learning_assistant.interfaces.web.application import create_app
 from rag_learning_assistant.learning import (
     SqliteLearningPackageRepository,
     SqliteQuestionBankRepository,
+    SqliteQuestionProgressRepository,
+    SqliteStudyAttemptRepository,
 )
 from rag_learning_assistant.library import SqliteDocumentRepository
 
@@ -48,11 +59,27 @@ def run_server(
         documents,
         SqliteQuestionBankRepository(database_path),
     )
+    reviewer = ReviewService(
+        banks=questions,
+        progress=SqliteQuestionProgressRepository(database_path),
+        scheduler=ReviewScheduler(),
+    )
+    study = LearningPackageStudyService(
+        packages=SqliteLearningPackageRepository(database_path),
+        sessions=StudySessionService(
+            banks=questions,
+            reviewer=reviewer,
+            attempts=SqliteStudyAttemptRepository(database_path),
+            attempt_id_factory=uuid4,
+            evaluator=AnswerEvaluationService(HuggingFaceTextGenerator()),
+        ),
+    )
     uvicorn.run(
         create_app(
             packages,
             summaries,
             questions,
+            study,
             library_directory=library_directory,
         ),
         host=LOOPBACK_HOST,

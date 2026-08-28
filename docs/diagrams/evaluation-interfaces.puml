@@ -26,6 +26,7 @@ package "interfaces.web" #E8F4FD {
   interface PackageCatalog <<Protocol>>
   interface SummaryCatalog <<Protocol>>
   interface QuestionCatalog <<Protocol>>
+  interface PackageStudy <<Protocol>>
   class "application.create_app" as WebApplication <<function>>
   class "server.run_server" as WebServer <<function>>
   class "home.html" as HomeTemplate <<template>>
@@ -72,12 +73,15 @@ WebApplication --> HomeTemplate
 WebApplication --> PackageCatalog
 WebApplication --> SummaryCatalog
 WebApplication --> QuestionCatalog
+WebApplication --> PackageStudy
 LearningPackageCatalog ..|> PackageCatalog
 DocumentSummaryCatalog ..|> SummaryCatalog
 QuestionBankCatalog ..|> QuestionCatalog
+LearningPackageStudyService ..|> PackageStudy
 WebServer --> LearningPackageCatalog : compose
 WebServer --> DocumentSummaryCatalog : compose
 WebServer --> QuestionBankCatalog : compose
+WebServer --> LearningPackageStudyService : compose
 LearningPackageCatalog --> SqliteLearningPackageRepository
 
 note bottom

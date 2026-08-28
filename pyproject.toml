@@ -38,6 +38,7 @@ dev = [
 gui = [
   "fastapi>=0.116,<1",
   "jinja2>=3.1,<4",
+  "python-multipart>=0.0.20,<1",
   "uvicorn>=0.35,<1",
 ]
 embeddings = [

@@ -1,18 +1,21 @@
 """Compose the local FastAPI application."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from rag_learning_assistant.application import LearningPackageNotFoundError
+from rag_learning_assistant.application.review import DueQuestion
 from rag_learning_assistant.generation import PersistedDocumentSummary
-from rag_learning_assistant.learning import LearningPackage, QuestionBank
+from rag_learning_assistant.learning import LearningPackage, QuestionBank, StudyAttempt
 
 WEB_ROOT = Path(__file__).resolve().parent
 
@@ -45,6 +48,21 @@ class QuestionCatalog(Protocol):
     ) -> QuestionBank: ...
 
 
+class PackageStudy(Protocol):
+    """Select and record study questions through a package name."""
+
+    def next_due(self, package_name: str, *, as_of: datetime) -> DueQuestion | None: ...
+
+    def record_answer(
+        self,
+        package_name: str,
+        question_number: int,
+        *,
+        answer_text: str,
+        answered_at: datetime,
+    ) -> StudyAttempt: ...
+
+
 @dataclass(frozen=True, slots=True)
 class PackageListItem:
     """Contain only the learning-package fields rendered by the start page."""
@@ -54,10 +72,22 @@ class PackageListItem:
     status_label: str
 
 
+def format_local_datetime(
+    value: datetime,
+    *,
+    timezone: tzinfo | None = None,
+) -> str:
+    """Format an aware timestamp for the local user-facing interface."""
+
+    local_value = value.astimezone(timezone)
+    return f"{local_value:%d.%m.%Y, %H:%M} (local time)"
+
+
 def create_app(
     packages: PackageCatalog,
     summaries: SummaryCatalog,
     questions: QuestionCatalog,
+    study: PackageStudy,
     *,
     library_directory: Path,
 ) -> FastAPI:
@@ -68,6 +98,10 @@ def create_app(
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["127.0.0.1", "localhost", "testserver"],
     )
     app.mount(
         "/static",
@@ -130,6 +164,48 @@ def create_app(
                 "package": package,
                 "question_count": len(bank.questions) if bank is not None else 0,
                 "summary": summary,
+            },
+        )
+
+    @app.get("/study", response_class=HTMLResponse)
+    def study_question(request: Request, package: str) -> HTMLResponse:
+        due = study.next_due(package, as_of=datetime.now(UTC))
+        return templates.TemplateResponse(
+            request=request,
+            name="study.html",
+            context={"due": due, "package_name": package},
+        )
+
+    @app.post("/study", response_class=HTMLResponse)
+    def submit_study_answer(
+        request: Request,
+        package: str = Form(),
+        question_number: int = Form(),
+        answer: str = Form(),
+    ) -> HTMLResponse:
+        expected_origin = f"{request.url.scheme}://{request.url.netloc}"
+        if request.headers.get("origin") != expected_origin:
+            raise HTTPException(status_code=403, detail="Cross-origin form submission rejected")
+        if not answer.strip():
+            raise HTTPException(status_code=422, detail="Study answer must not be blank")
+
+        answered_at = datetime.now(UTC)
+        due = study.next_due(package, as_of=answered_at)
+        if due is None or due.question.number != question_number:
+            raise HTTPException(status_code=409, detail="Study question is no longer due")
+        attempt = study.record_answer(
+            package,
+            question_number,
+            answer_text=answer,
+            answered_at=answered_at,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="study_result.html",
+            context={
+                "attempt": attempt,
+                "next_review": format_local_datetime(attempt.resulting_progress.due_at),
+                "package_name": package,
             },
         )
 
