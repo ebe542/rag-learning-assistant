@@ -17,12 +17,36 @@
       </header>
 
       <section aria-labelledby="packages-heading" class="panel">
-        <div>
-          <p class="section-label">Library</p>
-          <h2 id="packages-heading">Learning packages</h2>
-          <p>Package discovery will appear here in the next milestone.</p>
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">Library</p>
+            <h2 id="packages-heading">Learning packages</h2>
+          </div>
+          <span class="package-count">{{ packages | length }}</span>
         </div>
-        <span class="status">GUI ready</span>
+
+        <p class="library-path" title="{{ library_directory }}">
+          {{ library_directory }}
+        </p>
+
+        {% if packages %}
+        <ul class="package-list">
+          {% for package in packages %}
+          <li class="package-card">
+            <div>
+              <h3>{{ package.name }}</h3>
+              <p>Local learning package</p>
+            </div>
+            <span class="status status-{{ package.status }}">{{ package.status_label }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state">
+          <h3>No learning packages yet</h3>
+          <p>Prepare a PDF from the command line to add your first package.</p>
+        </div>
+        {% endif %}
       </section>
     </main>
   </body>

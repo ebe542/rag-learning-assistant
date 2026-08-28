@@ -23,6 +23,7 @@ package "interfaces.cli" #F2F2F2 {
   class "error_reporting" as ErrorReporting <<module>>
 }
 package "interfaces.web" #E8F4FD {
+  interface PackageCatalog <<Protocol>>
   class "application.create_app" as WebApplication <<function>>
   class "server.run_server" as WebServer <<function>>
   class "home.html" as HomeTemplate <<template>>
@@ -33,8 +34,12 @@ package "application services" #FFE8E8 {
   class DocumentSummarizationService
   class QuestionBankService
   class LearningPackageService
+  class LearningPackageCatalog
   class LearningPackageStudyService
   class LearningProgressService
+}
+package "learning adapter" #F3E8FF {
+  class SqliteLearningPackageRepository
 }
 
 GroundedEvaluationCase *-- "1..*" ExpectedCitation
@@ -60,6 +65,10 @@ CliEntrypoint --> ErrorReporting
 CliCommands --> WebServer
 WebServer --> WebApplication
 WebApplication --> HomeTemplate
+WebApplication --> PackageCatalog
+LearningPackageCatalog ..|> PackageCatalog
+WebServer --> LearningPackageCatalog : compose
+LearningPackageCatalog --> SqliteLearningPackageRepository
 
 note bottom
   Interface registrars and entry points are functions or modules rather than

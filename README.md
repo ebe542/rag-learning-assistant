@@ -46,8 +46,9 @@ python -m pip install -e ".[local,gui]"
 rag-learn gui
 ```
 
-The preview listens only on `127.0.0.1`. Its first page establishes the local
-interface; package discovery and study workflows follow in the next milestones.
+The preview listens only on `127.0.0.1` and lists the packages in the selected
+learning library. Package details and study workflows follow in the next
+milestones.
 
 ## Product workflow
 

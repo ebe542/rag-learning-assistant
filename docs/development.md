@@ -388,6 +388,7 @@ Current commands are:
 
 ```text
 prepare
+gui
 package-list
 progress
 extract
@@ -411,6 +412,16 @@ study
 A repository-root `.env` is loaded optionally. It may define `HF_TOKEN` for
 authenticated Hugging Face downloads, but public-model commands continue when
 the file is absent or environment loading fails.
+
+## Local web interface
+
+`rag-learn gui` starts a FastAPI application on `127.0.0.1`. The CLI resolves
+the library directory and composes a `LearningPackageCatalog` with the SQLite
+package repository. The web application receives that catalog through its
+factory instead of importing CLI commands or loading ML adapters. Its start page
+renders the package name and preparation status, including a dedicated empty
+library state. Templates and CSS are served from the installed package without
+external browser assets.
 
 ## Persistence layout
 

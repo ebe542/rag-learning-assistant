@@ -1,8 +1,12 @@
 """Register the local graphical-interface command."""
 
 import argparse
+from pathlib import Path
 
-from rag_learning_assistant.interfaces.cli.parsing import SubcommandCollection
+from rag_learning_assistant.interfaces.cli.parsing import (
+    SubcommandCollection,
+    default_library_directory,
+)
 
 DEFAULT_GUI_PORT = 8765
 
@@ -25,6 +29,12 @@ def add_gui_command(commands: SubcommandCollection) -> None:
     gui_parser = commands.add_parser(
         "gui",
         help="Open the local graphical interface",
+    )
+    gui_parser.add_argument(
+        "--library",
+        type=Path,
+        default=default_library_directory(),
+        help="Personal learning library (default: platform user-data directory)",
     )
     gui_parser.add_argument(
         "--port",

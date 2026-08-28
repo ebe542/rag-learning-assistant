@@ -52,10 +52,11 @@ Start the local browser interface:
 rag-learn gui
 ```
 
-The current GUI preview confirms that the local interface is installed. Keep
-the terminal open while using it and press `Ctrl+C` there to stop the server.
-The complete package and study workflow remains available through the commands
-below while those screens are added incrementally.
+The current GUI preview lists the learning packages in the default library. Use
+`rag-learn gui --library PATH` to open another library. Keep the terminal open
+while using it and press `Ctrl+C` there to stop the server. Package details and
+the complete study workflow remain available through the commands below while
+those screens are added incrementally.
 
 ## 3. Prepare the first PDF
 

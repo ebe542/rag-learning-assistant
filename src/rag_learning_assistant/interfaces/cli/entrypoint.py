@@ -40,6 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "gui":
         return commands.run_gui(
+            library_directory=args.library,
             port=args.port,
             open_browser=not args.no_browser,
         )

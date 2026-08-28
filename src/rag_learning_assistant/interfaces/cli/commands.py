@@ -1403,7 +1403,12 @@ def run_review_record(
     return 0
 
 
-def run_gui(port: int, *, open_browser: bool = True) -> int:
+def run_gui(
+    library_directory: Path,
+    port: int,
+    *,
+    open_browser: bool = True,
+) -> int:
     """Start the optional local browser interface."""
 
     try:
@@ -1415,5 +1420,9 @@ def run_gui(port: int, *, open_browser: bool = True) -> int:
             ) from error
         raise
 
-    run_server(port=port, open_browser=open_browser)
+    run_server(
+        library_directory=library_directory,
+        port=port,
+        open_browser=open_browser,
+    )
     return 0
