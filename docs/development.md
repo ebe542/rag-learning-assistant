@@ -420,8 +420,10 @@ the library directory and composes a `LearningPackageCatalog` with the SQLite
 package repository. The web application receives that catalog through its
 factory instead of importing CLI commands or loading ML adapters. Its start page
 renders the package name and preparation status, including a dedicated empty
-library state. Templates and CSS are served from the installed package without
-external browser assets.
+library state. A package detail route uses the active persisted identities with
+`DocumentSummaryCatalog` and `QuestionBankCatalog` to render the stored summary
+and question count. Unknown names return a user-facing HTTP 404 page. Templates
+and CSS are served from the installed package without external browser assets.
 
 ## Persistence layout
 

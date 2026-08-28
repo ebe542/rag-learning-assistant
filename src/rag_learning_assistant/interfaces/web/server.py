@@ -6,9 +6,18 @@ from pathlib import Path
 
 import uvicorn
 
-from rag_learning_assistant.application import LearningPackageCatalog
+from rag_learning_assistant.application import (
+    DocumentSummaryCatalog,
+    LearningPackageCatalog,
+    QuestionBankCatalog,
+)
+from rag_learning_assistant.generation import SqliteDocumentSummaryRepository
 from rag_learning_assistant.interfaces.web.application import create_app
-from rag_learning_assistant.learning import SqliteLearningPackageRepository
+from rag_learning_assistant.learning import (
+    SqliteLearningPackageRepository,
+    SqliteQuestionBankRepository,
+)
+from rag_learning_assistant.library import SqliteDocumentRepository
 
 LOOPBACK_HOST = "127.0.0.1"
 
@@ -28,11 +37,24 @@ def run_server(
         browser_timer.start()
 
     print(f"RAG Learning Assistant GUI: {url}", flush=True)
-    packages = LearningPackageCatalog(
-        SqliteLearningPackageRepository(library_directory / "metadata.sqlite3")
+    database_path = library_directory / "metadata.sqlite3"
+    documents = SqliteDocumentRepository(database_path)
+    packages = LearningPackageCatalog(SqliteLearningPackageRepository(database_path))
+    summaries = DocumentSummaryCatalog(
+        documents,
+        SqliteDocumentSummaryRepository(database_path),
+    )
+    questions = QuestionBankCatalog(
+        documents,
+        SqliteQuestionBankRepository(database_path),
     )
     uvicorn.run(
-        create_app(packages, library_directory=library_directory),
+        create_app(
+            packages,
+            summaries,
+            questions,
+            library_directory=library_directory,
+        ),
         host=LOOPBACK_HOST,
         port=port,
         access_log=False,

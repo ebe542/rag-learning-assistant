@@ -34,7 +34,11 @@
           {% for package in packages %}
           <li class="package-card">
             <div>
-              <h3>{{ package.name }}</h3>
+              <h3>
+                <a href="{{ url_for('package_detail') }}?name={{ package.name | urlencode }}">
+                  {{ package.name }}
+                </a>
+              </h3>
               <p>Local learning package</p>
             </div>
             <span class="status status-{{ package.status }}">{{ package.status_label }}</span>

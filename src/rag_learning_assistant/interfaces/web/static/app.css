@@ -40,8 +40,19 @@ body {
 
 h1,
 h2,
+h3,
 p {
   margin-top: 0;
+}
+
+a {
+  color: #17664f;
+  text-decoration-thickness: 0.09em;
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  color: #0d4938;
 }
 
 h1 {
@@ -148,9 +159,111 @@ h2 {
   background: #e3efff;
 }
 
+.detail-shell {
+  max-width: 62rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 2.5rem;
+  font-weight: 700;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.detail-header h1 {
+  margin-bottom: 0;
+  font-size: clamp(2.4rem, 6vw, 4.75rem);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  margin: 0 0 1rem;
+  border: 1px solid #d7e3df;
+  border-radius: 1rem;
+  background: #d7e3df;
+}
+
+.facts div {
+  padding: 1.2rem;
+  background: #ffffff;
+}
+
+.facts dt {
+  margin-bottom: 0.45rem;
+  color: #61736e;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 750;
+}
+
+.technical-value {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.9rem !important;
+}
+
+.summary-panel {
+  margin-top: 1rem;
+}
+
+.summary-text {
+  color: #344b45;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.muted {
+  margin-bottom: 0;
+  color: #61736e;
+}
+
+.message-shell {
+  max-width: 48rem;
+}
+
+.primary-link {
+  display: inline-block;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  color: #ffffff;
+  background: #17664f;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  color: #ffffff;
+  background: #0d4938;
+}
+
 @media (max-width: 36rem) {
   .package-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .detail-header {
+    flex-direction: column;
+  }
+
+  .facts {
+    grid-template-columns: 1fr;
   }
 }

@@ -24,6 +24,8 @@ package "interfaces.cli" #F2F2F2 {
 }
 package "interfaces.web" #E8F4FD {
   interface PackageCatalog <<Protocol>>
+  interface SummaryCatalog <<Protocol>>
+  interface QuestionCatalog <<Protocol>>
   class "application.create_app" as WebApplication <<function>>
   class "server.run_server" as WebServer <<function>>
   class "home.html" as HomeTemplate <<template>>
@@ -32,7 +34,9 @@ package "application services" #FFE8E8 {
   class LibraryService
   class QuestionAnsweringService
   class DocumentSummarizationService
+  class DocumentSummaryCatalog
   class QuestionBankService
+  class QuestionBankCatalog
   class LearningPackageService
   class LearningPackageCatalog
   class LearningPackageStudyService
@@ -66,8 +70,14 @@ CliCommands --> WebServer
 WebServer --> WebApplication
 WebApplication --> HomeTemplate
 WebApplication --> PackageCatalog
+WebApplication --> SummaryCatalog
+WebApplication --> QuestionCatalog
 LearningPackageCatalog ..|> PackageCatalog
+DocumentSummaryCatalog ..|> SummaryCatalog
+QuestionBankCatalog ..|> QuestionCatalog
 WebServer --> LearningPackageCatalog : compose
+WebServer --> DocumentSummaryCatalog : compose
+WebServer --> QuestionBankCatalog : compose
 LearningPackageCatalog --> SqliteLearningPackageRepository
 
 note bottom
