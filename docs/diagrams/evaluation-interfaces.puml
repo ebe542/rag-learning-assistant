@@ -27,9 +27,11 @@ package "interfaces.web" #E8F4FD {
   interface SummaryCatalog <<Protocol>>
   interface QuestionCatalog <<Protocol>>
   interface PackageStudy <<Protocol>>
+  interface ProgressReporting <<Protocol>>
   class "application.create_app" as WebApplication <<function>>
   class "server.run_server" as WebServer <<function>>
   class "home.html" as HomeTemplate <<template>>
+  class "progress.html" as ProgressTemplate <<template>>
 }
 package "application services" #FFE8E8 {
   class LibraryService
@@ -70,18 +72,22 @@ CliEntrypoint --> ErrorReporting
 CliCommands --> WebServer
 WebServer --> WebApplication
 WebApplication --> HomeTemplate
+WebApplication --> ProgressTemplate
 WebApplication --> PackageCatalog
 WebApplication --> SummaryCatalog
 WebApplication --> QuestionCatalog
 WebApplication --> PackageStudy
+WebApplication --> ProgressReporting
 LearningPackageCatalog ..|> PackageCatalog
 DocumentSummaryCatalog ..|> SummaryCatalog
 QuestionBankCatalog ..|> QuestionCatalog
 LearningPackageStudyService ..|> PackageStudy
+LearningProgressService ..|> ProgressReporting
 WebServer --> LearningPackageCatalog : compose
 WebServer --> DocumentSummaryCatalog : compose
 WebServer --> QuestionBankCatalog : compose
 WebServer --> LearningPackageStudyService : compose
+WebServer --> LearningProgressService : compose
 LearningPackageCatalog --> SqliteLearningPackageRepository
 
 note bottom

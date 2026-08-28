@@ -4,7 +4,11 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from rag_learning_assistant.application import DueQuestion, LearningPackageNotFoundError
+from rag_learning_assistant.application import (
+    DueQuestion,
+    LearningPackageNotFoundError,
+    LearningProgressReport,
+)
 from rag_learning_assistant.generation import Citation, PersistedDocumentSummary, PromptReference
 from rag_learning_assistant.interfaces.web import create_app
 from rag_learning_assistant.interfaces.web.application import format_local_datetime
@@ -90,9 +94,33 @@ class StubPackageStudy:
         return self.attempt
 
 
+class StubProgressReporting:
+    def __init__(self, report: LearningProgressReport | None = None) -> None:
+        self.progress_report = report or LearningProgressReport(
+            package_name="Python Basics",
+            total_question_count=0,
+            answered_question_count=0,
+            due_question_count=0,
+            attempt_count=0,
+            incorrect_attempt_count=0,
+            partially_correct_attempt_count=0,
+            correct_attempt_count=0,
+            difficult_concepts=(),
+            last_studied_at=None,
+            next_due_at=None,
+            unclassified_attempt_count=0,
+        )
+
+    def report(self, package_name: str, *, as_of: datetime) -> LearningProgressReport:
+        assert package_name == self.progress_report.package_name
+        assert as_of.tzinfo is UTC
+        return self.progress_report
+
+
 def build_client(
     packages: list[LearningPackage] | None = None,
     study: StubPackageStudy | None = None,
+    progress: StubProgressReporting | None = None,
 ) -> TestClient:
     return TestClient(
         create_app(
@@ -100,6 +128,7 @@ def build_client(
             StubSummaryCatalog(),
             StubQuestionCatalog(),
             study or StubPackageStudy(),
+            progress or StubProgressReporting(),
             library_directory=Path("personal-library"),
         )
     )
@@ -180,6 +209,7 @@ def test_package_detail_shows_summary_and_question_count() -> None:
             StubSummaryCatalog(summary),
             StubQuestionCatalog(bank),
             StubPackageStudy(),
+            StubProgressReporting(),
             library_directory=Path("personal-library"),
         )
     )
@@ -292,6 +322,52 @@ def test_study_submission_renders_grounded_feedback() -> None:
     assert "The answer captures the central idea." in response.text
     assert format_local_datetime(progress.due_at) in response.text
     assert progress.due_at.isoformat() not in response.text
+
+
+def test_progress_page_summarizes_attempts_and_learning_focus() -> None:
+    last_studied = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
+    next_due = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
+    report = LearningProgressReport(
+        package_name="Python Basics",
+        total_question_count=5,
+        answered_question_count=2,
+        due_question_count=1,
+        attempt_count=4,
+        incorrect_attempt_count=1,
+        partially_correct_attempt_count=1,
+        correct_attempt_count=2,
+        difficult_concepts=(("Closures", 2), ("Decorators", 1)),
+        last_studied_at=last_studied,
+        next_due_at=next_due,
+        unclassified_attempt_count=0,
+    )
+
+    response = build_client(
+        [ready_package()],
+        progress=StubProgressReporting(report),
+    ).get("/progress?package=Python%20Basics")
+
+    assert response.status_code == 200
+    assert "Learning progress" in response.text
+    assert "2/5" in response.text
+    assert "40% of the active question bank" in response.text
+    assert "50% evaluated as correct" in response.text
+    assert "Closures" in response.text
+    assert format_local_datetime(last_studied) in response.text
+    assert format_local_datetime(next_due) in response.text
+    assert last_studied.isoformat() not in response.text
+
+
+def test_progress_page_explains_an_empty_history() -> None:
+    response = build_client(
+        [ready_package()],
+        progress=StubProgressReporting(),
+    ).get("/progress?package=Python%20Basics")
+
+    assert response.status_code == 200
+    assert "No difficult concepts recorded." in response.text
+    assert "Never" in response.text
+    assert "No review scheduled" in response.text
 
 
 def test_datetime_format_shows_the_converted_local_time() -> None:

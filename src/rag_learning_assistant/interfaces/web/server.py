@@ -12,6 +12,7 @@ from rag_learning_assistant.application import (
     DocumentSummaryCatalog,
     LearningPackageCatalog,
     LearningPackageStudyService,
+    LearningProgressService,
     QuestionBankCatalog,
     ReviewScheduler,
     ReviewService,
@@ -50,7 +51,10 @@ def run_server(
     print(f"RAG Learning Assistant GUI: {url}", flush=True)
     database_path = library_directory / "metadata.sqlite3"
     documents = SqliteDocumentRepository(database_path)
-    packages = LearningPackageCatalog(SqliteLearningPackageRepository(database_path))
+    package_repository = SqliteLearningPackageRepository(database_path)
+    progress_repository = SqliteQuestionProgressRepository(database_path)
+    attempt_repository = SqliteStudyAttemptRepository(database_path)
+    packages = LearningPackageCatalog(package_repository)
     summaries = DocumentSummaryCatalog(
         documents,
         SqliteDocumentSummaryRepository(database_path),
@@ -61,18 +65,24 @@ def run_server(
     )
     reviewer = ReviewService(
         banks=questions,
-        progress=SqliteQuestionProgressRepository(database_path),
+        progress=progress_repository,
         scheduler=ReviewScheduler(),
     )
     study = LearningPackageStudyService(
-        packages=SqliteLearningPackageRepository(database_path),
+        packages=package_repository,
         sessions=StudySessionService(
             banks=questions,
             reviewer=reviewer,
-            attempts=SqliteStudyAttemptRepository(database_path),
+            attempts=attempt_repository,
             attempt_id_factory=uuid4,
             evaluator=AnswerEvaluationService(HuggingFaceTextGenerator()),
         ),
+    )
+    progress = LearningProgressService(
+        packages=package_repository,
+        banks=questions,
+        progress=progress_repository,
+        attempts=attempt_repository,
     )
     uvicorn.run(
         create_app(
@@ -80,6 +90,7 @@ def run_server(
             summaries,
             questions,
             study,
+            progress,
             library_directory=library_directory,
         ),
         host=LOOPBACK_HOST,

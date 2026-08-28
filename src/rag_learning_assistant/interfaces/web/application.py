@@ -12,7 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from rag_learning_assistant.application import LearningPackageNotFoundError
+from rag_learning_assistant.application import (
+    LearningPackageNotFoundError,
+    LearningProgressReport,
+)
 from rag_learning_assistant.application.review import DueQuestion
 from rag_learning_assistant.generation import PersistedDocumentSummary
 from rag_learning_assistant.learning import LearningPackage, QuestionBank, StudyAttempt
@@ -63,6 +66,12 @@ class PackageStudy(Protocol):
     ) -> StudyAttempt: ...
 
 
+class ProgressReporting(Protocol):
+    """Build a current read-only progress report for one package."""
+
+    def report(self, package_name: str, *, as_of: datetime) -> LearningProgressReport: ...
+
+
 @dataclass(frozen=True, slots=True)
 class PackageListItem:
     """Contain only the learning-package fields rendered by the start page."""
@@ -88,6 +97,7 @@ def create_app(
     summaries: SummaryCatalog,
     questions: QuestionCatalog,
     study: PackageStudy,
+    progress: ProgressReporting,
     *,
     library_directory: Path,
 ) -> FastAPI:
@@ -174,6 +184,29 @@ def create_app(
             request=request,
             name="study.html",
             context={"due": due, "package_name": package},
+        )
+
+    @app.get("/progress", response_class=HTMLResponse)
+    def learning_progress(request: Request, package: str) -> HTMLResponse:
+        report = progress.report(package, as_of=datetime.now(UTC))
+        return templates.TemplateResponse(
+            request=request,
+            name="progress.html",
+            context={
+                "answered_percent": round(report.answered_rate * 100),
+                "correct_percent": round(report.correct_attempt_rate * 100),
+                "last_studied": (
+                    format_local_datetime(report.last_studied_at)
+                    if report.last_studied_at is not None
+                    else "Never"
+                ),
+                "next_due": (
+                    format_local_datetime(report.next_due_at)
+                    if report.next_due_at is not None
+                    else "No review scheduled"
+                ),
+                "report": report,
+            },
         )
 
     @app.post("/study", response_class=HTMLResponse)

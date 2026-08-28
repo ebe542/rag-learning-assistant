@@ -56,7 +56,8 @@ The current GUI preview lists the learning packages in the default library.
 Select a package to inspect its status, document ID, stored summary, and question
 count. Use `rag-learn gui --library PATH` to open another library. Keep the
 terminal open while using it and press `Ctrl+C` there to stop the server. A ready
-package can also start one due-question study session through **Study now**.
+package can also start one due-question study session through **Study now** or
+open the same progress summary as the CLI through **View progress**.
 Submitting an answer runs the same local grounded evaluation and review
 scheduling as the CLI workflow below. The submit button remains disabled and a
 status message stays visible while the local model is evaluating the answer.

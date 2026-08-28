@@ -48,7 +48,8 @@ rag-learn gui
 
 The preview listens only on `127.0.0.1`, lists the packages in the selected
 learning library, and opens package details with the stored summary and question
-count. Ready packages can start a due-question study session, evaluate a written
+count. Ready packages can show their current learning progress or start a
+due-question study session, evaluate a written
 answer with the configured local model, and display grounded feedback plus the
 next review time.
 

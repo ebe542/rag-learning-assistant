@@ -442,6 +442,12 @@ A small local progressive-enhancement script disables the submitted answer
 button and exposes an ARIA live status while model evaluation is running. The
 server-rendered form remains functional when browser scripting is unavailable.
 
+The package detail also links to a read-only progress page. The web route depends
+on a small `ProgressReporting` protocol and receives the existing
+`LearningProgressService` from the server composition root, so CLI and GUI use
+the same aggregation rules and SQLite repositories. User-facing timestamps are
+converted from stored UTC values to the machine's local time before rendering.
+
 ## Persistence layout
 
 Private documents and generated libraries belong under ignored local paths:

@@ -32,9 +32,10 @@
       </dl>
 
       {% if package.status.value == "ready" %}
-      <a class="primary-link study-link" href="{{ url_for('study_question') }}?package={{ package.name | urlencode }}">
-        Study now
-      </a>
+      <div class="package-actions">
+        <a class="primary-link" href="{{ url_for('study_question') }}?package={{ package.name | urlencode }}">Study now</a>
+        <a class="secondary-link" href="{{ url_for('learning_progress') }}?package={{ package.name | urlencode }}">View progress</a>
+      </div>
       {% endif %}
 
       <section class="panel summary-panel" aria-labelledby="summary-heading">

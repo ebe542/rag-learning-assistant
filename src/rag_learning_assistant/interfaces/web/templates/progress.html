@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Progress · {{ report.package_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  </head>
+  <body>
+    <main class="shell detail-shell">
+      <a class="back-link" href="{{ url_for('package_detail') }}?name={{ report.package_name | urlencode }}">← Package details</a>
+      <p class="eyebrow">Learning progress</p>
+      <h1>{{ report.package_name }}</h1>
+
+      <section class="metric-grid" aria-label="Progress summary">
+        <article class="metric-card">
+          <span class="metric-value">{{ report.answered_question_count }}/{{ report.total_question_count }}</span>
+          <h2>Questions answered</h2>
+          <p>{{ answered_percent }}% of the active question bank</p>
+        </article>
+        <article class="metric-card">
+          <span class="metric-value">{{ report.due_question_count }}</span>
+          <h2>Questions due</h2>
+          <p>Ready for the next study session</p>
+        </article>
+        <article class="metric-card">
+          <span class="metric-value">{{ report.attempt_count }}</span>
+          <h2>Total attempts</h2>
+          <p>{{ correct_percent }}% evaluated as correct</p>
+        </article>
+      </section>
+
+      <section class="panel progress-panel" aria-labelledby="evaluations-heading">
+        <p class="section-label">Attempt history</p>
+        <h2 id="evaluations-heading">Evaluations</h2>
+        <dl class="evaluation-breakdown">
+          <div><dt>Correct</dt><dd>{{ report.correct_attempt_count }}</dd></div>
+          <div><dt>Partially correct</dt><dd>{{ report.partially_correct_attempt_count }}</dd></div>
+          <div><dt>Incorrect</dt><dd>{{ report.incorrect_attempt_count }}</dd></div>
+          <div><dt>Unclassified</dt><dd>{{ report.unclassified_attempt_count }}</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel progress-panel" aria-labelledby="concepts-heading">
+        <p class="section-label">Learning focus</p>
+        <h2 id="concepts-heading">Difficult concepts</h2>
+        {% if report.difficult_concepts %}
+        <ul class="concept-list">
+          {% for concept, count in report.difficult_concepts %}
+          <li><span>{{ concept }}</span><strong>{{ count }}</strong></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No difficult concepts recorded.</p>
+        {% endif %}
+      </section>
+
+      <section class="timeline" aria-label="Study schedule">
+        <div><span>Last studied</span><strong>{{ last_studied }}</strong></div>
+        <div><span>Next due</span><strong>{{ next_due }}</strong></div>
+      </section>
+    </main>
+  </body>
+</html>
