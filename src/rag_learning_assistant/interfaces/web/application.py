@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
-from typing import Protocol
+from typing import Annotated, Protocol
 from uuid import UUID
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -18,6 +18,7 @@ from rag_learning_assistant.application import (
 )
 from rag_learning_assistant.application.review import DueQuestion
 from rag_learning_assistant.generation import PersistedDocumentSummary
+from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
 from rag_learning_assistant.learning import LearningPackage, QuestionBank, StudyAttempt
 
 WEB_ROOT = Path(__file__).resolve().parent
@@ -72,6 +73,22 @@ class ProgressReporting(Protocol):
     def report(self, package_name: str, *, as_of: datetime) -> LearningProgressReport: ...
 
 
+class LibraryManagement(Protocol):
+    """Create libraries and open one within the configured local workspace."""
+
+    @property
+    def current_directory(self) -> Path: ...
+
+    @property
+    def current_library(self) -> LibraryListItem: ...
+
+    def list_libraries(self) -> tuple[LibraryListItem, ...]: ...
+
+    def create_library(self, name: str) -> LibraryListItem: ...
+
+    def select_library(self, library_id: UUID) -> LibraryListItem: ...
+
+
 @dataclass(frozen=True, slots=True)
 class PackageListItem:
     """Contain only the learning-package fields rendered by the start page."""
@@ -99,7 +116,7 @@ def create_app(
     study: PackageStudy,
     progress: ProgressReporting,
     *,
-    library_directory: Path,
+    libraries: LibraryManagement,
 ) -> FastAPI:
     """Create an isolated web application suitable for runtime and tests."""
 
@@ -118,11 +135,17 @@ def create_app(
         StaticFiles(directory=WEB_ROOT / "static"),
         name="static",
     )
-    templates = Jinja2Templates(directory=WEB_ROOT / "templates")
 
-    @app.get("/", response_class=HTMLResponse)
-    def home(request: Request) -> HTMLResponse:
-        package_items = tuple(
+    def navigation_context(_: Request) -> dict[str, LibraryListItem]:
+        return {"current_library": libraries.current_library}
+
+    templates = Jinja2Templates(
+        directory=WEB_ROOT / "templates",
+        context_processors=[navigation_context],
+    )
+
+    def package_items() -> tuple[PackageListItem, ...]:
+        return tuple(
             PackageListItem(
                 name=package.name,
                 status=package.status.value,
@@ -130,14 +153,74 @@ def create_app(
             )
             for package in packages.list_packages()
         )
+
+    def render_library_management(
+        request: Request,
+        *,
+        error_message: str | None = None,
+        status_code: int = 200,
+    ) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="library_management.html",
+            context={
+                "error_message": error_message,
+                "libraries": libraries.list_libraries(),
+            },
+            status_code=status_code,
+        )
+
+    @app.get("/", response_class=HTMLResponse)
+    def home(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(
             request=request,
             name="home.html",
+            context={"libraries": libraries.list_libraries()},
+        )
+
+    @app.get("/library", response_class=HTMLResponse)
+    def library_detail(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="library_detail.html",
             context={
-                "library_directory": str(library_directory),
-                "packages": package_items,
+                "library_name": libraries.current_library.name,
+                "packages": package_items(),
             },
         )
+
+    @app.get("/libraries/manage", response_class=HTMLResponse)
+    def library_management(request: Request) -> HTMLResponse:
+        return render_library_management(request)
+
+    @app.post("/libraries", response_class=HTMLResponse)
+    def create_library(request: Request, name: str = Form()) -> HTMLResponse:
+        _require_same_origin(request)
+        try:
+            libraries.create_library(name)
+        except ValueError as error:
+            return render_library_management(
+                request,
+                error_message=str(error),
+                status_code=422,
+            )
+        return RedirectResponse(request.url_for("library_management"), status_code=303)
+
+    @app.post("/libraries/select", response_class=HTMLResponse)
+    def select_library(
+        request: Request,
+        library_id: Annotated[UUID, Form()],
+    ) -> HTMLResponse:
+        _require_same_origin(request)
+        try:
+            libraries.select_library(library_id)
+        except (LookupError, ValueError) as error:
+            return render_library_management(
+                request,
+                error_message=str(error),
+                status_code=404,
+            )
+        return RedirectResponse(request.url_for("library_detail"), status_code=303)
 
     @app.get("/package", response_class=HTMLResponse)
     def package_detail(request: Request, name: str) -> HTMLResponse:
@@ -216,9 +299,7 @@ def create_app(
         question_number: int = Form(),
         answer: str = Form(),
     ) -> HTMLResponse:
-        expected_origin = f"{request.url.scheme}://{request.url.netloc}"
-        if request.headers.get("origin") != expected_origin:
-            raise HTTPException(status_code=403, detail="Cross-origin form submission rejected")
+        _require_same_origin(request)
         if not answer.strip():
             raise HTTPException(status_code=422, detail="Study answer must not be blank")
 
@@ -243,3 +324,11 @@ def create_app(
         )
 
     return app
+
+
+def _require_same_origin(request: Request) -> None:
+    """Reject state-changing browser forms sent by another origin."""
+
+    expected_origin = f"{request.url.scheme}://{request.url.netloc}"
+    if request.headers.get("origin") != expected_origin:
+        raise HTTPException(status_code=403, detail="Cross-origin form submission rejected")

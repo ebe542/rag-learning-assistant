@@ -1,57 +1,30 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>RAG Learning Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <p class="eyebrow">Local learning workspace</p>
-        <h1>RAG Learning Assistant</h1>
-        <p class="introduction">
-          Turn trusted PDF material into grounded learning sessions and review progress.
-        </p>
-      </header>
-
-      <section aria-labelledby="packages-heading" class="panel">
-        <div class="panel-heading">
-          <div>
-            <p class="section-label">Library</p>
-            <h2 id="packages-heading">Learning packages</h2>
-          </div>
-          <span class="package-count">{{ packages | length }}</span>
-        </div>
-
-        <p class="library-path" title="{{ library_directory }}">
-          {{ library_directory }}
-        </p>
-
-        {% if packages %}
-        <ul class="package-list">
-          {% for package in packages %}
-          <li class="package-card">
-            <div>
-              <h3>
-                <a href="{{ url_for('package_detail') }}?name={{ package.name | urlencode }}">
-                  {{ package.name }}
-                </a>
-              </h3>
-              <p>Local learning package</p>
-            </div>
-            <span class="status status-{{ package.status }}">{{ package.status_label }}</span>
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <div class="empty-state">
-          <h3>No learning packages yet</h3>
-          <p>Prepare a PDF from the command line to add your first package.</p>
-        </div>
-        {% endif %}
-      </section>
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+{% block title %}Libraries · RAG Learning Assistant{% endblock %}
+{% block content %}
+<header class="hero">
+  <p class="eyebrow">Local learning workspace</p>
+  <h1>Your libraries</h1>
+  <p class="introduction">Choose a library to continue learning.</p>
+</header>
+<section aria-labelledby="libraries-heading" class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="section-label">Workspace</p>
+      <h2 id="libraries-heading">Available libraries</h2>
+    </div>
+    <span class="package-count">{{ libraries | length }}</span>
+  </div>
+  <ul class="library-list library-overview">
+    {% for library in libraries %}
+    <li>
+      <form action="{{ url_for('select_library') }}" method="post">
+        <input type="hidden" name="library_id" value="{{ library.id }}">
+        <button class="library-button" type="submit" aria-label="{{ library.name }}">
+          <strong>{{ library.name }}</strong>
+        </button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

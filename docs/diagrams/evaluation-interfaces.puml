@@ -28,9 +28,14 @@ package "interfaces.web" #E8F4FD {
   interface QuestionCatalog <<Protocol>>
   interface PackageStudy <<Protocol>>
   interface ProgressReporting <<Protocol>>
+  interface LibraryManagement <<Protocol>>
+  class LocalLibraryManager
   class "application.create_app" as WebApplication <<function>>
   class "server.run_server" as WebServer <<function>>
+  class "base.html" as BaseTemplate <<template>>
   class "home.html" as HomeTemplate <<template>>
+  class "library_detail.html" as LibraryDetailTemplate <<template>>
+  class "library_management.html" as LibraryManagementTemplate <<template>>
   class "progress.html" as ProgressTemplate <<template>>
 }
 package "application services" #FFE8E8 {
@@ -72,22 +77,36 @@ CliEntrypoint --> ErrorReporting
 CliCommands --> WebServer
 WebServer --> WebApplication
 WebApplication --> HomeTemplate
+WebApplication --> LibraryDetailTemplate
+WebApplication --> LibraryManagementTemplate
 WebApplication --> ProgressTemplate
+HomeTemplate --|> BaseTemplate
+LibraryDetailTemplate --|> BaseTemplate
+LibraryManagementTemplate --|> BaseTemplate
+ProgressTemplate --|> BaseTemplate
 WebApplication --> PackageCatalog
 WebApplication --> SummaryCatalog
 WebApplication --> QuestionCatalog
 WebApplication --> PackageStudy
 WebApplication --> ProgressReporting
+WebApplication --> LibraryManagement
 LearningPackageCatalog ..|> PackageCatalog
 DocumentSummaryCatalog ..|> SummaryCatalog
 QuestionBankCatalog ..|> QuestionCatalog
 LearningPackageStudyService ..|> PackageStudy
 LearningProgressService ..|> ProgressReporting
-WebServer --> LearningPackageCatalog : compose
-WebServer --> DocumentSummaryCatalog : compose
-WebServer --> QuestionBankCatalog : compose
-WebServer --> LearningPackageStudyService : compose
-WebServer --> LearningProgressService : compose
+LocalLibraryManager ..|> PackageCatalog
+LocalLibraryManager ..|> SummaryCatalog
+LocalLibraryManager ..|> QuestionCatalog
+LocalLibraryManager ..|> PackageStudy
+LocalLibraryManager ..|> ProgressReporting
+LocalLibraryManager ..|> LibraryManagement
+WebServer --> LocalLibraryManager : compose
+LocalLibraryManager *-- LearningPackageCatalog
+LocalLibraryManager *-- DocumentSummaryCatalog
+LocalLibraryManager *-- QuestionBankCatalog
+LocalLibraryManager *-- LearningPackageStudyService
+LocalLibraryManager *-- LearningProgressService
 LearningPackageCatalog --> SqliteLearningPackageRepository
 
 note bottom

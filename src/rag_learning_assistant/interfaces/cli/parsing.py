@@ -88,7 +88,7 @@ def validate_index_directory(index_directory: Path) -> None:
     if not entries:
         return
 
-    allowed_entries = {"vectors.faiss", "metadata.sqlite3"}
+    allowed_entries = {"vectors.faiss", "metadata.sqlite3", "library.json"}
 
     # A failed first import can leave valid metadata before vectors exist. The
     # directory must remain reusable, while vectors without metadata are unsafe.

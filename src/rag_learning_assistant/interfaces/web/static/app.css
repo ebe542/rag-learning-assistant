@@ -17,6 +17,52 @@ body {
     #f3f7f5;
 }
 
+.site-nav {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  border-bottom: 1px solid #d7e3df;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(0.75rem);
+}
+
+.nav-inner {
+  display: flex;
+  width: min(70rem, calc(100% - 2rem));
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  margin: 0 auto;
+}
+
+.nav-brand {
+  flex: none;
+  color: #17332d;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.nav-links a {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.55rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.nav-links a:hover,
+.nav-links a[aria-current="page"] {
+  background: #e5f1ed;
+}
+
 .shell {
   width: min(70rem, calc(100% - 2rem));
   margin: 0 auto;
@@ -26,6 +72,22 @@ body {
 .hero {
   max-width: 48rem;
   margin-bottom: 3rem;
+}
+
+.overview-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  max-width: none;
+}
+
+.overview-hero > div {
+  max-width: 48rem;
+}
+
+.overview-hero .secondary-link {
+  flex: none;
 }
 
 .eyebrow,
@@ -99,6 +161,105 @@ h2 {
   color: #ffffff;
   background: #245f50;
   font-weight: 750;
+}
+
+.library-manager {
+  margin-bottom: 1rem;
+}
+
+.compact-hero {
+  padding-top: 1.5rem;
+}
+
+.library-list {
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.library-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid #e3ebe8;
+}
+
+.library-overview li {
+  display: block;
+  padding: 0;
+}
+
+.library-overview form {
+  width: 100%;
+}
+
+.library-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem 0.25rem;
+  border: 0;
+  border-radius: 0;
+  color: #17332d;
+  background: transparent;
+  text-align: left;
+}
+
+.library-button:hover,
+.library-button:focus-visible {
+  color: #0d4938;
+  background: #edf5f2;
+}
+
+.compact-button {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.library-form {
+  padding-top: 0.25rem;
+}
+
+.library-form > label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-weight: 750;
+}
+
+.library-form > div {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.library-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #9eb6af;
+  border-radius: 0.65rem;
+  font: inherit;
+}
+
+.library-form p,
+.form-error {
+  margin: 0.55rem 0 0;
+  font-size: 0.85rem;
+}
+
+.library-form p {
+  color: #61736e;
+}
+
+.form-error {
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  color: #7a271a;
+  background: #fff0ed;
 }
 
 .library-path {
@@ -471,5 +632,32 @@ button:disabled {
 
   .timeline {
     flex-direction: column;
+  }
+
+  .library-form > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .overview-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .overview-hero .secondary-link {
+    align-self: flex-start;
+  }
+
+  .nav-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.8rem 0;
+  }
+
+  .nav-links {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }

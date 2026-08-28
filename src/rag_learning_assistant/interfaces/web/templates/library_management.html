@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Manage libraries · RAG Learning Assistant{% endblock %}
+{% block main_class %}detail-shell{% endblock %}
+{% block content %}
+<p class="eyebrow">Workspace settings</p>
+<h1>Manage libraries</h1>
+<section aria-labelledby="libraries-heading" class="panel library-manager">
+  <div class="panel-heading">
+    <div>
+      <p class="section-label">Libraries</p>
+      <h2 id="libraries-heading">Available libraries</h2>
+    </div>
+    <span class="package-count">{{ libraries | length }}</span>
+  </div>
+  {% if error_message %}
+  <p class="form-error" role="alert">{{ error_message }}</p>
+  {% endif %}
+  <ul class="library-list">
+    {% for library in libraries %}
+    <li><strong>{{ library.name }}</strong></li>
+    {% endfor %}
+  </ul>
+  <form class="library-form" action="{{ url_for('create_library') }}" method="post">
+    <label for="library-name">New library name</label>
+    <div>
+      <input id="library-name" name="name" maxlength="100" required>
+      <button type="submit">Create</button>
+    </div>
+    <p>Libraries are created in the local library workspace.</p>
+  </form>
+</section>
+{% endblock %}

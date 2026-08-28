@@ -52,10 +52,17 @@ Start the local browser interface:
 rag-learn gui
 ```
 
-The current GUI preview lists the learning packages in the default library.
-Select a package to inspect its status, document ID, stored summary, and question
-count. Use `rag-learn gui --library PATH` to open another library. Keep the
-terminal open while using it and press `Ctrl+C` there to stop the server. A ready
+The GUI start page lists the startup library and other valid libraries stored
+beside it. Open a library to see its packages. Follow **Manage libraries** to a
+separate page and use **Create** to add an empty library. Select a
+package to inspect its status, document ID, stored summary, and question count.
+The entered name is used only in the interface; the application assigns the
+storage directory automatically.
+The navigation bar remains available on package, study, feedback, and progress
+pages, so returning through intermediate pages is unnecessary.
+Use `rag-learn gui --library PATH` to choose
+the startup library and its parent workspace. Keep the terminal open while using
+it and press `Ctrl+C` there to stop the server. A ready
 package can also start one due-question study session through **Study now** or
 open the same progress summary as the CLI through **View progress**.
 Submitting an answer runs the same local grounded evaluation and review

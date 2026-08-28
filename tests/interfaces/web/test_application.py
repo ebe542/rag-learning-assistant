@@ -12,6 +12,7 @@ from rag_learning_assistant.application import (
 from rag_learning_assistant.generation import Citation, PersistedDocumentSummary, PromptReference
 from rag_learning_assistant.interfaces.web import create_app
 from rag_learning_assistant.interfaces.web.application import format_local_datetime
+from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
 from rag_learning_assistant.learning import (
     AnswerEvaluation,
     AnswerVerdict,
@@ -117,11 +118,54 @@ class StubProgressReporting:
         return self.progress_report
 
 
+class StubLibraryManagement:
+    def __init__(self) -> None:
+        self._current_directory = Path("personal-library")
+        self.items = [
+            LibraryListItem(
+                UUID("11111111-1111-1111-1111-111111111111"),
+                "Personal Library",
+                self._current_directory,
+            )
+        ]
+
+    @property
+    def current_directory(self) -> Path:
+        return self._current_directory
+
+    @property
+    def current_library(self) -> LibraryListItem:
+        return next(item for item in self.items if item.directory == self._current_directory)
+
+    def list_libraries(self) -> tuple[LibraryListItem, ...]:
+        return tuple(self.items)
+
+    def create_library(self, name: str) -> LibraryListItem:
+        if not name.strip():
+            raise ValueError("Library name must not be blank")
+        created = LibraryListItem(
+            UUID("22222222-2222-2222-2222-222222222222"),
+            name,
+            Path("22222222-2222-2222-2222-222222222222"),
+        )
+        self.items.append(created)
+        return created
+
+    def select_library(self, library_id: UUID) -> LibraryListItem:
+        selected = next((item for item in self.items if item.id == library_id), None)
+        if selected is None:
+            raise LookupError(f"Library not found: {library_id}")
+        self._current_directory = selected.directory
+        return selected
+
+
 def build_client(
     packages: list[LearningPackage] | None = None,
     study: StubPackageStudy | None = None,
     progress: StubProgressReporting | None = None,
+    libraries: StubLibraryManagement | None = None,
 ) -> TestClient:
+    library_management = libraries or StubLibraryManagement()
     return TestClient(
         create_app(
             StubPackageCatalog(packages or []),
@@ -129,7 +173,7 @@ def build_client(
             StubQuestionCatalog(),
             study or StubPackageStudy(),
             progress or StubProgressReporting(),
-            library_directory=Path("personal-library"),
+            libraries=library_management,
         )
     )
 
@@ -163,20 +207,99 @@ def test_home_page_introduces_local_learning_workspace() -> None:
     response = build_client().get("/")
 
     assert response.status_code == 200
-    assert "RAG Learning Assistant" in response.text
-    assert "Learning packages" in response.text
-    assert "No learning packages yet" in response.text
-    assert "personal-library" in response.text
+    assert "Your libraries" in response.text
+    assert "Available libraries" in response.text
+    assert "Personal Library" in response.text
+    assert "Manage libraries" in response.text
+    assert 'aria-label="Main navigation"' in response.text
+    assert "Personal Library · Packages" in response.text
 
 
-def test_home_page_lists_packages_with_their_preparation_status() -> None:
-    response = build_client([ready_package()]).get("/")
+def test_library_page_lists_packages_with_their_preparation_status() -> None:
+    response = build_client([ready_package()]).get("/library")
 
     assert response.status_code == 200
     assert "Python Basics" in response.text
     assert "Ready" in response.text
     assert "No learning packages yet" not in response.text
     assert "/package?name=Python%20Basics" in response.text
+
+
+def test_home_page_lists_the_selected_library() -> None:
+    response = build_client().get("/")
+
+    assert response.status_code == 200
+    assert "Personal Library" in response.text
+    assert "Currently selected" not in response.text
+    assert "Open library" not in response.text
+    assert 'class="library-button"' in response.text
+    assert 'aria-label="Personal Library"' in response.text
+    assert "Create and select" not in response.text
+
+
+def test_library_management_is_on_a_separate_page() -> None:
+    response = build_client().get("/libraries/manage")
+
+    assert response.status_code == 200
+    assert "Manage libraries" in response.text
+    assert ">Create</button>" in response.text
+    assert "Create and select" not in response.text
+
+
+def test_library_can_be_created_and_selected_from_same_origin() -> None:
+    libraries = StubLibraryManagement()
+    client = build_client(libraries=libraries)
+
+    response = client.post(
+        "/libraries",
+        data={"name": "German History"},
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://testserver/libraries/manage"
+    home_response = client.get("/")
+    assert "German History" in home_response.text
+    assert libraries.current_directory == Path("personal-library")
+
+
+def test_existing_library_can_be_selected() -> None:
+    libraries = StubLibraryManagement()
+    libraries.create_library("German History")
+    client = build_client(libraries=libraries)
+
+    response = client.post(
+        "/libraries/select",
+        data={"library_id": "11111111-1111-1111-1111-111111111111"},
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://testserver/library"
+    assert libraries.current_directory == Path("personal-library")
+
+
+def test_library_creation_rejects_a_cross_origin_request() -> None:
+    response = build_client().post(
+        "/libraries",
+        data={"name": "Untrusted"},
+        headers={"origin": "https://attacker.example"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_library_creation_shows_validation_errors() -> None:
+    response = build_client().post(
+        "/libraries",
+        data={"name": "  "},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "Library name must not be blank" in response.text
 
 
 def test_package_detail_shows_summary_and_question_count() -> None:
@@ -210,13 +333,17 @@ def test_package_detail_shows_summary_and_question_count() -> None:
             StubQuestionCatalog(bank),
             StubPackageStudy(),
             StubProgressReporting(),
-            library_directory=Path("personal-library"),
+            libraries=StubLibraryManagement(),
         )
     )
 
     response = client.get("/package", params={"name": "Python Basics"})
 
     assert response.status_code == 200
+    assert 'aria-label="Main navigation"' in response.text
+    assert "Libraries" in response.text
+    assert "Manage libraries" in response.text
+    assert "Personal Library · Packages" in response.text
     assert "Functions organize code into reusable units." in response.text
     assert "Questions" in response.text
     assert ">1<" in response.text

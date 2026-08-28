@@ -1,52 +1,28 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ package.name }} · RAG Learning Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  </head>
-  <body>
-    <main class="shell detail-shell">
-      <a class="back-link" href="{{ url_for('home') }}">← All learning packages</a>
-
-      <header class="detail-header">
-        <div>
-          <p class="eyebrow">Learning package</p>
-          <h1>{{ package.name }}</h1>
-        </div>
-        <span class="status status-{{ package.status.value }}">
-          {{ package.status.value | capitalize }}
-        </span>
-      </header>
-
-      <dl class="facts" aria-label="Package facts">
-        <div>
-          <dt>Questions</dt>
-          <dd>{{ question_count }}</dd>
-        </div>
-        <div>
-          <dt>Document ID</dt>
-          <dd class="technical-value">{{ package.document_id }}</dd>
-        </div>
-      </dl>
-
-      {% if package.status.value == "ready" %}
-      <div class="package-actions">
-        <a class="primary-link" href="{{ url_for('study_question') }}?package={{ package.name | urlencode }}">Study now</a>
-        <a class="secondary-link" href="{{ url_for('learning_progress') }}?package={{ package.name | urlencode }}">View progress</a>
-      </div>
-      {% endif %}
-
-      <section class="panel summary-panel" aria-labelledby="summary-heading">
-        <p class="section-label">Grounded material</p>
-        <h2 id="summary-heading">Summary</h2>
-        {% if summary %}
-        <div class="summary-text">{{ summary.text }}</div>
-        {% else %}
-        <p class="muted">No completed summary is available yet.</p>
-        {% endif %}
-      </section>
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+{% block title %}{{ package.name }} · RAG Learning Assistant{% endblock %}
+{% block main_class %}detail-shell{% endblock %}
+{% block content %}
+<header class="detail-header">
+  <div>
+    <p class="eyebrow">Learning package</p>
+    <h1>{{ package.name }}</h1>
+  </div>
+  <span class="status status-{{ package.status.value }}">{{ package.status.value | capitalize }}</span>
+</header>
+<dl class="facts" aria-label="Package facts">
+  <div><dt>Questions</dt><dd>{{ question_count }}</dd></div>
+  <div><dt>Document ID</dt><dd class="technical-value">{{ package.document_id }}</dd></div>
+</dl>
+{% if package.status.value == "ready" %}
+<div class="package-actions">
+  <a class="primary-link" href="{{ url_for('study_question') }}?package={{ package.name | urlencode }}">Study now</a>
+  <a class="secondary-link" href="{{ url_for('learning_progress') }}?package={{ package.name | urlencode }}">View progress</a>
+</div>
+{% endif %}
+<section class="panel summary-panel" aria-labelledby="summary-heading">
+  <p class="section-label">Grounded material</p>
+  <h2 id="summary-heading">Summary</h2>
+  {% if summary %}<div class="summary-text">{{ summary.text }}</div>
+  {% else %}<p class="muted">No completed summary is available yet.</p>{% endif %}
+</section>
+{% endblock %}

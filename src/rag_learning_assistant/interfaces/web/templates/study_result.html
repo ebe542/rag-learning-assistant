@@ -1,33 +1,21 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Study feedback · RAG Learning Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-  </head>
-  <body>
-    <main class="shell detail-shell">
-      <p class="eyebrow">Answer evaluated</p>
-      <h1>Study feedback</h1>
-
-      <section class="panel feedback-panel">
-        <p class="section-label">Expected answer</p>
-        <h2>{{ attempt.expected_answer }}</h2>
-        {% if attempt.evaluation %}
-        <p><strong>{{ attempt.evaluation.verdict.value | replace('_', ' ') | title }}</strong> · Score {{ "%.2f" | format(attempt.evaluation.score) }}</p>
-        <p>{{ attempt.evaluation.feedback }}</p>
-        {% if attempt.evaluation.missing_concepts %}
-        <h3>Missing concepts</h3>
-        <ul>
-          {% for concept in attempt.evaluation.missing_concepts %}<li>{{ concept }}</li>{% endfor %}
-        </ul>
-        {% endif %}
-        {% endif %}
-        <p><strong>Next review:</strong> {{ next_review }}</p>
-      </section>
-
-      <a class="primary-link" href="{{ url_for('study_question') }}?package={{ package_name | urlencode }}">Continue studying</a>
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+{% block title %}Study feedback · RAG Learning Assistant{% endblock %}
+{% block main_class %}detail-shell{% endblock %}
+{% block content %}
+<p class="eyebrow">Answer evaluated</p>
+<h1>Study feedback</h1>
+<section class="panel feedback-panel">
+  <p class="section-label">Expected answer</p>
+  <h2>{{ attempt.expected_answer }}</h2>
+  {% if attempt.evaluation %}
+  <p><strong>{{ attempt.evaluation.verdict.value | replace('_', ' ') | title }}</strong> · Score {{ "%.2f" | format(attempt.evaluation.score) }}</p>
+  <p>{{ attempt.evaluation.feedback }}</p>
+  {% if attempt.evaluation.missing_concepts %}
+  <h3>Missing concepts</h3>
+  <ul>{% for concept in attempt.evaluation.missing_concepts %}<li>{{ concept }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% endif %}
+  <p><strong>Next review:</strong> {{ next_review }}</p>
+</section>
+<a class="primary-link" href="{{ url_for('study_question') }}?package={{ package_name | urlencode }}">Continue studying</a>
+{% endblock %}

@@ -46,12 +46,16 @@ python -m pip install -e ".[local,gui]"
 rag-learn gui
 ```
 
-The preview listens only on `127.0.0.1`, lists the packages in the selected
-learning library, and opens package details with the stored summary and question
-count. Ready packages can show their current learning progress or start a
+The preview listens only on `127.0.0.1`. Its start page lists local libraries
+stored beside the startup library, with management always available in the
+top-right header. Display names are independent from UUID-based storage
+directories. Opening a library leads to its learning packages; creating
+libraries is kept on a separate management page. Package details show
+the stored summary and question count. Ready packages can show their current learning progress or start a
 due-question study session, evaluate a written
 answer with the configured local model, and display grounded feedback plus the
-next review time.
+next review time. A shared navigation bar keeps libraries, library management,
+and the opened library's packages reachable from every GUI page.
 
 ## Product workflow
 
@@ -436,7 +440,8 @@ Generated answer text is included for diagnosing failures. Accepted phrases make
 the check reproducible but do not replace human factual review or prove semantic
 equivalence.
 
-Each library directory contains `vectors.faiss` and `metadata.sqlite3`.
+Each prepared library directory contains `vectors.faiss`, `metadata.sqlite3`,
+and optional GUI identity metadata in `library.json`.
 SQLite records documents with stable UUIDs and content hashes, maps FAISS IDs back to their document chunks, and stores embedding-model metadata.
 Adding identical file content again is rejected before PDF extraction or embedding generation.
 Batch imports process documents sequentially and report each path as `added`, `skipped`, or `failed`.

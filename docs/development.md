@@ -416,14 +416,27 @@ the file is absent or environment loading fails.
 ## Local web interface
 
 `rag-learn gui` starts a FastAPI application on `127.0.0.1`. The CLI resolves
-the library directory and composes a `LearningPackageCatalog` with the SQLite
-package repository. The web application receives that catalog through its
-factory instead of importing CLI commands or loading ML adapters. Its start page
-renders the package name and preparation status, including a dedicated empty
-library state. A package detail route uses the active persisted identities with
+the startup library directory. `LocalLibraryManager` treats its parent as a
+bounded workspace, discovers only direct child directories containing
+`metadata.sqlite3`, and delegates all web services to the selected library.
+Each library has a `library.json` containing its internal UUID and independent
+display name. New directories use the UUID rather than user input, so renaming
+can never change a storage path. Existing libraries receive metadata in place
+without moving their database. Create and open forms require the same loopback
+origin as study submissions. Creating a library initializes an isolated SQLite
+database but does not open it implicitly.
+
+The web application receives its service protocols through the factory instead
+of importing CLI commands. Its start page is a library overview. Opening a
+library redirects to its package page, while creation is isolated
+on a management page. The package page renders preparation status and a
+dedicated empty-library state. A package detail route uses the active persisted identities with
 `DocumentSummaryCatalog` and `QuestionBankCatalog` to render the stored summary
 and question count. Unknown names return a user-facing HTTP 404 page. Templates
 and CSS are served from the installed package without external browser assets.
+All pages extend `base.html`, which owns document metadata and a responsive,
+server-rendered navigation bar. The shared template exposes library overview,
+management, and the opened library's packages without JavaScript.
 
 Ready package details link to a server-rendered study form. Its GET route asks
 `LearningPackageStudyService` for the highest-priority due question without

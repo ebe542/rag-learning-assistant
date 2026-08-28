@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}RAG Learning Assistant{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Main navigation">
+      <div class="nav-inner">
+        <a class="nav-brand" href="{{ url_for('home') }}">RAG Learning Assistant</a>
+        <div class="nav-links">
+          <a {% if request.url.path == '/' %}aria-current="page"{% endif %} href="{{ url_for('home') }}">Libraries</a>
+          <a {% if request.url.path == '/libraries/manage' %}aria-current="page"{% endif %} href="{{ url_for('library_management') }}">Manage libraries</a>
+          {% if current_library %}
+          <a {% if request.url.path == '/library' %}aria-current="page"{% endif %} href="{{ url_for('library_detail') }}">{{ current_library.name }} · Packages</a>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+    <main class="shell {% block main_class %}{% endblock %}">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

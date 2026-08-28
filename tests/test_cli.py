@@ -811,6 +811,18 @@ def test_index_accepts_metadata_only_directory_after_failed_import(
     validate_index_directory(index_directory)
 
 
+def test_index_accepts_gui_library_metadata(tmp_path: Path) -> None:
+    index_directory = tmp_path / "course-index"
+    index_directory.mkdir()
+    (index_directory / "metadata.sqlite3").touch()
+    (index_directory / "library.json").write_text(
+        '{"id":"11111111-1111-1111-1111-111111111111","name":"Python"}',
+        encoding="utf-8",
+    )
+
+    validate_index_directory(index_directory)
+
+
 def test_search_rejects_missing_index_directory(
     monkeypatch,
     tmp_path: Path,

@@ -1,39 +1,26 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Study {{ package_name }} · RAG Learning Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-    <script src="{{ url_for('static', path='/study.js') }}" defer></script>
-  </head>
-  <body>
-    <main class="shell detail-shell">
-      <a class="back-link" href="{{ url_for('package_detail') }}?name={{ package_name | urlencode }}">← Package details</a>
-      <p class="eyebrow">Study session</p>
-      <h1>{{ package_name }}</h1>
-
-      {% if due %}
-      <section class="panel study-panel" aria-labelledby="question-heading">
-        <p class="section-label">Question {{ due.question.number }}</p>
-        <h2 id="question-heading">{{ due.question.text }}</h2>
-        <form action="{{ url_for('submit_study_answer') }}" method="post" data-study-form>
-          <input type="hidden" name="package" value="{{ package_name }}">
-          <input type="hidden" name="question_number" value="{{ due.question.number }}">
-          <label for="answer">Your answer</label>
-          <textarea id="answer" name="answer" rows="8" required></textarea>
-          <button type="submit" data-submit-button>Evaluate answer</button>
-          <p class="submission-status" data-submission-status role="status" aria-live="polite" hidden>
-            Evaluating your answer with the local model. This may take a moment…
-          </p>
-        </form>
-      </section>
-      {% else %}
-      <section class="panel empty-state">
-        <h2>No questions are due</h2>
-        <p>Your current review schedule has no question ready for study.</p>
-      </section>
-      {% endif %}
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+{% block title %}Study {{ package_name }} · RAG Learning Assistant{% endblock %}
+{% block head %}<script src="{{ url_for('static', path='/study.js') }}" defer></script>{% endblock %}
+{% block main_class %}detail-shell{% endblock %}
+{% block content %}
+<p class="eyebrow">Study session</p>
+<h1>{{ package_name }}</h1>
+{% if due %}
+<section class="panel study-panel" aria-labelledby="question-heading">
+  <p class="section-label">Question {{ due.question.number }}</p>
+  <h2 id="question-heading">{{ due.question.text }}</h2>
+  <form action="{{ url_for('submit_study_answer') }}" method="post" data-study-form>
+    <input type="hidden" name="package" value="{{ package_name }}">
+    <input type="hidden" name="question_number" value="{{ due.question.number }}">
+    <label for="answer">Your answer</label>
+    <textarea id="answer" name="answer" rows="8" required></textarea>
+    <button type="submit" data-submit-button>Evaluate answer</button>
+    <p class="submission-status" data-submission-status role="status" aria-live="polite" hidden>
+      Evaluating your answer with the local model. This may take a moment…
+    </p>
+  </form>
+</section>
+{% else %}
+<section class="panel empty-state"><h2>No questions are due</h2><p>Your current review schedule has no question ready for study.</p></section>
+{% endif %}
+{% endblock %}
