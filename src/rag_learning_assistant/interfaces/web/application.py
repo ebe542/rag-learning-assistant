@@ -88,6 +88,16 @@ class LibraryManagement(Protocol):
 
     def select_library(self, library_id: UUID) -> LibraryListItem: ...
 
+    def rename_library(self, library_id: UUID, name: str) -> LibraryListItem: ...
+
+    def delete_library(
+        self,
+        library_id: UUID,
+        *,
+        confirmation: str,
+        delete_contents: bool,
+    ) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class PackageListItem:
@@ -158,14 +168,20 @@ def create_app(
         request: Request,
         *,
         error_message: str | None = None,
+        selected_library_id: UUID | None = None,
         status_code: int = 200,
     ) -> HTMLResponse:
+        library_items = libraries.list_libraries()
         return templates.TemplateResponse(
             request=request,
             name="library_management.html",
             context={
                 "error_message": error_message,
-                "libraries": libraries.list_libraries(),
+                "libraries": library_items,
+                "selected_library": next(
+                    (item for item in library_items if item.id == selected_library_id),
+                    None,
+                ),
             },
             status_code=status_code,
         )
@@ -190,18 +206,64 @@ def create_app(
         )
 
     @app.get("/libraries/manage", response_class=HTMLResponse)
-    def library_management(request: Request) -> HTMLResponse:
-        return render_library_management(request)
+    def library_management(
+        request: Request,
+        library_id: UUID | None = None,
+    ) -> HTMLResponse:
+        return render_library_management(request, selected_library_id=library_id)
 
     @app.post("/libraries", response_class=HTMLResponse)
     def create_library(request: Request, name: str = Form()) -> HTMLResponse:
         _require_same_origin(request)
         try:
-            libraries.create_library(name)
+            created = libraries.create_library(name)
         except ValueError as error:
             return render_library_management(
                 request,
                 error_message=str(error),
+                status_code=422,
+            )
+        location = f"{request.url_for('library_management')}?library_id={created.id}"
+        return RedirectResponse(location, status_code=303)
+
+    @app.post("/libraries/rename", response_class=HTMLResponse)
+    def rename_library(
+        request: Request,
+        library_id: Annotated[UUID, Form()],
+        name: Annotated[str, Form()],
+    ) -> HTMLResponse:
+        _require_same_origin(request)
+        try:
+            renamed = libraries.rename_library(library_id, name)
+        except (LookupError, ValueError) as error:
+            return render_library_management(
+                request,
+                error_message=str(error),
+                selected_library_id=library_id,
+                status_code=422,
+            )
+        location = f"{request.url_for('library_management')}?library_id={renamed.id}"
+        return RedirectResponse(location, status_code=303)
+
+    @app.post("/libraries/delete", response_class=HTMLResponse)
+    def delete_library(
+        request: Request,
+        library_id: Annotated[UUID, Form()],
+        confirmation: Annotated[str, Form()],
+        delete_contents: Annotated[str | None, Form()] = None,
+    ) -> HTMLResponse:
+        _require_same_origin(request)
+        try:
+            libraries.delete_library(
+                library_id,
+                confirmation=confirmation,
+                delete_contents=delete_contents == "yes",
+            )
+        except (LookupError, ValueError) as error:
+            return render_library_management(
+                request,
+                error_message=str(error),
+                selected_library_id=library_id,
                 status_code=422,
             )
         return RedirectResponse(request.url_for("library_management"), status_code=303)

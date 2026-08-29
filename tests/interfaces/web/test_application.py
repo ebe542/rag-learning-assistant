@@ -126,6 +126,7 @@ class StubLibraryManagement:
                 UUID("11111111-1111-1111-1111-111111111111"),
                 "Personal Library",
                 self._current_directory,
+                False,
             )
         ]
 
@@ -147,6 +148,7 @@ class StubLibraryManagement:
             UUID("22222222-2222-2222-2222-222222222222"),
             name,
             Path("22222222-2222-2222-2222-222222222222"),
+            False,
         )
         self.items.append(created)
         return created
@@ -157,6 +159,28 @@ class StubLibraryManagement:
             raise LookupError(f"Library not found: {library_id}")
         self._current_directory = selected.directory
         return selected
+
+    def rename_library(self, library_id: UUID, name: str) -> LibraryListItem:
+        selected = next((item for item in self.items if item.id == library_id), None)
+        if selected is None:
+            raise LookupError(f"Library not found: {library_id}")
+        renamed = LibraryListItem(selected.id, name, selected.directory, selected.has_content)
+        self.items = [renamed if item.id == library_id else item for item in self.items]
+        return renamed
+
+    def delete_library(
+        self,
+        library_id: UUID,
+        *,
+        confirmation: str,
+        delete_contents: bool,
+    ) -> None:
+        selected = next((item for item in self.items if item.id == library_id), None)
+        if selected is None:
+            raise LookupError(f"Library not found: {library_id}")
+        if confirmation != selected.name:
+            raise ValueError("Library name confirmation does not match")
+        self.items = [item for item in self.items if item.id != library_id]
 
 
 def build_client(
@@ -246,6 +270,49 @@ def test_library_management_is_on_a_separate_page() -> None:
     assert "Create and select" not in response.text
 
 
+def test_library_management_shows_editor_for_chosen_row() -> None:
+    response = build_client().get(
+        "/libraries/manage?library_id=11111111-1111-1111-1111-111111111111"
+    )
+
+    assert response.status_code == 200
+    assert "Edit library" in response.text
+    assert "Rename" in response.text
+    assert "Delete library" in response.text
+
+
+def test_library_can_be_renamed_without_changing_its_directory() -> None:
+    libraries = StubLibraryManagement()
+    response = build_client(libraries=libraries).post(
+        "/libraries/rename",
+        data={
+            "library_id": "11111111-1111-1111-1111-111111111111",
+            "name": "Renamed Library",
+        },
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert libraries.current_library.name == "Renamed Library"
+    assert libraries.current_directory == Path("personal-library")
+
+
+def test_library_deletion_requires_the_exact_display_name() -> None:
+    libraries = StubLibraryManagement()
+    response = build_client(libraries=libraries).post(
+        "/libraries/delete",
+        data={
+            "library_id": "11111111-1111-1111-1111-111111111111",
+            "confirmation": "wrong name",
+        },
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "Library name confirmation does not match" in response.text
+
+
 def test_library_can_be_created_and_selected_from_same_origin() -> None:
     libraries = StubLibraryManagement()
     client = build_client(libraries=libraries)
@@ -258,7 +325,7 @@ def test_library_can_be_created_and_selected_from_same_origin() -> None:
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "http://testserver/libraries/manage"
+    assert response.headers["location"].startswith("http://testserver/libraries/manage?library_id=")
     home_response = client.get("/")
     assert "German History" in home_response.text
     assert libraries.current_directory == Path("personal-library")

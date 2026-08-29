@@ -50,7 +50,9 @@ The preview listens only on `127.0.0.1`. Its start page lists local libraries
 stored beside the startup library, with management always available in the
 top-right header. Display names are independent from UUID-based storage
 directories. Opening a library leads to its learning packages; creating
-libraries is kept on a separate management page. Package details show
+libraries is kept on a separate management page. Selecting a management row
+reveals rename and deletion controls. Deletion requires the exact display name;
+libraries containing data require an additional explicit confirmation. Package details show
 the stored summary and question count. Ready packages can show their current learning progress or start a
 due-question study session, evaluate a written
 answer with the configured local model, and display grounded feedback plus the

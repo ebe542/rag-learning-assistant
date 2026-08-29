@@ -1,7 +1,10 @@
 """Manage selectable local libraries for the loopback web interface."""
 
 import json
+import shutil
+import sqlite3
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -44,6 +47,7 @@ class LibraryListItem:
     id: UUID
     name: str
     directory: Path
+    has_content: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,13 +87,20 @@ class LocalLibraryManager:
     @property
     def current_library(self) -> LibraryListItem:
         metadata = self._read_or_create_metadata(self._current_directory)
-        return LibraryListItem(metadata.id, metadata.name, self._current_directory)
+        return LibraryListItem(
+            metadata.id,
+            metadata.name,
+            self._current_directory,
+            _library_has_content(self._current_directory),
+        )
 
     def list_libraries(self) -> tuple[LibraryListItem, ...]:
         library_directories = (
             path
             for path in self.root_directory.iterdir()
-            if path.is_dir() and (path / "metadata.sqlite3").is_file()
+            if path.is_dir()
+            and path.resolve().parent == self.root_directory
+            and (path / "metadata.sqlite3").is_file()
         )
         items = []
         known_ids: set[UUID] = set()
@@ -103,6 +114,7 @@ class LocalLibraryManager:
                     id=metadata.id,
                     name=metadata.name,
                     directory=directory,
+                    has_content=_library_has_content(directory),
                 )
             )
         return tuple(sorted(items, key=lambda item: (item.name.casefold(), str(item.id))))
@@ -119,7 +131,7 @@ class LocalLibraryManager:
         directory.mkdir()
         self._write_metadata(directory, _LibraryMetadata(library_id, normalized_name))
         SqliteLearningPackageRepository(directory / "metadata.sqlite3")
-        return LibraryListItem(library_id, normalized_name, directory.resolve())
+        return LibraryListItem(library_id, normalized_name, directory.resolve(), False)
 
     def select_library(self, library_id: UUID) -> LibraryListItem:
         matching_library = next(
@@ -135,11 +147,68 @@ class LocalLibraryManager:
             matching_library.id,
             matching_library.name,
             self._current_directory,
+            matching_library.has_content,
         )
+
+    def rename_library(self, library_id: UUID, name: str) -> LibraryListItem:
+        normalized_name = _validate_library_name(name)
+        libraries = self.list_libraries()
+        matching_library = next((item for item in libraries if item.id == library_id), None)
+        if matching_library is None:
+            raise LookupError(f"Library not found: {library_id}")
+        if any(
+            item.id != library_id and item.name.casefold() == normalized_name.casefold()
+            for item in libraries
+        ):
+            raise ValueError(f"Library already exists: {normalized_name}")
+
+        self._write_metadata(
+            matching_library.directory,
+            _LibraryMetadata(library_id, normalized_name),
+        )
+        return LibraryListItem(
+            library_id,
+            normalized_name,
+            matching_library.directory,
+            matching_library.has_content,
+        )
+
+    def delete_library(
+        self,
+        library_id: UUID,
+        *,
+        confirmation: str,
+        delete_contents: bool,
+    ) -> None:
+        libraries = self.list_libraries()
+        matching_library = next((item for item in libraries if item.id == library_id), None)
+        if matching_library is None:
+            raise LookupError(f"Library not found: {library_id}")
+        if len(libraries) == 1:
+            raise ValueError("The last library cannot be deleted")
+        if confirmation != matching_library.name:
+            raise ValueError("Library name confirmation does not match")
+        if matching_library.has_content and not delete_contents:
+            raise ValueError("Confirm deletion of all library contents")
+
+        target = matching_library.directory.resolve()
+        if target.parent != self.root_directory or target == self.root_directory:
+            raise ValueError("Library directory is outside the configured workspace")
+        metadata = self._read_or_create_metadata(target)
+        if metadata.id != library_id:
+            raise ValueError("Library identity changed before deletion")
+
+        if target == self._current_directory:
+            replacement = next(item for item in libraries if item.id != library_id)
+            self._current_directory = replacement.directory.resolve()
+            self._services = self._build_services(self._current_directory)
+        shutil.rmtree(target)
 
     def _next_library_id(self) -> UUID:
         known_ids = {item.id for item in self.list_libraries()}
-        while (library_id := self.id_factory()) in known_ids:
+        while (library_id := self.id_factory()) in known_ids or (
+            self.root_directory / str(library_id)
+        ).exists():
             continue
         return library_id
 
@@ -279,3 +348,29 @@ def _validate_library_name(name: str) -> str:
     if any(ord(character) < 32 for character in normalized_name):
         raise ValueError("Library name must not contain control characters")
     return normalized_name
+
+
+def _library_has_content(directory: Path) -> bool:
+    """Detect persisted user data without treating schemas as content."""
+
+    vectors_path = directory / "vectors.faiss"
+    if vectors_path.is_file() and vectors_path.stat().st_size > 0:
+        return True
+
+    database_path = directory / "metadata.sqlite3"
+    if not database_path.is_file():
+        return False
+    with closing(sqlite3.connect(database_path)) as connection:
+        table_names = (
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        )
+        for table_name in table_names:
+            escaped_name = table_name.replace('"', '""')
+            if connection.execute(
+                f'SELECT EXISTS(SELECT 1 FROM "{escaped_name}" LIMIT 1)'
+            ).fetchone()[0]:
+                return True
+    return False

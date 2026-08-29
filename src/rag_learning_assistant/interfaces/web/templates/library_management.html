@@ -17,9 +17,39 @@
   {% endif %}
   <ul class="library-list">
     {% for library in libraries %}
-    <li><strong>{{ library.name }}</strong></li>
+    <li>
+      <a class="management-library-link" {% if selected_library and selected_library.id == library.id %}aria-current="true"{% endif %} href="{{ url_for('library_management') }}?library_id={{ library.id }}">
+        <strong>{{ library.name }}</strong>
+      </a>
+    </li>
     {% endfor %}
   </ul>
+  {% if selected_library %}
+  <section class="library-editor" aria-labelledby="library-editor-heading">
+    <p class="section-label">Edit library</p>
+    <h3 id="library-editor-heading">{{ selected_library.name }}</h3>
+    <form class="library-form" action="{{ url_for('rename_library') }}" method="post">
+      <input type="hidden" name="library_id" value="{{ selected_library.id }}">
+      <label for="renamed-library-name">Display name</label>
+      <div>
+        <input id="renamed-library-name" name="name" value="{{ selected_library.name }}" maxlength="100" required>
+        <button type="submit">Rename</button>
+      </div>
+    </form>
+    <form class="delete-library-form" action="{{ url_for('delete_library') }}" method="post">
+      <input type="hidden" name="library_id" value="{{ selected_library.id }}">
+      <label for="delete-confirmation">Type <strong>{{ selected_library.name }}</strong> to confirm deletion</label>
+      <input id="delete-confirmation" name="confirmation" autocomplete="off" required>
+      {% if selected_library.has_content %}
+      <label class="confirmation-check">
+        <input type="checkbox" name="delete_contents" value="yes" required>
+        Permanently delete all packages and learning progress in this library
+      </label>
+      {% endif %}
+      <button class="danger-button" type="submit">Delete library</button>
+    </form>
+  </section>
+  {% endif %}
   <form class="library-form" action="{{ url_for('create_library') }}" method="post">
     <label for="library-name">New library name</label>
     <div>

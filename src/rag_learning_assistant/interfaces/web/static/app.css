@@ -186,6 +186,63 @@ h2 {
   border-bottom: 1px solid #e3ebe8;
 }
 
+.management-library-link {
+  display: block;
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  text-decoration: none;
+}
+
+.management-library-link:hover,
+.management-library-link[aria-current="true"] {
+  background: #edf5f2;
+}
+
+.library-editor {
+  margin: 0 0 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid #c8d9d3;
+  border-radius: 0.9rem;
+  background: #f8fbfa;
+}
+
+.delete-library-form {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e3ebe8;
+}
+
+.delete-library-form > input {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #b9877e;
+  border-radius: 0.65rem;
+  font: inherit;
+}
+
+.confirmation-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: #7a271a;
+  line-height: 1.4;
+}
+
+.confirmation-check input {
+  margin-top: 0.2rem;
+}
+
+.danger-button {
+  justify-self: start;
+  background: #a33a2b;
+}
+
+.danger-button:hover {
+  background: #7a271a;
+}
+
 .library-overview li {
   display: block;
   padding: 0;

@@ -75,3 +75,50 @@ def test_manager_rejects_a_duplicate_name_case_insensitively(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="already exists"):
         manager.create_library("german history")
+
+
+def test_manager_renames_only_display_metadata(tmp_path: Path) -> None:
+    manager = LocalLibraryManager(tmp_path / "library")
+    created = manager.create_library("Original name")
+
+    renamed = manager.rename_library(created.id, "Renamed / display name")
+
+    assert renamed.name == "Renamed / display name"
+    assert renamed.directory == created.directory
+    assert created.directory.name == str(created.id)
+
+
+def test_manager_deletes_an_empty_library_after_name_confirmation(tmp_path: Path) -> None:
+    manager = LocalLibraryManager(tmp_path / "library")
+    created = manager.create_library("Temporary")
+
+    manager.delete_library(
+        created.id,
+        confirmation="Temporary",
+        delete_contents=False,
+    )
+
+    assert not created.directory.exists()
+
+
+def test_manager_requires_extra_confirmation_for_non_empty_library(tmp_path: Path) -> None:
+    manager = LocalLibraryManager(tmp_path / "library")
+    created = manager.create_library("With content")
+    (created.directory / "vectors.faiss").write_bytes(b"data")
+
+    with pytest.raises(ValueError, match="all library contents"):
+        manager.delete_library(
+            created.id,
+            confirmation="With content",
+            delete_contents=False,
+        )
+
+    assert created.directory.exists()
+
+    manager.delete_library(
+        created.id,
+        confirmation="With content",
+        delete_contents=True,
+    )
+
+    assert not created.directory.exists()

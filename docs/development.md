@@ -426,6 +426,13 @@ without moving their database. Create and open forms require the same loopback
 origin as study submissions. Creating a library initializes an isolated SQLite
 database but does not open it implicitly.
 
+Management selection is page-local and does not change the library used by
+package routes. Renaming atomically replaces only `library.json`. Deletion
+re-resolves the UUID and workspace boundary immediately before removing the
+directory, refuses to remove the last library, requires an exact display-name
+confirmation, and requires an additional flag when SQLite rows or FAISS data
+show that the library is not empty.
+
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a
 library redirects to its package page, while creation is isolated

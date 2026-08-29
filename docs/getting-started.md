@@ -58,6 +58,9 @@ separate page and use **Create** to add an empty library. Select a
 package to inspect its status, document ID, stored summary, and question count.
 The entered name is used only in the interface; the application assigns the
 storage directory automatically.
+On **Manage libraries**, choose a row to reveal its actions. Renaming changes
+only the display name. Deletion requires typing that name exactly, and a library
+with packages or other learning data requires an additional confirmation.
 The navigation bar remains available on package, study, feedback, and progress
 pages, so returning through intermediate pages is unnecessary.
 Use `rag-learn gui --library PATH` to choose
