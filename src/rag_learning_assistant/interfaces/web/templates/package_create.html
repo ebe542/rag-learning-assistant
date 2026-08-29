@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Add package · RAG Learning Assistant{% endblock %}
+{% block main_class %}detail-shell{% endblock %}
+{% block content %}
+<p class="eyebrow">Package preparation</p>
+<h1>Add learning package</h1>
+<p class="introduction">Choose a text-based PDF and review its preparation settings.</p>
+{% if error_message %}<p class="form-error" role="alert">{{ error_message }}</p>{% endif %}
+<form class="panel package-create-form" action="{{ url_for('validate_package_upload') }}" method="post" enctype="multipart/form-data">
+  <label for="package-name">Package name</label>
+  <input id="package-name" name="name" maxlength="100" required>
+  <label for="package-pdf">PDF document</label>
+  <input id="package-pdf" name="pdf" type="file" accept="application/pdf,.pdf" required>
+  <label for="question-count">Study questions</label>
+  <input id="question-count" name="question_count" type="number" min="1" max="50" value="5" required>
+  <p class="muted">Maximum PDF size: 25 MiB. Scanned PDFs without embedded text are not supported.</p>
+  <button type="submit">Validate upload</button>
+</form>
+{% endblock %}

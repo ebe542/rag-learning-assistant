@@ -152,15 +152,54 @@ h2 {
   gap: 1.5rem;
 }
 
-.package-count {
+.heading-with-count {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0.75rem;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.package-create-form {
   display: grid;
+  gap: 0.7rem;
+}
+
+.package-create-form label {
+  margin-top: 0.5rem;
+  font-weight: 750;
+}
+
+.package-create-form input {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #9eb6af;
+  border-radius: 0.65rem;
+  font: inherit;
+}
+
+.package-create-form button {
+  justify-self: start;
+}
+
+.validation-summary {
+  margin-bottom: 1rem;
+}
+
+.package-count {
+  display: inline-flex;
   width: 2.5rem;
   height: 2.5rem;
-  place-items: center;
+  flex: 0 0 2.5rem;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   color: #ffffff;
   background: #245f50;
+  font-size: 1rem;
   font-weight: 750;
+  line-height: 1;
 }
 
 .library-manager {

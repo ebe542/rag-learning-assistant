@@ -10,6 +10,7 @@ from rag_learning_assistant.application import (
     LearningProgressReport,
 )
 from rag_learning_assistant.generation import Citation, PersistedDocumentSummary, PromptReference
+from rag_learning_assistant.interfaces.web import application as web_application
 from rag_learning_assistant.interfaces.web import create_app
 from rag_learning_assistant.interfaces.web.application import format_local_datetime
 from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
@@ -252,6 +253,97 @@ def test_library_page_lists_packages_with_their_preparation_status() -> None:
     assert "Ready" in response.text
     assert "No learning packages yet" not in response.text
     assert "/package?name=Python%20Basics" in response.text
+    assert "Add package" in response.text
+    assert '<h2 class="heading-with-count" id="packages-heading">' in response.text
+    assert '<span class="package-count">1</span>' in response.text
+
+
+def test_package_create_page_shows_upload_constraints() -> None:
+    response = build_client().get("/package/new")
+
+    assert response.status_code == 200
+    assert "Add learning package" in response.text
+    assert 'enctype="multipart/form-data"' in response.text
+    assert "Maximum PDF size: 25 MiB" in response.text
+
+
+def test_valid_pdf_upload_is_reviewed_without_starting_preparation() -> None:
+    response = build_client().post(
+        "/package/new",
+        data={"name": "Python Course", "question_count": "7"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+    assert "Upload validated" in response.text
+    assert "Python Course" in response.text
+    assert "course.pdf" in response.text
+    assert "7" in response.text
+    assert "package preparation has not started yet" in response.text
+
+
+def test_package_upload_rejects_non_pdf_content() -> None:
+    response = build_client().post(
+        "/package/new",
+        data={"name": "Not PDF", "question_count": "5"},
+        files={"pdf": ("course.pdf", b"plain text", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "does not contain a PDF signature" in response.text
+
+
+def test_package_upload_rejects_duplicate_package_name() -> None:
+    response = build_client([ready_package()]).post(
+        "/package/new",
+        data={"name": "python basics", "question_count": "5"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "Learning package already exists" in response.text
+
+
+def test_package_upload_rejects_question_count_outside_supported_range() -> None:
+    response = build_client().post(
+        "/package/new",
+        data={"name": "Too many", "question_count": "51"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "Question count must be between 1 and 50" in response.text
+
+
+def test_package_upload_rejects_files_above_size_limit(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(web_application, "MAX_PDF_UPLOAD_BYTES", 8)
+
+    response = build_client().post(
+        "/package/new",
+        data={"name": "Too large", "question_count": "5"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7 extra", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "PDF file must not exceed 25 MiB" in response.text
+
+
+def test_package_upload_rejects_cross_origin_submission() -> None:
+    response = build_client().post(
+        "/package/new",
+        data={"name": "Untrusted", "question_count": "5"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7", "application/pdf")},
+        headers={"origin": "https://attacker.example"},
+    )
+
+    assert response.status_code == 403
 
 
 def test_home_page_lists_the_selected_library() -> None:

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Upload validated · RAG Learning Assistant{% endblock %}
+{% block main_class %}detail-shell{% endblock %}
+{% block content %}
+<p class="eyebrow">Package preparation</p>
+<h1>Upload validated</h1>
+<section class="panel validation-summary">
+  <p>The PDF and preparation settings passed the initial validation.</p>
+  <dl class="facts">
+    <div><dt>Package</dt><dd>{{ name }}</dd></div>
+    <div><dt>File</dt><dd>{{ filename }}</dd></div>
+    <div><dt>Size</dt><dd>{{ size_bytes }} bytes</dd></div>
+    <div><dt>Questions</dt><dd>{{ question_count }}</dd></div>
+  </dl>
+  <p class="muted">The file was not stored and package preparation has not started yet.</p>
+</section>
+<a class="primary-link" href="{{ url_for('package_create') }}">Choose again</a>
+{% endblock %}

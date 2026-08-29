@@ -36,6 +36,8 @@ package "interfaces.web" #E8F4FD {
   class "home.html" as HomeTemplate <<template>>
   class "library_detail.html" as LibraryDetailTemplate <<template>>
   class "library_management.html" as LibraryManagementTemplate <<template>>
+  class "package_create.html" as PackageCreateTemplate <<template>>
+  class "package_upload_validated.html" as PackageUploadValidatedTemplate <<template>>
   class "progress.html" as ProgressTemplate <<template>>
 }
 package "application services" #FFE8E8 {
@@ -79,11 +81,15 @@ WebServer --> WebApplication
 WebApplication --> HomeTemplate
 WebApplication --> LibraryDetailTemplate
 WebApplication --> LibraryManagementTemplate
+WebApplication --> PackageCreateTemplate
+WebApplication --> PackageUploadValidatedTemplate
 WebApplication --> ProgressTemplate
 HomeTemplate --|> BaseTemplate
 LibraryDetailTemplate --|> BaseTemplate
 LibraryManagementTemplate --|> BaseTemplate
 ProgressTemplate --|> BaseTemplate
+PackageCreateTemplate --|> BaseTemplate
+PackageUploadValidatedTemplate --|> BaseTemplate
 WebApplication --> PackageCatalog
 WebApplication --> SummaryCatalog
 WebApplication --> QuestionCatalog

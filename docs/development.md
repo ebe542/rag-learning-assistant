@@ -432,9 +432,16 @@ re-resolves the UUID and workspace boundary immediately before removing the
 directory, requires an exact display-name confirmation, and requires an
 additional flag when SQLite rows or FAISS data show that the library is not
 empty. Deleting the final library clears the optional service delegates and
-hides package navigation. A workspace marker distinguishes this intentional
-empty state from first startup, so restarting does not recreate the deleted
-library automatically.
+hides package navigation. An empty workspace also remains empty on first
+startup: the manager opens the configured startup directory only when it
+already contains `metadata.sqlite3` and never initializes a library implicitly.
+
+The package page exposes a multipart upload form as the input boundary for a
+future preparation job. The server requires the loopback origin, a unique
+display name, 1 to 50 questions, a `.pdf` filename, a PDF signature within the
+first 1024 bytes, and at most 25 MiB. It streams only for validation and closes
+the upload without writing it to the workspace. This deliberately separates
+upload validation from later ownership, cleanup, and background-job decisions.
 
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a

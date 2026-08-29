@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -22,6 +22,7 @@ from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
 from rag_learning_assistant.learning import LearningPackage, QuestionBank, StudyAttempt
 
 WEB_ROOT = Path(__file__).resolve().parent
+MAX_PDF_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
 class PackageCatalog(Protocol):
@@ -146,7 +147,7 @@ def create_app(
         name="static",
     )
 
-    def navigation_context(_: Request) -> dict[str, LibraryListItem]:
+    def navigation_context(_: Request) -> dict[str, LibraryListItem | None]:
         return {"current_library": libraries.current_library}
 
     templates = Jinja2Templates(
@@ -162,6 +163,19 @@ def create_app(
                 status_label=package.status.value.capitalize(),
             )
             for package in packages.list_packages()
+        )
+
+    def render_package_create(
+        request: Request,
+        *,
+        error_message: str | None = None,
+        status_code: int = 200,
+    ) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="package_create.html",
+            context={"error_message": error_message},
+            status_code=status_code,
         )
 
     def render_library_management(
@@ -327,6 +341,58 @@ def create_app(
             },
         )
 
+    @app.get("/package/new", response_class=HTMLResponse)
+    def package_create(request: Request) -> Response:
+        if libraries.current_library is None:
+            return RedirectResponse(request.url_for("home"), status_code=303)
+        return render_package_create(request)
+
+    @app.post("/package/new", response_class=HTMLResponse)
+    async def validate_package_upload(
+        request: Request,
+        name: Annotated[str, Form()],
+        question_count: Annotated[int, Form()],
+        pdf: Annotated[UploadFile, File()],
+    ) -> Response:
+        _require_same_origin(request)
+        if libraries.current_library is None:
+            raise HTTPException(status_code=409, detail="No library is open")
+
+        try:
+            normalized_name = _validate_package_name(name)
+            if any(
+                package.name.casefold() == normalized_name.casefold()
+                for package in packages.list_packages()
+            ):
+                raise ValueError(f"Learning package already exists: {normalized_name}")
+            if not 1 <= question_count <= 50:
+                raise ValueError("Question count must be between 1 and 50")
+            filename = pdf.filename or ""
+            if Path(filename).suffix.casefold() != ".pdf":
+                raise ValueError("Choose a PDF file")
+            size, prefix = await _inspect_pdf_upload(pdf)
+            if b"%PDF-" not in prefix[:1024]:
+                raise ValueError("The uploaded file does not contain a PDF signature")
+        except ValueError as error:
+            return render_package_create(
+                request,
+                error_message=str(error),
+                status_code=422,
+            )
+        finally:
+            await pdf.close()
+
+        return templates.TemplateResponse(
+            request=request,
+            name="package_upload_validated.html",
+            context={
+                "filename": filename,
+                "name": normalized_name,
+                "question_count": question_count,
+                "size_bytes": size,
+            },
+        )
+
     @app.get("/study", response_class=HTMLResponse)
     def study_question(request: Request, package: str) -> Response:
         if libraries.current_library is None:
@@ -405,3 +471,26 @@ def _require_same_origin(request: Request) -> None:
     expected_origin = f"{request.url.scheme}://{request.url.netloc}"
     if request.headers.get("origin") != expected_origin:
         raise HTTPException(status_code=403, detail="Cross-origin form submission rejected")
+
+
+def _validate_package_name(name: str) -> str:
+    normalized_name = name.strip()
+    if not 1 <= len(normalized_name) <= 100:
+        raise ValueError("Package name must contain between 1 and 100 characters")
+    if any(ord(character) < 32 for character in normalized_name):
+        raise ValueError("Package name must not contain control characters")
+    return normalized_name
+
+
+async def _inspect_pdf_upload(upload: UploadFile) -> tuple[int, bytes]:
+    size = 0
+    prefix = b""
+    while chunk := await upload.read(64 * 1024):
+        size += len(chunk)
+        if len(prefix) < 1024:
+            prefix += chunk[: 1024 - len(prefix)]
+        if size > MAX_PDF_UPLOAD_BYTES:
+            raise ValueError("PDF file must not exceed 25 MiB")
+    if size == 0:
+        raise ValueError("PDF file must not be empty")
+    return size, prefix

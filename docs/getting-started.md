@@ -52,9 +52,10 @@ Start the local browser interface:
 rag-learn gui
 ```
 
-The GUI start page lists the startup library and other valid libraries stored
-beside it. Open a library to see its packages. Follow **Manage libraries** to a
-separate page and use **Create** to add an empty library. Select a
+The GUI start page lists valid libraries stored in the configured workspace.
+On first startup, an empty workspace remains empty. Follow **Manage libraries**
+and use **Create** to add the first library, then open it from **All libraries**
+to see its packages. Select a
 package to inspect its status, document ID, stored summary, and question count.
 The entered name is used only in the interface; the application assigns the
 storage directory automatically.
@@ -65,6 +66,9 @@ The final library may also be deleted. The start page then shows an empty
 workspace, while **Manage libraries** remains available for creating a new one.
 The navigation bar remains available on package, study, feedback, and progress
 pages, so returning through intermediate pages is unnecessary.
+The package page links to **Add package**. This first upload stage validates a
+text-based PDF and its settings, then discards the file after showing a review
+summary; background preparation is not connected yet.
 Use `rag-learn gui --library PATH` to choose
 the startup library and its parent workspace. Keep the terminal open while using
 it and press `Ctrl+C` there to stop the server. A ready

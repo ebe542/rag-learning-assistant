@@ -8,8 +8,11 @@
 </header>
 <section aria-labelledby="packages-heading" class="panel">
   <div class="panel-heading">
-    <h2 id="packages-heading">Packages</h2>
-    <span class="package-count">{{ packages | length }}</span>
+    <h2 class="heading-with-count" id="packages-heading">
+      <span>Packages</span>
+      <span class="package-count">{{ packages | length }}</span>
+    </h2>
+    <a class="primary-link" href="{{ url_for('package_create') }}">Add package</a>
   </div>
   {% if packages %}
   <ul class="package-list">

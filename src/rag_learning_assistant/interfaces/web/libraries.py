@@ -80,12 +80,9 @@ class LocalLibraryManager:
         self._current_directory: Path | None = None
         self._services: _LibraryServices | None = None
         initial_directory = initial_directory.resolve()
-        workspace_path = self.root_directory / ".rag-learning-workspace.json"
 
-        if (initial_directory / "metadata.sqlite3").is_file() or not workspace_path.is_file():
+        if (initial_directory / "metadata.sqlite3").is_file():
             self._open_directory(initial_directory)
-
-        workspace_path.write_text('{"version":1}\n', encoding="utf-8")
 
     @property
     def current_directory(self) -> Path | None:

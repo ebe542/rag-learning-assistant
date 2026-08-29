@@ -8,10 +8,8 @@ from rag_learning_assistant.interfaces.web.libraries import LocalLibraryManager
 
 def test_manager_creates_and_switches_between_isolated_libraries(tmp_path: Path) -> None:
     initial_directory = tmp_path / "library"
-    legacy_id = UUID("11111111-1111-1111-1111-111111111111")
-    created_id = UUID("22222222-2222-2222-2222-222222222222")
-    ids = iter((legacy_id, created_id))
-    manager = LocalLibraryManager(initial_directory, id_factory=ids.__next__)
+    created_id = UUID("11111111-1111-1111-1111-111111111111")
+    manager = LocalLibraryManager(initial_directory, id_factory=lambda: created_id)
 
     created = manager.create_library("German History")
 
@@ -19,33 +17,36 @@ def test_manager_creates_and_switches_between_isolated_libraries(tmp_path: Path)
     assert created.name == "German History"
     assert created.directory == (tmp_path / str(created_id)).resolve()
     assert (created.directory / "metadata.sqlite3").is_file()
-    assert manager.current_directory == initial_directory.resolve()
+    assert manager.current_directory is None
+
+    selected = manager.select_library(created_id)
+
+    assert selected.directory == created.directory
+    assert manager.current_directory == created.directory
     assert manager.list_packages() == []
-
-    selected = manager.select_library(legacy_id)
-
-    assert selected.directory == initial_directory.resolve()
-    assert manager.current_directory == initial_directory.resolve()
     assert [(item.id, item.name) for item in manager.list_libraries()] == [
         (created_id, "German History"),
-        (legacy_id, "library"),
     ]
-    assert (initial_directory / "library.json").is_file()
+
+
+def test_manager_does_not_create_a_library_for_an_empty_workspace(tmp_path: Path) -> None:
+    initial_directory = tmp_path / "library"
+
+    manager = LocalLibraryManager(initial_directory)
+
+    assert manager.current_library is None
+    assert manager.list_libraries() == ()
+    assert not initial_directory.exists()
 
 
 def test_display_name_does_not_determine_the_directory(tmp_path: Path) -> None:
-    ids = iter(
-        (
-            UUID("11111111-1111-1111-1111-111111111111"),
-            UUID("22222222-2222-2222-2222-222222222222"),
-        )
-    )
-    manager = LocalLibraryManager(tmp_path / "library", id_factory=ids.__next__)
+    library_id = UUID("11111111-1111-1111-1111-111111111111")
+    manager = LocalLibraryManager(tmp_path / "library", id_factory=lambda: library_id)
 
     created = manager.create_library("C++ / Python: Basics?")
 
     assert created.name == "C++ / Python: Basics?"
-    assert created.directory.name == "22222222-2222-2222-2222-222222222222"
+    assert created.directory.name == str(library_id)
     assert not (tmp_path / "C++ / Python: Basics?").exists()
 
 
@@ -60,6 +61,8 @@ def test_manager_rejects_invalid_display_names(tmp_path: Path, name: str) -> Non
 def test_manager_migrates_an_existing_library_without_moving_it(tmp_path: Path) -> None:
     initial_directory = tmp_path / "existing-folder"
     library_id = UUID("11111111-1111-1111-1111-111111111111")
+    initial_directory.mkdir()
+    (initial_directory / "metadata.sqlite3").touch()
 
     manager = LocalLibraryManager(initial_directory, id_factory=lambda: library_id)
 
@@ -127,12 +130,12 @@ def test_manager_requires_extra_confirmation_for_non_empty_library(tmp_path: Pat
 def test_manager_keeps_an_empty_workspace_after_deleting_last_library(tmp_path: Path) -> None:
     initial_directory = tmp_path / "library"
     manager = LocalLibraryManager(initial_directory)
-    initial_library = manager.current_library
-    assert initial_library is not None
+    created = manager.create_library("Only library")
+    manager.select_library(created.id)
 
     manager.delete_library(
-        initial_library.id,
-        confirmation=initial_library.name,
+        created.id,
+        confirmation=created.name,
         delete_contents=False,
     )
 
@@ -149,13 +152,6 @@ def test_manager_keeps_an_empty_workspace_after_deleting_last_library(tmp_path: 
 def test_first_library_created_in_empty_workspace_is_opened_explicitly(tmp_path: Path) -> None:
     initial_directory = tmp_path / "library"
     manager = LocalLibraryManager(initial_directory)
-    initial_library = manager.current_library
-    assert initial_library is not None
-    manager.delete_library(
-        initial_library.id,
-        confirmation=initial_library.name,
-        delete_contents=False,
-    )
 
     created = manager.create_library("New start")
 

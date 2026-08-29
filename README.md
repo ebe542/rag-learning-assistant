@@ -49,7 +49,8 @@ rag-learn gui
 The preview listens only on `127.0.0.1`. Its start page lists local libraries
 stored beside the startup library, with management always available in the
 top-right header. Display names are independent from UUID-based storage
-directories. Opening a library leads to its learning packages; creating
+directories. A new empty workspace stays empty until the user creates its first
+library. Opening a library leads to its learning packages; creating
 libraries is kept on a separate management page. Selecting a management row
 reveals rename and deletion controls. Deletion requires the exact display name;
 libraries containing data require an additional explicit confirmation. Package details show
@@ -60,6 +61,9 @@ next review time. A shared navigation bar keeps libraries, library management,
 and the opened library's packages reachable from every GUI page.
 Deleting the final library leaves a valid empty workspace; package navigation
 returns after a newly created library is opened.
+The package page also provides an initial PDF upload form. It validates package
+name uniqueness, question count, file extension, PDF signature, and a 25 MiB
+size limit without storing the file or starting model processing yet.
 
 ## Product workflow
 
