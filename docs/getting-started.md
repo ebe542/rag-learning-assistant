@@ -61,6 +61,8 @@ storage directory automatically.
 On **Manage libraries**, choose a row to reveal its actions. Renaming changes
 only the display name. Deletion requires typing that name exactly, and a library
 with packages or other learning data requires an additional confirmation.
+The final library may also be deleted. The start page then shows an empty
+workspace, while **Manage libraries** remains available for creating a new one.
 The navigation bar remains available on package, study, feedback, and progress
 pages, so returning through intermediate pages is unnecessary.
 Use `rag-learn gui --library PATH` to choose

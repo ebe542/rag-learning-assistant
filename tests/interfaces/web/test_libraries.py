@@ -122,3 +122,46 @@ def test_manager_requires_extra_confirmation_for_non_empty_library(tmp_path: Pat
     )
 
     assert not created.directory.exists()
+
+
+def test_manager_keeps_an_empty_workspace_after_deleting_last_library(tmp_path: Path) -> None:
+    initial_directory = tmp_path / "library"
+    manager = LocalLibraryManager(initial_directory)
+    initial_library = manager.current_library
+    assert initial_library is not None
+
+    manager.delete_library(
+        initial_library.id,
+        confirmation=initial_library.name,
+        delete_contents=False,
+    )
+
+    assert manager.current_library is None
+    assert manager.current_directory is None
+    assert manager.list_libraries() == ()
+
+    restarted_manager = LocalLibraryManager(initial_directory)
+
+    assert restarted_manager.current_library is None
+    assert restarted_manager.list_libraries() == ()
+
+
+def test_first_library_created_in_empty_workspace_is_opened_explicitly(tmp_path: Path) -> None:
+    initial_directory = tmp_path / "library"
+    manager = LocalLibraryManager(initial_directory)
+    initial_library = manager.current_library
+    assert initial_library is not None
+    manager.delete_library(
+        initial_library.id,
+        confirmation=initial_library.name,
+        delete_contents=False,
+    )
+
+    created = manager.create_library("New start")
+
+    assert manager.current_library is None
+    restarted_manager = LocalLibraryManager(initial_directory)
+    assert restarted_manager.current_library is None
+    assert restarted_manager.list_libraries() == (created,)
+    manager.select_library(created.id)
+    assert manager.current_library == created

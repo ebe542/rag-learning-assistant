@@ -429,9 +429,12 @@ database but does not open it implicitly.
 Management selection is page-local and does not change the library used by
 package routes. Renaming atomically replaces only `library.json`. Deletion
 re-resolves the UUID and workspace boundary immediately before removing the
-directory, refuses to remove the last library, requires an exact display-name
-confirmation, and requires an additional flag when SQLite rows or FAISS data
-show that the library is not empty.
+directory, requires an exact display-name confirmation, and requires an
+additional flag when SQLite rows or FAISS data show that the library is not
+empty. Deleting the final library clears the optional service delegates and
+hides package navigation. A workspace marker distinguishes this intentional
+empty state from first startup, so restarting does not recreate the deleted
+library automatically.
 
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a

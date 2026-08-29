@@ -76,16 +76,25 @@ class LocalLibraryManager:
     ) -> None:
         self.id_factory = id_factory
         self.root_directory = initial_directory.resolve().parent
-        self._current_directory = initial_directory.resolve()
-        self._services = self._build_services(self._current_directory)
-        self._read_or_create_metadata(self._current_directory)
+        self.root_directory.mkdir(parents=True, exist_ok=True)
+        self._current_directory: Path | None = None
+        self._services: _LibraryServices | None = None
+        initial_directory = initial_directory.resolve()
+        workspace_path = self.root_directory / ".rag-learning-workspace.json"
+
+        if (initial_directory / "metadata.sqlite3").is_file() or not workspace_path.is_file():
+            self._open_directory(initial_directory)
+
+        workspace_path.write_text('{"version":1}\n', encoding="utf-8")
 
     @property
-    def current_directory(self) -> Path:
+    def current_directory(self) -> Path | None:
         return self._current_directory
 
     @property
-    def current_library(self) -> LibraryListItem:
+    def current_library(self) -> LibraryListItem | None:
+        if self._current_directory is None:
+            return None
         metadata = self._read_or_create_metadata(self._current_directory)
         return LibraryListItem(
             metadata.id,
@@ -95,16 +104,9 @@ class LocalLibraryManager:
         )
 
     def list_libraries(self) -> tuple[LibraryListItem, ...]:
-        library_directories = (
-            path
-            for path in self.root_directory.iterdir()
-            if path.is_dir()
-            and path.resolve().parent == self.root_directory
-            and (path / "metadata.sqlite3").is_file()
-        )
         items = []
         known_ids: set[UUID] = set()
-        for directory in library_directories:
+        for directory in self._library_directories():
             metadata = self._read_or_create_metadata(directory)
             if metadata.id in known_ids:
                 raise ValueError(f"Duplicate library ID: {metadata.id}")
@@ -184,8 +186,6 @@ class LocalLibraryManager:
         matching_library = next((item for item in libraries if item.id == library_id), None)
         if matching_library is None:
             raise LookupError(f"Library not found: {library_id}")
-        if len(libraries) == 1:
-            raise ValueError("The last library cannot be deleted")
         if confirmation != matching_library.name:
             raise ValueError("Library name confirmation does not match")
         if matching_library.has_content and not delete_contents:
@@ -199,10 +199,36 @@ class LocalLibraryManager:
             raise ValueError("Library identity changed before deletion")
 
         if target == self._current_directory:
-            replacement = next(item for item in libraries if item.id != library_id)
-            self._current_directory = replacement.directory.resolve()
-            self._services = self._build_services(self._current_directory)
+            replacement = next((item for item in libraries if item.id != library_id), None)
+            if replacement is None:
+                self._current_directory = None
+                self._services = None
+            else:
+                self._open_directory(replacement.directory)
         shutil.rmtree(target)
+
+    def _library_directories(self) -> list[Path]:
+        return sorted(
+            (
+                path
+                for path in self.root_directory.iterdir()
+                if path.is_dir()
+                and path.resolve().parent == self.root_directory
+                and (path / "metadata.sqlite3").is_file()
+            ),
+            key=lambda path: path.name.casefold(),
+        )
+
+    def _open_directory(self, directory: Path) -> None:
+        resolved_directory = directory.resolve()
+        self._services = self._build_services(resolved_directory)
+        self._current_directory = resolved_directory
+        self._read_or_create_metadata(resolved_directory)
+
+    def _require_services(self) -> _LibraryServices:
+        if self._services is None:
+            raise RuntimeError("No library is open")
+        return self._services
 
     def _next_library_id(self) -> UUID:
         known_ids = {item.id for item in self.list_libraries()}
@@ -255,17 +281,17 @@ class LocalLibraryManager:
         temporary_path.replace(directory / "library.json")
 
     def list_packages(self) -> list[LearningPackage]:
-        return self._services.packages.list_packages()
+        return self._require_services().packages.list_packages()
 
     def get_package(self, name: str) -> LearningPackage:
-        return self._services.packages.get_package(name)
+        return self._require_services().packages.get_package(name)
 
     def get_document_summary(
         self,
         document_id: UUID,
         identity_fingerprint: str,
     ) -> PersistedDocumentSummary:
-        return self._services.summaries.get_document_summary(
+        return self._require_services().summaries.get_document_summary(
             document_id,
             identity_fingerprint,
         )
@@ -275,13 +301,13 @@ class LocalLibraryManager:
         document_id: UUID,
         identity_fingerprint: str,
     ) -> QuestionBank:
-        return self._services.questions.get_document_bank(
+        return self._require_services().questions.get_document_bank(
             document_id,
             identity_fingerprint,
         )
 
     def next_due(self, package_name: str, *, as_of: datetime) -> DueQuestion | None:
-        return self._services.study.next_due(package_name, as_of=as_of)
+        return self._require_services().study.next_due(package_name, as_of=as_of)
 
     def record_answer(
         self,
@@ -291,7 +317,7 @@ class LocalLibraryManager:
         answer_text: str,
         answered_at: datetime,
     ) -> StudyAttempt:
-        return self._services.study.record_answer(
+        return self._require_services().study.record_answer(
             package_name,
             question_number,
             answer_text=answer_text,
@@ -299,7 +325,7 @@ class LocalLibraryManager:
         )
 
     def report(self, package_name: str, *, as_of: datetime) -> LearningProgressReport:
-        return self._services.progress.report(package_name, as_of=as_of)
+        return self._require_services().progress.report(package_name, as_of=as_of)
 
     @staticmethod
     def _build_services(library_directory: Path) -> _LibraryServices:

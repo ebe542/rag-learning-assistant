@@ -131,12 +131,15 @@ class StubLibraryManagement:
         ]
 
     @property
-    def current_directory(self) -> Path:
+    def current_directory(self) -> Path | None:
         return self._current_directory
 
     @property
-    def current_library(self) -> LibraryListItem:
-        return next(item for item in self.items if item.directory == self._current_directory)
+    def current_library(self) -> LibraryListItem | None:
+        return next(
+            (item for item in self.items if item.directory == self._current_directory),
+            None,
+        )
 
     def list_libraries(self) -> tuple[LibraryListItem, ...]:
         return tuple(self.items)
@@ -181,6 +184,8 @@ class StubLibraryManagement:
         if confirmation != selected.name:
             raise ValueError("Library name confirmation does not match")
         self.items = [item for item in self.items if item.id != library_id]
+        if selected.directory == self._current_directory:
+            self._current_directory = self.items[0].directory if self.items else None
 
 
 def build_client(
@@ -311,6 +316,40 @@ def test_library_deletion_requires_the_exact_display_name() -> None:
 
     assert response.status_code == 422
     assert "Library name confirmation does not match" in response.text
+
+
+def test_last_library_can_be_deleted_and_home_shows_empty_state() -> None:
+    libraries = StubLibraryManagement()
+    client = build_client(libraries=libraries)
+
+    response = client.post(
+        "/libraries/delete",
+        data={
+            "library_id": "11111111-1111-1111-1111-111111111111",
+            "confirmation": "Personal Library",
+        },
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    home_response = client.get("/")
+    assert "No libraries yet" in home_response.text
+    assert "· Packages" not in home_response.text
+
+
+def test_package_page_redirects_when_no_library_is_open() -> None:
+    libraries = StubLibraryManagement()
+    libraries.delete_library(
+        UUID("11111111-1111-1111-1111-111111111111"),
+        confirmation="Personal Library",
+        delete_contents=False,
+    )
+
+    response = build_client(libraries=libraries).get("/library", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://testserver/"
 
 
 def test_library_can_be_created_and_selected_from_same_origin() -> None:

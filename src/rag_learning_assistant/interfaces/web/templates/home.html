@@ -26,5 +26,11 @@
     </li>
     {% endfor %}
   </ul>
+  {% if not libraries %}
+  <div class="empty-state">
+    <h3>No libraries yet</h3>
+    <p>Use Manage libraries to create your first library.</p>
+  </div>
+  {% endif %}
 </section>
 {% endblock %}

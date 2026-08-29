@@ -58,6 +58,8 @@ due-question study session, evaluate a written
 answer with the configured local model, and display grounded feedback plus the
 next review time. A shared navigation bar keeps libraries, library management,
 and the opened library's packages reachable from every GUI page.
+Deleting the final library leaves a valid empty workspace; package navigation
+returns after a newly created library is opened.
 
 ## Product workflow
 

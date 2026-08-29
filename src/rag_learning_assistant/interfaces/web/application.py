@@ -7,7 +7,7 @@ from typing import Annotated, Protocol
 from uuid import UUID
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -77,10 +77,10 @@ class LibraryManagement(Protocol):
     """Create libraries and open one within the configured local workspace."""
 
     @property
-    def current_directory(self) -> Path: ...
+    def current_directory(self) -> Path | None: ...
 
     @property
-    def current_library(self) -> LibraryListItem: ...
+    def current_library(self) -> LibraryListItem | None: ...
 
     def list_libraries(self) -> tuple[LibraryListItem, ...]: ...
 
@@ -195,12 +195,15 @@ def create_app(
         )
 
     @app.get("/library", response_class=HTMLResponse)
-    def library_detail(request: Request) -> HTMLResponse:
+    def library_detail(request: Request) -> Response:
+        current_library = libraries.current_library
+        if current_library is None:
+            return RedirectResponse(request.url_for("home"), status_code=303)
         return templates.TemplateResponse(
             request=request,
             name="library_detail.html",
             context={
-                "library_name": libraries.current_library.name,
+                "library_name": current_library.name,
                 "packages": package_items(),
             },
         )
@@ -285,7 +288,9 @@ def create_app(
         return RedirectResponse(request.url_for("library_detail"), status_code=303)
 
     @app.get("/package", response_class=HTMLResponse)
-    def package_detail(request: Request, name: str) -> HTMLResponse:
+    def package_detail(request: Request, name: str) -> Response:
+        if libraries.current_library is None:
+            return RedirectResponse(request.url_for("home"), status_code=303)
         try:
             package = packages.get_package(name)
         except LearningPackageNotFoundError:
@@ -323,7 +328,9 @@ def create_app(
         )
 
     @app.get("/study", response_class=HTMLResponse)
-    def study_question(request: Request, package: str) -> HTMLResponse:
+    def study_question(request: Request, package: str) -> Response:
+        if libraries.current_library is None:
+            return RedirectResponse(request.url_for("home"), status_code=303)
         due = study.next_due(package, as_of=datetime.now(UTC))
         return templates.TemplateResponse(
             request=request,
@@ -332,7 +339,9 @@ def create_app(
         )
 
     @app.get("/progress", response_class=HTMLResponse)
-    def learning_progress(request: Request, package: str) -> HTMLResponse:
+    def learning_progress(request: Request, package: str) -> Response:
+        if libraries.current_library is None:
+            return RedirectResponse(request.url_for("home"), status_code=303)
         report = progress.report(package, as_of=datetime.now(UTC))
         return templates.TemplateResponse(
             request=request,
@@ -362,6 +371,8 @@ def create_app(
         answer: str = Form(),
     ) -> HTMLResponse:
         _require_same_origin(request)
+        if libraries.current_library is None:
+            raise HTTPException(status_code=409, detail="No library is open")
         if not answer.strip():
             raise HTTPException(status_code=422, detail="Study answer must not be blank")
 
