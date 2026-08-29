@@ -81,6 +81,17 @@ package "Generated material" #FFF4D9 {
 }
 
 package "Learning workflow" #FFE8E8 {
+  entity package_preparations {
+    * id : TEXT <<PK>>
+    --
+    * name : TEXT <<UQ, NOCASE>>
+    * source_filename : TEXT
+    * stored_filename : TEXT <<UQ>>
+    * question_count : INTEGER
+    * size_bytes : INTEGER
+    * status : TEXT
+  }
+
   entity learning_packages {
     * id : TEXT <<PK>>
     --
@@ -136,6 +147,11 @@ question_banks |o..o{ learning_packages : question-bank identity
 question_banks ||..o{ question_progress : document, bank, question
 question_banks ||..o{ study_attempts : document, bank, question
 question_progress |o..o{ study_attempts : resulting schedule snapshot
+
+note right of package_preparations
+  uploads/<id>.pdf contains the validated source.
+  A future worker converts this request into a learning package.
+end note
 
 legend bottom
   |= Notation |= Meaning |

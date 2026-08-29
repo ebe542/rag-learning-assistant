@@ -8,6 +8,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import BinaryIO
 from uuid import UUID, uuid4
 
 from rag_learning_assistant.application import (
@@ -18,6 +19,7 @@ from rag_learning_assistant.application import (
     LearningPackageStudyService,
     LearningProgressReport,
     LearningProgressService,
+    PackagePreparationService,
     QuestionBankCatalog,
     ReviewScheduler,
     ReviewService,
@@ -30,8 +32,10 @@ from rag_learning_assistant.generation import (
 )
 from rag_learning_assistant.learning import (
     LearningPackage,
+    PackagePreparation,
     QuestionBank,
     SqliteLearningPackageRepository,
+    SqlitePackagePreparationRepository,
     SqliteQuestionBankRepository,
     SqliteQuestionProgressRepository,
     SqliteStudyAttemptRepository,
@@ -59,6 +63,7 @@ class _LibraryMetadata:
 @dataclass(frozen=True, slots=True)
 class _LibraryServices:
     packages: LearningPackageCatalog
+    preparations: PackagePreparationService
     summaries: DocumentSummaryCatalog
     questions: QuestionBankCatalog
     study: LearningPackageStudyService
@@ -280,6 +285,26 @@ class LocalLibraryManager:
     def list_packages(self) -> list[LearningPackage]:
         return self._require_services().packages.list_packages()
 
+    def list_package_preparations(self) -> list[PackagePreparation]:
+        return self._require_services().preparations.list_all()
+
+    def store_package_upload(
+        self,
+        *,
+        name: str,
+        source_filename: str,
+        question_count: int,
+        size_bytes: int,
+        source: BinaryIO,
+    ) -> PackagePreparation:
+        return self._require_services().preparations.store(
+            name=name,
+            source_filename=source_filename,
+            question_count=question_count,
+            size_bytes=size_bytes,
+            source=source,
+        )
+
     def get_package(self, name: str) -> LearningPackage:
         return self._require_services().packages.get_package(name)
 
@@ -329,6 +354,10 @@ class LocalLibraryManager:
         database_path = library_directory / "metadata.sqlite3"
         documents = SqliteDocumentRepository(database_path)
         package_repository = SqliteLearningPackageRepository(database_path)
+        preparations = PackagePreparationService(
+            SqlitePackagePreparationRepository(database_path),
+            library_directory / "uploads",
+        )
         progress_repository = SqliteQuestionProgressRepository(database_path)
         attempt_repository = SqliteStudyAttemptRepository(database_path)
         packages = LearningPackageCatalog(package_repository)
@@ -361,7 +390,7 @@ class LocalLibraryManager:
             progress=progress_repository,
             attempts=attempt_repository,
         )
-        return _LibraryServices(packages, summaries, questions, study, progress)
+        return _LibraryServices(packages, preparations, summaries, questions, study, progress)
 
 
 def _validate_library_name(name: str) -> str:

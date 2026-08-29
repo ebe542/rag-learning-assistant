@@ -439,9 +439,12 @@ already contains `metadata.sqlite3` and never initializes a library implicitly.
 The package page exposes a multipart upload form as the input boundary for a
 future preparation job. The server requires the loopback origin, a unique
 display name, 1 to 50 questions, a `.pdf` filename, a PDF signature within the
-first 1024 bytes, and at most 25 MiB. It streams only for validation and closes
-the upload without writing it to the workspace. This deliberately separates
-upload validation from later ownership, cleanup, and background-job decisions.
+first 1024 bytes, and at most 25 MiB. `PackagePreparationService` atomically
+stores accepted content in the selected library's `uploads` directory using a
+UUID-derived filename; user input is retained only as display metadata. The
+matching pending request is persisted in SQLite after the file move, and failed
+registration removes both partial and completed upload files. This deliberately
+separates upload ownership from later indexing and model-processing decisions.
 
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a

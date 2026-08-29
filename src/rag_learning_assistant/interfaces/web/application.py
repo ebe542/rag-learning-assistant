@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
-from typing import Annotated, Protocol
+from typing import Annotated, BinaryIO, Protocol
 from uuid import UUID
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -19,7 +19,12 @@ from rag_learning_assistant.application import (
 from rag_learning_assistant.application.review import DueQuestion
 from rag_learning_assistant.generation import PersistedDocumentSummary
 from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
-from rag_learning_assistant.learning import LearningPackage, QuestionBank, StudyAttempt
+from rag_learning_assistant.learning import (
+    LearningPackage,
+    PackagePreparation,
+    QuestionBank,
+    StudyAttempt,
+)
 
 WEB_ROOT = Path(__file__).resolve().parent
 MAX_PDF_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -99,6 +104,18 @@ class LibraryManagement(Protocol):
         delete_contents: bool,
     ) -> None: ...
 
+    def list_package_preparations(self) -> list[PackagePreparation]: ...
+
+    def store_package_upload(
+        self,
+        *,
+        name: str,
+        source_filename: str,
+        question_count: int,
+        size_bytes: int,
+        source: BinaryIO,
+    ) -> PackagePreparation: ...
+
 
 @dataclass(frozen=True, slots=True)
 class PackageListItem:
@@ -107,6 +124,7 @@ class PackageListItem:
     name: str
     status: str
     status_label: str
+    has_detail: bool
 
 
 def format_local_datetime(
@@ -156,14 +174,25 @@ def create_app(
     )
 
     def package_items() -> tuple[PackageListItem, ...]:
-        return tuple(
+        prepared = [
             PackageListItem(
                 name=package.name,
                 status=package.status.value,
                 status_label=package.status.value.capitalize(),
+                has_detail=True,
             )
             for package in packages.list_packages()
-        )
+        ]
+        pending = [
+            PackageListItem(
+                name=preparation.name,
+                status=preparation.status.value,
+                status_label=preparation.status.value.capitalize(),
+                has_detail=False,
+            )
+            for preparation in libraries.list_package_preparations()
+        ]
+        return tuple(sorted((*prepared, *pending), key=lambda item: item.name.casefold()))
 
     def render_package_create(
         request: Request,
@@ -365,6 +394,11 @@ def create_app(
                 for package in packages.list_packages()
             ):
                 raise ValueError(f"Learning package already exists: {normalized_name}")
+            if any(
+                preparation.name.casefold() == normalized_name.casefold()
+                for preparation in libraries.list_package_preparations()
+            ):
+                raise ValueError(f"Learning package already exists: {normalized_name}")
             if not 1 <= question_count <= 50:
                 raise ValueError("Question count must be between 1 and 50")
             filename = pdf.filename or ""
@@ -373,6 +407,14 @@ def create_app(
             size, prefix = await _inspect_pdf_upload(pdf)
             if b"%PDF-" not in prefix[:1024]:
                 raise ValueError("The uploaded file does not contain a PDF signature")
+            await pdf.seek(0)
+            preparation = libraries.store_package_upload(
+                name=normalized_name,
+                source_filename=filename,
+                question_count=question_count,
+                size_bytes=size,
+                source=pdf.file,
+            )
         except ValueError as error:
             return render_package_create(
                 request,
@@ -386,10 +428,7 @@ def create_app(
             request=request,
             name="package_upload_validated.html",
             context={
-                "filename": filename,
-                "name": normalized_name,
-                "question_count": question_count,
-                "size_bytes": size,
+                "preparation": preparation,
             },
         )
 

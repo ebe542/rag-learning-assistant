@@ -51,9 +51,11 @@ package "application services" #FFE8E8 {
   class LearningPackageCatalog
   class LearningPackageStudyService
   class LearningProgressService
+  class PackagePreparationService
 }
 package "learning adapter" #F3E8FF {
   class SqliteLearningPackageRepository
+  class SqlitePackagePreparationRepository
 }
 
 GroundedEvaluationCase *-- "1..*" ExpectedCitation
@@ -113,7 +115,9 @@ LocalLibraryManager *-- DocumentSummaryCatalog
 LocalLibraryManager *-- QuestionBankCatalog
 LocalLibraryManager *-- LearningPackageStudyService
 LocalLibraryManager *-- LearningProgressService
+LocalLibraryManager *-- PackagePreparationService
 LearningPackageCatalog --> SqliteLearningPackageRepository
+PackagePreparationService --> SqlitePackagePreparationRepository
 
 note bottom
   Interface registrars and entry points are functions or modules rather than

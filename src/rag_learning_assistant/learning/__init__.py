@@ -19,6 +19,13 @@ from rag_learning_assistant.learning.packages import (
     LearningPackage,
     LearningPackageStatus,
 )
+from rag_learning_assistant.learning.preparation_repository import (
+    SqlitePackagePreparationRepository,
+)
+from rag_learning_assistant.learning.preparations import (
+    PackagePreparation,
+    PackagePreparationStatus,
+)
 from rag_learning_assistant.learning.progress import (
     QuestionProgress,
     ReviewRating,
@@ -50,4 +57,7 @@ __all__ = [
     "LearningPackage",
     "LearningPackageStatus",
     "SqliteLearningPackageRepository",
+    "PackagePreparation",
+    "PackagePreparationStatus",
+    "SqlitePackagePreparationRepository",
 ]

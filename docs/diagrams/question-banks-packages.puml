@@ -25,9 +25,12 @@ package "learning" #F3E8FF {
   class QuestionBankIdentity <<immutable model>>
   enum LearningPackageStatus
   class LearningPackage <<immutable model>>
+  enum PackagePreparationStatus
+  class PackagePreparation <<immutable model>>
   interface QuestionBankRepository <<Protocol>>
   class SqliteQuestionBankRepository
   class SqliteLearningPackageRepository
+  class SqlitePackagePreparationRepository
 }
 package "application" #FFE8E8 {
   interface DocumentSummaryLookup <<Protocol>>
@@ -44,6 +47,7 @@ package "application" #FFE8E8 {
   class QuestionBankService
   class LearningPackageCatalog
   class LearningPackageService
+  class PackagePreparationService
   class LibraryService
   class QuestionBankNotFoundError
   class LearningPackageNotFoundError
@@ -72,6 +76,10 @@ QuestionBankService --> QuestionBankIdentity
 QuestionBankService --> QuestionBank
 QuestionBankService ..|> PackageQuestionPreparer
 LearningPackage --> LearningPackageStatus
+PackagePreparation --> PackagePreparationStatus
+SqlitePackagePreparationRepository --> PackagePreparation
+PackagePreparationService o-- SqlitePackagePreparationRepository
+PackagePreparationService --> PackagePreparation
 SqliteLearningPackageRepository ..|> LearningPackageRepository
 SqliteLearningPackageRepository ..|> LearningPackageReader
 SqliteLearningPackageRepository ..|> DocumentDerivedDataCleaner
@@ -83,6 +91,7 @@ LearningPackageService o-- PackageQuestionPreparer
 LearningPackageService --> LearningPackage
 LibraryService ..|> PackageDocumentImporter
 LearningPackageStatus --|> StrEnum
+PackagePreparationStatus --|> StrEnum
 QuestionBankNotFoundError --|> LookupError
 LearningPackageNotFoundError --|> LookupError
 LearningPackageNotReadyError --|> ValueError

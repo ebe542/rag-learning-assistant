@@ -1,3 +1,4 @@
+from io import BytesIO
 from pathlib import Path
 from uuid import UUID
 
@@ -161,3 +162,23 @@ def test_first_library_created_in_empty_workspace_is_opened_explicitly(tmp_path:
     assert restarted_manager.list_libraries() == (created,)
     manager.select_library(created.id)
     assert manager.current_library == created
+
+
+def test_pending_upload_survives_library_manager_restart(tmp_path: Path) -> None:
+    initial_directory = tmp_path / "library"
+    manager = LocalLibraryManager(initial_directory)
+    created = manager.create_library("Courses")
+    manager.select_library(created.id)
+
+    preparation = manager.store_package_upload(
+        name="Python Course",
+        source_filename="course.pdf",
+        question_count=7,
+        size_bytes=8,
+        source=BytesIO(b"%PDF-1.7"),
+    )
+
+    assert (created.directory / "uploads" / preparation.stored_filename).is_file()
+    restarted_manager = LocalLibraryManager(initial_directory)
+    restarted_manager.select_library(created.id)
+    assert restarted_manager.list_package_preparations() == [preparation]

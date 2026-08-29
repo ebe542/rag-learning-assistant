@@ -63,7 +63,8 @@ Deleting the final library leaves a valid empty workspace; package navigation
 returns after a newly created library is opened.
 The package page also provides an initial PDF upload form. It validates package
 name uniqueness, question count, file extension, PDF signature, and a 25 MiB
-size limit without storing the file or starting model processing yet.
+size limit. Valid PDFs are stored under internal UUID filenames and appear as
+pending packages; model processing is not connected yet.
 
 ## Product workflow
 

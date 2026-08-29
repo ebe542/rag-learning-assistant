@@ -19,6 +19,7 @@ from rag_learning_assistant.learning import (
     AnswerVerdict,
     LearningPackage,
     LearningPackageStatus,
+    PackagePreparation,
     QuestionBank,
     QuestionProgress,
     ReviewRating,
@@ -130,6 +131,8 @@ class StubLibraryManagement:
                 False,
             )
         ]
+        self.preparations: list[PackagePreparation] = []
+        self.uploaded_content = b""
 
     @property
     def current_directory(self) -> Path | None:
@@ -187,6 +190,31 @@ class StubLibraryManagement:
         self.items = [item for item in self.items if item.id != library_id]
         if selected.directory == self._current_directory:
             self._current_directory = self.items[0].directory if self.items else None
+
+    def list_package_preparations(self) -> list[PackagePreparation]:
+        return self.preparations
+
+    def store_package_upload(
+        self,
+        *,
+        name: str,
+        source_filename: str,
+        question_count: int,
+        size_bytes: int,
+        source,
+    ) -> PackagePreparation:
+        preparation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+        preparation = PackagePreparation(
+            id=preparation_id,
+            name=name,
+            source_filename=source_filename,
+            stored_filename=f"{preparation_id}.pdf",
+            question_count=question_count,
+            size_bytes=size_bytes,
+        )
+        self.uploaded_content = source.read()
+        self.preparations.append(preparation)
+        return preparation
 
 
 def build_client(
@@ -267,8 +295,11 @@ def test_package_create_page_shows_upload_constraints() -> None:
     assert "Maximum PDF size: 25 MiB" in response.text
 
 
-def test_valid_pdf_upload_is_reviewed_without_starting_preparation() -> None:
-    response = build_client().post(
+def test_valid_pdf_upload_is_stored_as_pending_without_model_processing() -> None:
+    libraries = StubLibraryManagement()
+    client = build_client(libraries=libraries)
+
+    response = client.post(
         "/package/new",
         data={"name": "Python Course", "question_count": "7"},
         files={"pdf": ("course.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
@@ -276,11 +307,19 @@ def test_valid_pdf_upload_is_reviewed_without_starting_preparation() -> None:
     )
 
     assert response.status_code == 200
-    assert "Upload validated" in response.text
+    assert "Upload stored" in response.text
     assert "Python Course" in response.text
     assert "course.pdf" in response.text
     assert "7" in response.text
-    assert "package preparation has not started yet" in response.text
+    assert "Pending" in response.text
+    assert "Model processing has not started yet" in response.text
+    assert libraries.uploaded_content == b"%PDF-1.7\ncontent"
+
+    package_response = client.get("/library")
+
+    assert "Python Course" in package_response.text
+    assert "PDF stored; preparation is pending" in package_response.text
+    assert '<span class="package-count">1</span>' in package_response.text
 
 
 def test_package_upload_rejects_non_pdf_content() -> None:
@@ -299,6 +338,31 @@ def test_package_upload_rejects_duplicate_package_name() -> None:
     response = build_client([ready_package()]).post(
         "/package/new",
         data={"name": "python basics", "question_count": "5"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "Learning package already exists" in response.text
+
+
+def test_package_upload_rejects_duplicate_pending_name() -> None:
+    libraries = StubLibraryManagement()
+    preparation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    libraries.preparations.append(
+        PackagePreparation(
+            id=preparation_id,
+            name="Python Course",
+            source_filename="first.pdf",
+            stored_filename=f"{preparation_id}.pdf",
+            question_count=5,
+            size_bytes=8,
+        )
+    )
+
+    response = build_client(libraries=libraries).post(
+        "/package/new",
+        data={"name": "python course", "question_count": "5"},
         files={"pdf": ("course.pdf", b"%PDF-1.7", "application/pdf")},
         headers={"origin": "http://testserver"},
     )
