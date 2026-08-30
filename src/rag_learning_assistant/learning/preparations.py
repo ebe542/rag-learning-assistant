@@ -30,6 +30,7 @@ class PackagePreparation:
     stored_filename: str
     question_count: int
     size_bytes: int
+    content_sha256: str | None = None
     status: PackagePreparationStatus = PackagePreparationStatus.PENDING
     created_at: datetime = field(default_factory=_utc_now)
     updated_at: datetime | None = None
@@ -48,6 +49,11 @@ class PackagePreparation:
             raise ValueError("Question count must be between 1 and 50")
         if self.size_bytes < 1:
             raise ValueError("Stored PDF must not be empty")
+        if self.content_sha256 is not None and (
+            len(self.content_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in self.content_sha256)
+        ):
+            raise ValueError("Package preparation hash must be a lowercase SHA-256 digest")
         if self.updated_at is None:
             object.__setattr__(self, "updated_at", self.created_at)
         if self.created_at.tzinfo is None or self.updated_at.tzinfo is None:

@@ -63,10 +63,14 @@ Deleting the final library leaves a valid empty workspace; package navigation
 returns after a newly created library is opened.
 The package page also provides an initial PDF upload form. It validates package
 name uniqueness, question count, file extension, PDF signature, and a 25 MiB
-size limit. Valid PDFs are stored under internal UUID filenames and appear as
-pending packages; model processing is not connected yet. SQLite reserves names
-across pending and completed packages and supports leased, resumable processing
-phases so queued uploads can later be handled serially without duplicate work.
+size limit. SHA-256 duplicate detection runs before acceptance against queued
+uploads and indexed documents, even when filenames or package names differ.
+Valid PDFs are stored under internal UUID filenames and appear as
+pending packages. The GUI starts one serial workspace worker, loads processing
+models only after claiming work, and advances each package through resumable
+phases. SQLite reserves names across pending and completed packages and leases
+each claimed request to prevent duplicate work. Failed requests retain their PDF
+and show a short explanation with actions to retry or remove them completely.
 
 ## Product workflow
 

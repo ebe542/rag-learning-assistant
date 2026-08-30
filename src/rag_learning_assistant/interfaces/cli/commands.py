@@ -476,6 +476,8 @@ def _serialize_learning_package(
 
 def build_learning_package_service(
     library_directory: Path,
+    *,
+    progress: Callable[[str], None] | None = write_learning_package_progress,
 ) -> LearningPackageService:
     """Build the product workflow for one personal learning library."""
 
@@ -502,7 +504,7 @@ def build_learning_package_service(
             library_directory,
             max_new_tokens=DEFAULT_QUESTION_MAX_NEW_TOKENS,
         ),
-        progress=write_learning_package_progress,
+        progress=progress,
     )
 
 
@@ -1424,5 +1426,13 @@ def run_gui(
         library_directory=library_directory,
         port=port,
         open_browser=open_browser,
+        package_service_factory=lambda directory, progress: build_learning_package_service(
+            directory,
+            progress=progress,
+        ),
+        package_remover=lambda directory, name: build_learning_package_service(
+            directory,
+            progress=None,
+        ).remove(name),
     )
     return 0

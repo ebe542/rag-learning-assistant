@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, BinaryIO, Protocol
 from uuid import UUID
@@ -113,7 +114,15 @@ class LibraryManagement(Protocol):
         source_filename: str,
         question_count: int,
         size_bytes: int,
+        content_sha256: str,
         source: BinaryIO,
+    ) -> PackagePreparation: ...
+
+    def retry_package_preparation(self, preparation_id: UUID) -> PackagePreparation: ...
+
+    def delete_failed_package_preparation(
+        self,
+        preparation_id: UUID,
     ) -> PackagePreparation: ...
 
 
@@ -125,6 +134,8 @@ class PackageListItem:
     status: str
     status_label: str
     has_detail: bool
+    preparation_id: UUID | None
+    failure_message: str | None
 
 
 def format_local_datetime(
@@ -180,19 +191,33 @@ def create_app(
                 status=package.status.value,
                 status_label=package.status.value.capitalize(),
                 has_detail=True,
+                preparation_id=None,
+                failure_message=None,
             )
             for package in packages.list_packages()
         ]
-        pending = [
-            PackageListItem(
+        items = {item.name.casefold(): item for item in prepared}
+        for preparation in libraries.list_package_preparations():
+            item = PackageListItem(
                 name=preparation.name,
                 status=preparation.status.value,
                 status_label=preparation.status.value.replace("_", " ").capitalize(),
                 has_detail=False,
+                preparation_id=preparation.id,
+                failure_message=_friendly_preparation_error(preparation.failure_message),
             )
-            for preparation in libraries.list_package_preparations()
-        ]
-        return tuple(sorted((*prepared, *pending), key=lambda item: item.name.casefold()))
+            items[item.name.casefold()] = item
+        return tuple(sorted(items.values(), key=lambda item: item.name.casefold()))
+
+    def package_list_context() -> dict[str, object]:
+        items = package_items()
+        return {
+            "packages": items,
+            "refresh_packages": any(
+                item.status in {"pending", "indexing", "summarizing", "generating_questions"}
+                for item in items
+            ),
+        }
 
     def render_package_create(
         request: Request,
@@ -247,8 +272,18 @@ def create_app(
             name="library_detail.html",
             context={
                 "library_name": current_library.name,
-                "packages": package_items(),
+                **package_list_context(),
             },
+        )
+
+    @app.get("/library/packages/status", response_class=HTMLResponse)
+    def library_package_status(request: Request) -> Response:
+        if libraries.current_library is None:
+            raise HTTPException(status_code=409, detail="No library is open")
+        return templates.TemplateResponse(
+            request=request,
+            name="_package_list.html",
+            context=package_list_context(),
         )
 
     @app.get("/libraries/manage", response_class=HTMLResponse)
@@ -262,15 +297,14 @@ def create_app(
     def create_library(request: Request, name: str = Form()) -> HTMLResponse:
         _require_same_origin(request)
         try:
-            created = libraries.create_library(name)
+            libraries.create_library(name)
         except ValueError as error:
             return render_library_management(
                 request,
                 error_message=str(error),
                 status_code=422,
             )
-        location = f"{request.url_for('library_management')}?library_id={created.id}"
-        return RedirectResponse(location, status_code=303)
+        return RedirectResponse(request.url_for("library_management"), status_code=303)
 
     @app.post("/libraries/rename", response_class=HTMLResponse)
     def rename_library(
@@ -404,15 +438,16 @@ def create_app(
             filename = pdf.filename or ""
             if Path(filename).suffix.casefold() != ".pdf":
                 raise ValueError("Choose a PDF file")
-            size, prefix = await _inspect_pdf_upload(pdf)
+            size, prefix, content_sha256 = await _inspect_pdf_upload(pdf)
             if b"%PDF-" not in prefix[:1024]:
                 raise ValueError("The uploaded file does not contain a PDF signature")
             await pdf.seek(0)
-            preparation = libraries.store_package_upload(
+            libraries.store_package_upload(
                 name=normalized_name,
                 source_filename=filename,
                 question_count=question_count,
                 size_bytes=size,
+                content_sha256=content_sha256,
                 source=pdf.file,
             )
         except ValueError as error:
@@ -424,13 +459,7 @@ def create_app(
         finally:
             await pdf.close()
 
-        return templates.TemplateResponse(
-            request=request,
-            name="package_upload_validated.html",
-            context={
-                "preparation": preparation,
-            },
-        )
+        return RedirectResponse(request.url_for("library_detail"), status_code=303)
 
     @app.get("/study", response_class=HTMLResponse)
     def study_question(request: Request, package: str) -> Response:
@@ -442,6 +471,34 @@ def create_app(
             name="study.html",
             context={"due": due, "package_name": package},
         )
+
+    @app.post("/package/retry", response_class=HTMLResponse)
+    def retry_package_preparation(
+        request: Request,
+        preparation_id: Annotated[UUID, Form()],
+    ) -> Response:
+        _require_same_origin(request)
+        if libraries.current_library is None:
+            raise HTTPException(status_code=409, detail="No library is open")
+        try:
+            libraries.retry_package_preparation(preparation_id)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return RedirectResponse(request.url_for("library_detail"), status_code=303)
+
+    @app.post("/package/preparation/delete", response_class=HTMLResponse)
+    def delete_failed_package_preparation(
+        request: Request,
+        preparation_id: Annotated[UUID, Form()],
+    ) -> Response:
+        _require_same_origin(request)
+        if libraries.current_library is None:
+            raise HTTPException(status_code=409, detail="No library is open")
+        try:
+            libraries.delete_failed_package_preparation(preparation_id)
+        except (RuntimeError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return RedirectResponse(request.url_for("library_detail"), status_code=303)
 
     @app.get("/progress", response_class=HTMLResponse)
     def learning_progress(request: Request, package: str) -> Response:
@@ -521,15 +578,28 @@ def _validate_package_name(name: str) -> str:
     return normalized_name
 
 
-async def _inspect_pdf_upload(upload: UploadFile) -> tuple[int, bytes]:
+def _friendly_preparation_error(message: str | None) -> str | None:
+    if message is None:
+        return None
+    if message.startswith("DuplicateDocumentError:"):
+        return "This PDF already exists in the library. Remove this failed upload."
+    if message.startswith("FileNotFoundError:"):
+        return "The uploaded PDF could not be found. Remove this failed upload."
+    detail = message.split(":", 1)[-1].strip()
+    return f"Preparation failed: {detail[:180]}"
+
+
+async def _inspect_pdf_upload(upload: UploadFile) -> tuple[int, bytes, str]:
     size = 0
     prefix = b""
+    digest = sha256()
     while chunk := await upload.read(64 * 1024):
         size += len(chunk)
+        digest.update(chunk)
         if len(prefix) < 1024:
             prefix += chunk[: 1024 - len(prefix)]
         if size > MAX_PDF_UPLOAD_BYTES:
             raise ValueError("PDF file must not exceed 25 MiB")
     if size == 0:
         raise ValueError("PDF file must not be empty")
-    return size, prefix
+    return size, prefix, digest.hexdigest()

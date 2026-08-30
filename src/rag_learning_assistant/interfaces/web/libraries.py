@@ -6,7 +6,7 @@ import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID, uuid4
@@ -64,6 +64,7 @@ class _LibraryMetadata:
 class _LibraryServices:
     packages: LearningPackageCatalog
     preparations: PackagePreparationService
+    documents: SqliteDocumentRepository
     summaries: DocumentSummaryCatalog
     questions: QuestionBankCatalog
     study: LearningPackageStudyService
@@ -78,8 +79,10 @@ class LocalLibraryManager:
         initial_directory: Path,
         *,
         id_factory: Callable[[], UUID] = uuid4,
+        package_remover: Callable[[Path, str], None] | None = None,
     ) -> None:
         self.id_factory = id_factory
+        self.package_remover = package_remover
         self.root_directory = initial_directory.resolve().parent
         self.root_directory.mkdir(parents=True, exist_ok=True)
         self._current_directory: Path | None = None
@@ -192,6 +195,8 @@ class LocalLibraryManager:
             raise ValueError("Library name confirmation does not match")
         if matching_library.has_content and not delete_contents:
             raise ValueError("Confirm deletion of all library contents")
+        if _library_has_active_preparation(matching_library.directory):
+            raise ValueError("Library is currently preparing a package and cannot be deleted")
 
         target = matching_library.directory.resolve()
         if target.parent != self.root_directory or target == self.root_directory:
@@ -295,15 +300,54 @@ class LocalLibraryManager:
         source_filename: str,
         question_count: int,
         size_bytes: int,
+        content_sha256: str,
         source: BinaryIO,
     ) -> PackagePreparation:
+        duplicate_document = self._require_services().documents.find_by_content_hash(content_sha256)
+        if duplicate_document is not None:
+            raise ValueError(
+                f"This PDF already exists in the library as {duplicate_document.source}"
+            )
         return self._require_services().preparations.store(
             name=name,
             source_filename=source_filename,
             question_count=question_count,
             size_bytes=size_bytes,
+            content_sha256=content_sha256,
             source=source,
         )
+
+    def retry_package_preparation(self, preparation_id: UUID) -> PackagePreparation:
+        return self._require_services().preparations.retry_failed(
+            preparation_id,
+            now=datetime.now(UTC),
+        )
+
+    def delete_failed_package_preparation(
+        self,
+        preparation_id: UUID,
+    ) -> PackagePreparation:
+        services = self._require_services()
+        preparation = next(
+            (item for item in services.preparations.list_all() if item.id == preparation_id),
+            None,
+        )
+        if preparation is None:
+            raise ValueError(f"Package preparation does not exist: {preparation_id}")
+        materialized = next(
+            (
+                package
+                for package in services.packages.list_packages()
+                if package.name.casefold() == preparation.name.casefold()
+            ),
+            None,
+        )
+        if materialized is not None:
+            if self.package_remover is None:
+                raise RuntimeError("Package removal service is not configured")
+            assert self._current_directory is not None
+            self.package_remover(self._current_directory, materialized.name)
+        return services.preparations.delete_failed(preparation_id)
 
     def get_package(self, name: str) -> LearningPackage:
         return self._require_services().packages.get_package(name)
@@ -358,6 +402,7 @@ class LocalLibraryManager:
             SqlitePackagePreparationRepository(database_path),
             library_directory / "uploads",
         )
+        preparations.backfill_missing_hashes()
         progress_repository = SqliteQuestionProgressRepository(database_path)
         attempt_repository = SqliteStudyAttemptRepository(database_path)
         packages = LearningPackageCatalog(package_repository)
@@ -390,7 +435,15 @@ class LocalLibraryManager:
             progress=progress_repository,
             attempts=attempt_repository,
         )
-        return _LibraryServices(packages, preparations, summaries, questions, study, progress)
+        return _LibraryServices(
+            packages,
+            preparations,
+            documents,
+            summaries,
+            questions,
+            study,
+            progress,
+        )
 
 
 def _validate_library_name(name: str) -> str:
@@ -426,3 +479,25 @@ def _library_has_content(directory: Path) -> bool:
             ).fetchone()[0]:
                 return True
     return False
+
+
+def _library_has_active_preparation(directory: Path) -> bool:
+    database_path = directory / "metadata.sqlite3"
+    if not database_path.is_file():
+        return False
+    with closing(sqlite3.connect(database_path)) as connection:
+        table_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'package_preparations'"
+        ).fetchone()
+        if table_exists is None:
+            return False
+        return (
+            connection.execute(
+                """
+                SELECT 1 FROM package_preparations
+                WHERE status IN ('indexing', 'summarizing', 'generating_questions')
+                LIMIT 1
+                """
+            ).fetchone()
+            is not None
+        )

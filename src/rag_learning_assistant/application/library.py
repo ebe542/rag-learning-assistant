@@ -2,6 +2,7 @@
 
 import hashlib
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -95,7 +96,12 @@ class LibraryService(LibraryCatalog):
         # An immutable tuple prevents callers from changing lifecycle behavior later.
         self.derived_data_cleaners = tuple(derived_data_cleaners)
 
-    def add_document(self, path: Path) -> IndexedDocument:
+    def add_document(
+        self,
+        path: Path,
+        *,
+        source_name: str | None = None,
+    ) -> IndexedDocument:
         """Index a file and register its persistent library metadata."""
 
         content_sha256 = self._calculate_sha256(path)
@@ -108,6 +114,14 @@ class LibraryService(LibraryCatalog):
 
         document_id = self.id_factory()
         document = self.extractor.extract(path)
+        if source_name is not None:
+            if not source_name.strip():
+                raise ValueError("Document source name must not be blank")
+            document = replace(
+                document,
+                source=source_name,
+                pages=tuple(replace(page, source=source_name) for page in document.pages),
+            )
         chunks = self.indexer.index_document(
             document,
             document_id=document_id,

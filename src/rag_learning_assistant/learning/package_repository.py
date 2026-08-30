@@ -90,6 +90,44 @@ class SqliteLearningPackageRepository:
                 ),
             )
 
+    def save_from_preparation(
+        self,
+        package: LearningPackage,
+        preparation_id: UUID,
+    ) -> None:
+        """Atomically transfer a pending name reservation to its indexed package."""
+
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """
+                UPDATE package_names
+                SET owner_kind = 'package', owner_id = ?
+                WHERE name = ? COLLATE NOCASE
+                  AND owner_kind = 'preparation'
+                  AND owner_id = ?
+                """,
+                (str(package.id), package.name, str(preparation_id)),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Pending package name reservation is no longer valid")
+            connection.execute(
+                """
+                INSERT INTO learning_packages (
+                    id, name, document_id, status,
+                    summary_identity_fingerprint, question_bank_identity_fingerprint
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(package.id),
+                    package.name,
+                    str(package.document_id),
+                    package.status.value,
+                    package.summary_identity_fingerprint,
+                    package.question_bank_identity_fingerprint,
+                ),
+            )
+
     def replace(self, package: LearningPackage) -> None:
         """Replace the current state of an existing learning package."""
 

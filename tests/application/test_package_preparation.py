@@ -29,6 +29,7 @@ def test_service_stores_upload_under_internal_id_and_persists_request(
         source_filename="C:\\private\\course.pdf",
         question_count=7,
         size_bytes=12,
+        content_sha256="a" * 64,
         source=BytesIO(b"%PDF-1.7\nxx"),
     )
 
@@ -51,10 +52,47 @@ def test_repository_matches_pending_names_case_insensitively(tmp_path: Path) -> 
         source_filename="course.pdf",
         question_count=5,
         size_bytes=8,
+        content_sha256="a" * 64,
         source=BytesIO(b"%PDF-1.7"),
     )
 
     assert repository.find_by_name("python course") == stored
+
+
+def test_service_rejects_duplicate_content_before_writing_another_upload(
+    tmp_path: Path,
+) -> None:
+    ids = iter(
+        (
+            UUID("11111111-1111-1111-1111-111111111111"),
+            UUID("22222222-2222-2222-2222-222222222222"),
+        )
+    )
+    service = PackagePreparationService(
+        SqlitePackagePreparationRepository(tmp_path / "metadata.sqlite3"),
+        tmp_path / "uploads",
+        id_factory=ids.__next__,
+    )
+    service.store(
+        name="First name",
+        source_filename="course.pdf",
+        question_count=5,
+        size_bytes=8,
+        content_sha256="a" * 64,
+        source=BytesIO(b"%PDF-1.7"),
+    )
+
+    with pytest.raises(ValueError, match="already queued as First name"):
+        service.store(
+            name="Different name",
+            source_filename="renamed.pdf",
+            question_count=5,
+            size_bytes=8,
+            content_sha256="a" * 64,
+            source=BytesIO(b"%PDF-1.7"),
+        )
+
+    assert len(list((tmp_path / "uploads").iterdir())) == 1
 
 
 def test_shared_name_reservation_removes_upload_when_package_exists(tmp_path: Path) -> None:
@@ -80,6 +118,7 @@ def test_shared_name_reservation_removes_upload_when_package_exists(tmp_path: Pa
             source_filename="course.pdf",
             question_count=5,
             size_bytes=8,
+            content_sha256="a" * 64,
             source=BytesIO(b"%PDF-1.7"),
         )
 

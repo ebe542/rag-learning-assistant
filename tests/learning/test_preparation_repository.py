@@ -129,6 +129,35 @@ def test_only_current_lease_can_fail_and_retry_a_request(tmp_path: Path) -> None
     assert retried.failure_message is None
 
 
+def test_renewed_lease_cannot_be_reclaimed_at_its_original_expiry(tmp_path: Path) -> None:
+    repository = SqlitePackagePreparationRepository(tmp_path / "metadata.sqlite3")
+    preparation_id = UUID("11111111-1111-1111-1111-111111111111")
+    lease_token = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    repository.save(pending(preparation_id, "Course"))
+    repository.claim_next(
+        lease_token=lease_token,
+        now=NOW,
+        lease_duration=timedelta(minutes=5),
+    )
+
+    renewed = repository.renew_lease(
+        preparation_id,
+        lease_token=lease_token,
+        now=NOW + timedelta(minutes=4),
+        lease_duration=timedelta(minutes=5),
+    )
+
+    assert renewed.lease_expires_at == NOW + timedelta(minutes=9)
+    assert (
+        repository.claim_next(
+            lease_token=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            now=NOW + timedelta(minutes=6),
+            lease_duration=timedelta(minutes=5),
+        )
+        is None
+    )
+
+
 def test_existing_pending_schema_is_migrated_in_place(tmp_path: Path) -> None:
     database_path = tmp_path / "metadata.sqlite3"
     preparation_id = UUID("11111111-1111-1111-1111-111111111111")

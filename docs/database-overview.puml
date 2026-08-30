@@ -98,6 +98,7 @@ package "Learning workflow" #FFE8E8 {
     * stored_filename : TEXT <<UQ>>
     * question_count : INTEGER
     * size_bytes : INTEGER
+    content_sha256 : TEXT <<SHA-256>>
     * status : TEXT
     * created_at : TEXT <<ISO datetime>>
     * updated_at : TEXT <<ISO datetime>>
@@ -175,6 +176,7 @@ legend bottom
   | PK | Primary-key column |
   | UQ | SQLite unique constraint |
   | JSON | JSON serialized into a TEXT column |
+  | SHA-256 | Lowercase content digest used for duplicate detection |
   | dotted relationship | Logical application relationship, not a SQLite foreign key |
 endlegend
 

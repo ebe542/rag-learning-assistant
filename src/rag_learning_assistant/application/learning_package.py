@@ -36,6 +36,12 @@ class LearningPackageRepository(
 
     def save(self, package: LearningPackage) -> None: ...
 
+    def save_from_preparation(
+        self,
+        package: LearningPackage,
+        preparation_id: UUID,
+    ) -> None: ...
+
     def replace(self, package: LearningPackage) -> None: ...
 
     def is_name_reserved(self, name: str) -> bool: ...
@@ -44,7 +50,12 @@ class LearningPackageRepository(
 class PackageDocumentImporter(Protocol):
     """Import one source document into the persistent library."""
 
-    def add_document(self, path: Path) -> IndexedDocument: ...
+    def add_document(
+        self,
+        path: Path,
+        *,
+        source_name: str | None = None,
+    ) -> IndexedDocument: ...
 
     def remove_document(self, document_id: UUID) -> IndexedDocument: ...
 
@@ -115,6 +126,8 @@ class LearningPackageService:
         name: str,
         pdf_path: Path,
         question_count: int,
+        preparation_id: UUID | None = None,
+        source_filename: str | None = None,
     ) -> LearningPackage:
         """Prepare or resume one learning package by its user-facing name."""
 
@@ -127,10 +140,14 @@ class LearningPackageService:
         package = self.packages.find_by_name(name)
 
         if package is None:
-            if self.packages.is_name_reserved(name):
+            if preparation_id is None and self.packages.is_name_reserved(name):
                 raise ValueError(f"Learning package already exists: {name}")
             self._report_progress("index")
-            document = self.documents.add_document(pdf_path)
+            document = (
+                self.documents.add_document(pdf_path)
+                if source_filename is None
+                else self.documents.add_document(pdf_path, source_name=source_filename)
+            )
             package = LearningPackage(
                 id=self.id_factory(),
                 name=name,
@@ -139,7 +156,10 @@ class LearningPackageService:
             )
             # Persist each expensive completed phase before starting the next
             # one, so a later retry can resume without repeating earlier work.
-            self.packages.save(package)
+            if preparation_id is None:
+                self.packages.save(package)
+            else:
+                self.packages.save_from_preparation(package, preparation_id)
 
         if package.status is LearningPackageStatus.INDEXED:
             self._report_progress("summarize")

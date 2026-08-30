@@ -40,6 +40,13 @@ class RecordingPackageRepository:
     def save(self, package: LearningPackage) -> None:
         self.saved.append(package)
 
+    def save_from_preparation(
+        self,
+        package: LearningPackage,
+        preparation_id: UUID,
+    ) -> None:
+        self.saved.append(package)
+
     def replace(self, package: LearningPackage) -> None:
         self.replaced.append(package)
 
@@ -55,7 +62,12 @@ class RecordingDocumentImporter:
         self.paths: list[Path] = []
         self.removed_document_ids: list[UUID] = []
 
-    def add_document(self, path: Path) -> IndexedDocument:
+    def add_document(
+        self,
+        path: Path,
+        *,
+        source_name: str | None = None,
+    ) -> IndexedDocument:
         self.paths.append(path)
         return self.document
 

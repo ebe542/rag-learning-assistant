@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
@@ -5,6 +6,13 @@ from uuid import UUID
 import pytest
 
 from rag_learning_assistant.interfaces.web.libraries import LocalLibraryManager
+from rag_learning_assistant.learning import (
+    LearningPackage,
+    LearningPackageStatus,
+    SqliteLearningPackageRepository,
+    SqlitePackagePreparationRepository,
+)
+from rag_learning_assistant.library import IndexedDocument, SqliteDocumentRepository
 
 
 def test_manager_creates_and_switches_between_isolated_libraries(tmp_path: Path) -> None:
@@ -175,6 +183,7 @@ def test_pending_upload_survives_library_manager_restart(tmp_path: Path) -> None
         source_filename="course.pdf",
         question_count=7,
         size_bytes=8,
+        content_sha256="a" * 64,
         source=BytesIO(b"%PDF-1.7"),
     )
 
@@ -182,3 +191,113 @@ def test_pending_upload_survives_library_manager_restart(tmp_path: Path) -> None
     restarted_manager = LocalLibraryManager(initial_directory)
     restarted_manager.select_library(created.id)
     assert restarted_manager.list_package_preparations() == [preparation]
+
+
+def test_manager_rejects_deleting_library_while_package_is_processing(tmp_path: Path) -> None:
+    manager = LocalLibraryManager(tmp_path / "library")
+    created = manager.create_library("Courses")
+    manager.select_library(created.id)
+    manager.store_package_upload(
+        name="Python Course",
+        source_filename="course.pdf",
+        question_count=7,
+        size_bytes=8,
+        content_sha256="a" * 64,
+        source=BytesIO(b"%PDF-1.7"),
+    )
+    repository = SqlitePackagePreparationRepository(created.directory / "metadata.sqlite3")
+    repository.claim_next(
+        lease_token=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        now=datetime.now(UTC),
+        lease_duration=timedelta(minutes=5),
+    )
+
+    with pytest.raises(ValueError, match="currently preparing"):
+        manager.delete_library(
+            created.id,
+            confirmation=created.name,
+            delete_contents=True,
+        )
+
+    assert created.directory.exists()
+
+
+def test_manager_rejects_upload_content_already_indexed_in_library(tmp_path: Path) -> None:
+    manager = LocalLibraryManager(tmp_path / "library")
+    created = manager.create_library("Courses")
+    manager.select_library(created.id)
+    SqliteDocumentRepository(created.directory / "metadata.sqlite3").add(
+        IndexedDocument(
+            id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            source="existing.pdf",
+            content_sha256="a" * 64,
+            page_count=1,
+            chunk_count=1,
+        )
+    )
+
+    with pytest.raises(ValueError, match="already exists.*existing.pdf"):
+        manager.store_package_upload(
+            name="Different name",
+            source_filename="renamed.pdf",
+            question_count=5,
+            size_bytes=8,
+            content_sha256="a" * 64,
+            source=BytesIO(b"%PDF-1.7"),
+        )
+
+    assert not (created.directory / "uploads").exists()
+
+
+def test_manager_removes_failed_upload_and_its_partial_package(tmp_path: Path) -> None:
+    def remove_package(directory: Path, name: str) -> None:
+        packages = SqliteLearningPackageRepository(directory / "metadata.sqlite3")
+        package = packages.find_by_name(name)
+        assert package is not None
+        packages.delete_document(package.document_id)
+
+    manager = LocalLibraryManager(
+        tmp_path / "library",
+        package_remover=remove_package,
+    )
+    created = manager.create_library("Courses")
+    manager.select_library(created.id)
+    preparation = manager.store_package_upload(
+        name="Python Course",
+        source_filename="course.pdf",
+        question_count=5,
+        size_bytes=8,
+        content_sha256="a" * 64,
+        source=BytesIO(b"%PDF-1.7"),
+    )
+    database_path = created.directory / "metadata.sqlite3"
+    preparations = SqlitePackagePreparationRepository(database_path)
+    lease_token = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+    now = datetime.now(UTC)
+    preparations.claim_next(
+        lease_token=lease_token,
+        now=now,
+        lease_duration=timedelta(minutes=5),
+    )
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name=preparation.name,
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.INDEXED,
+    )
+    SqliteLearningPackageRepository(database_path).save_from_preparation(
+        package,
+        preparation.id,
+    )
+    preparations.mark_failed(
+        preparation.id,
+        lease_token=lease_token,
+        now=now,
+        message="Summary failed",
+    )
+
+    manager.delete_failed_package_preparation(preparation.id)
+
+    assert manager.list_package_preparations() == []
+    assert manager.list_packages() == []
+    assert not (created.directory / "uploads" / preparation.stored_filename).exists()

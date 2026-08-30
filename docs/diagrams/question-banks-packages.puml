@@ -49,6 +49,7 @@ package "application" #FFE8E8 {
   class LearningPackageCatalog
   class LearningPackageService
   class PackagePreparationService
+  class PackagePreparationWorker
   class LibraryService
   class QuestionBankNotFoundError
   class LearningPackageNotFoundError
@@ -82,6 +83,8 @@ SqlitePackagePreparationRepository --> PackagePreparation
 SqlitePackagePreparationRepository ..|> PackagePreparationRepository
 PackagePreparationService o-- PackagePreparationRepository
 PackagePreparationService --> PackagePreparation
+PackagePreparationWorker o-- PackagePreparationService
+PackagePreparationWorker --> LearningPackageService
 SqliteLearningPackageRepository ..|> LearningPackageRepository
 SqliteLearningPackageRepository ..|> LearningPackageReader
 SqliteLearningPackageRepository ..|> DocumentDerivedDataCleaner

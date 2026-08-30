@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta, timezone
+from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from rag_learning_assistant.learning import (
     LearningPackage,
     LearningPackageStatus,
     PackagePreparation,
+    PackagePreparationStatus,
     QuestionBank,
     QuestionProgress,
     ReviewRating,
@@ -201,8 +203,15 @@ class StubLibraryManagement:
         source_filename: str,
         question_count: int,
         size_bytes: int,
+        content_sha256: str,
         source,
     ) -> PackagePreparation:
+        duplicate = next(
+            (item for item in self.preparations if item.content_sha256 == content_sha256),
+            None,
+        )
+        if duplicate is not None:
+            raise ValueError(f"This PDF is already queued as {duplicate.name}")
         preparation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
         preparation = PackagePreparation(
             id=preparation_id,
@@ -211,10 +220,36 @@ class StubLibraryManagement:
             stored_filename=f"{preparation_id}.pdf",
             question_count=question_count,
             size_bytes=size_bytes,
+            content_sha256=content_sha256,
         )
         self.uploaded_content = source.read()
         self.preparations.append(preparation)
         return preparation
+
+    def retry_package_preparation(self, preparation_id: UUID) -> PackagePreparation:
+        existing = next(item for item in self.preparations if item.id == preparation_id)
+        retried = PackagePreparation(
+            id=existing.id,
+            name=existing.name,
+            source_filename=existing.source_filename,
+            stored_filename=existing.stored_filename,
+            question_count=existing.question_count,
+            size_bytes=existing.size_bytes,
+            content_sha256=existing.content_sha256,
+            created_at=existing.created_at,
+        )
+        self.preparations = [
+            retried if item.id == preparation_id else item for item in self.preparations
+        ]
+        return retried
+
+    def delete_failed_package_preparation(
+        self,
+        preparation_id: UUID,
+    ) -> PackagePreparation:
+        existing = next(item for item in self.preparations if item.id == preparation_id)
+        self.preparations = [item for item in self.preparations if item.id != preparation_id]
+        return existing
 
 
 def build_client(
@@ -295,7 +330,7 @@ def test_package_create_page_shows_upload_constraints() -> None:
     assert "Maximum PDF size: 25 MiB" in response.text
 
 
-def test_valid_pdf_upload_is_stored_as_pending_without_model_processing() -> None:
+def test_valid_pdf_upload_redirects_to_live_package_status() -> None:
     libraries = StubLibraryManagement()
     client = build_client(libraries=libraries)
 
@@ -307,19 +342,42 @@ def test_valid_pdf_upload_is_stored_as_pending_without_model_processing() -> Non
     )
 
     assert response.status_code == 200
-    assert "Upload stored" in response.text
     assert "Python Course" in response.text
-    assert "course.pdf" in response.text
-    assert "7" in response.text
     assert "Pending" in response.text
-    assert "Model processing has not started yet" in response.text
+    assert "Model processing has not started yet" not in response.text
+    assert '<meta http-equiv="refresh"' not in response.text
+    assert 'src="http://testserver/static/package-status.js?v=20260830"' in response.text
+    assert 'data-refresh="true"' in response.text
     assert libraries.uploaded_content == b"%PDF-1.7\ncontent"
+    assert libraries.preparations[0].content_sha256 == sha256(b"%PDF-1.7\ncontent").hexdigest()
 
     package_response = client.get("/library")
 
     assert "Python Course" in package_response.text
     assert "PDF stored; preparation is pending" in package_response.text
     assert '<span class="package-count">1</span>' in package_response.text
+
+
+def test_package_upload_rejects_same_pdf_under_another_name() -> None:
+    libraries = StubLibraryManagement()
+    client = build_client(libraries=libraries)
+    first = client.post(
+        "/package/new",
+        data={"name": "First name", "question_count": "5"},
+        files={"pdf": ("course.pdf", b"%PDF-1.7", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+    assert first.status_code == 200
+
+    response = client.post(
+        "/package/new",
+        data={"name": "Different name", "question_count": "5"},
+        files={"pdf": ("renamed.pdf", b"%PDF-1.7", "application/pdf")},
+        headers={"origin": "http://testserver"},
+    )
+
+    assert response.status_code == 422
+    assert "already queued as First name" in response.text
 
 
 def test_package_upload_rejects_non_pdf_content() -> None:
@@ -332,6 +390,16 @@ def test_package_upload_rejects_non_pdf_content() -> None:
 
     assert response.status_code == 422
     assert "does not contain a PDF signature" in response.text
+    assert "data-upload-error" in response.text
+    assert 'src="http://testserver/static/package-upload.js?v=20260830"' in response.text
+
+
+def test_package_status_fragment_contains_only_the_refreshable_package_region() -> None:
+    response = build_client().get("/library/packages/status")
+
+    assert response.status_code == 200
+    assert 'id="package-status-region"' in response.text
+    assert "<!doctype html>" not in response.text
 
 
 def test_package_upload_rejects_duplicate_package_name() -> None:
@@ -369,6 +437,76 @@ def test_package_upload_rejects_duplicate_pending_name() -> None:
 
     assert response.status_code == 422
     assert "Learning package already exists" in response.text
+
+
+def test_failed_package_preparation_can_be_retried() -> None:
+    libraries = StubLibraryManagement()
+    preparation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    pending = PackagePreparation(
+        id=preparation_id,
+        name="Python Course",
+        source_filename="course.pdf",
+        stored_filename=f"{preparation_id}.pdf",
+        question_count=5,
+        size_bytes=8,
+    )
+    libraries.preparations.append(
+        PackagePreparation(
+            id=pending.id,
+            name=pending.name,
+            source_filename=pending.source_filename,
+            stored_filename=pending.stored_filename,
+            question_count=pending.question_count,
+            size_bytes=pending.size_bytes,
+            status=PackagePreparationStatus.FAILED,
+            created_at=pending.created_at,
+            failure_message="Summary failed",
+        )
+    )
+    client = build_client(libraries=libraries)
+
+    page = client.get("/library")
+    assert "Failed" in page.text
+    assert "Preparation failed: Summary failed" in page.text
+    assert ">Retry</button>" in page.text
+    assert ">Remove</button>" in page.text
+
+    response = client.post(
+        "/package/retry",
+        data={"preparation_id": str(preparation_id)},
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert libraries.preparations[0].status is PackagePreparationStatus.PENDING
+
+
+def test_failed_package_preparation_can_be_removed() -> None:
+    libraries = StubLibraryManagement()
+    preparation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    libraries.preparations.append(
+        PackagePreparation(
+            id=preparation_id,
+            name="Broken Course",
+            source_filename="course.pdf",
+            stored_filename=f"{preparation_id}.pdf",
+            question_count=5,
+            size_bytes=8,
+            status=PackagePreparationStatus.FAILED,
+            failure_message="Summary failed",
+        )
+    )
+
+    response = build_client(libraries=libraries).post(
+        "/package/preparation/delete",
+        data={"preparation_id": str(preparation_id)},
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert libraries.preparations == []
 
 
 def test_package_upload_rejects_question_count_outside_supported_range() -> None:
@@ -508,7 +646,7 @@ def test_package_page_redirects_when_no_library_is_open() -> None:
     assert response.headers["location"] == "http://testserver/"
 
 
-def test_library_can_be_created_and_selected_from_same_origin() -> None:
+def test_library_creation_returns_to_management_without_opening_the_editor() -> None:
     libraries = StubLibraryManagement()
     client = build_client(libraries=libraries)
 
@@ -520,7 +658,9 @@ def test_library_can_be_created_and_selected_from_same_origin() -> None:
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("http://testserver/libraries/manage?library_id=")
+    assert response.headers["location"] == "http://testserver/libraries/manage"
+    management_response = client.get(response.headers["location"])
+    assert "Edit library" not in management_response.text
     home_response = client.get("/")
     assert "German History" in home_response.text
     assert libraries.current_directory == Path("personal-library")
@@ -738,6 +878,10 @@ def test_progress_page_summarizes_attempts_and_learning_focus() -> None:
 
     assert response.status_code == 200
     assert "Learning progress" in response.text
+    assert (
+        'href="http://testserver/package?name=Python%20Basics">← Back to package</a>'
+        in response.text
+    )
     assert "2/5" in response.text
     assert "40% of the active question bank" in response.text
     assert "50% evaluated as correct" in response.text

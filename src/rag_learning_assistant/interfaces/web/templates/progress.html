@@ -2,6 +2,7 @@
 {% block title %}Progress · {{ report.package_name }}{% endblock %}
 {% block main_class %}detail-shell{% endblock %}
 {% block content %}
+<a class="back-link" href="{{ url_for('package_detail') }}?name={{ report.package_name | urlencode }}">← Back to package</a>
 <p class="eyebrow">Learning progress</p>
 <h1>{{ report.package_name }}</h1>
 <section class="metric-grid" aria-label="Progress summary">

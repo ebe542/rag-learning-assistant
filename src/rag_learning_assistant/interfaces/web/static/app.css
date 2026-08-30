@@ -329,7 +329,12 @@ h2 {
 
 .library-form > div {
   display: flex;
+  align-items: center;
   gap: 0.65rem;
+}
+
+.library-form > div button {
+  margin-top: 0;
 }
 
 .library-form input {
@@ -396,6 +401,23 @@ h2 {
   color: #61736e;
 }
 
+.package-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.package-actions .status,
+.package-actions button {
+  display: inline-flex;
+  width: auto;
+  height: 2.75rem;
+  padding: 0 0.85rem;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .status {
   flex: 0 0 auto;
   padding: 0.55rem 0.85rem;
@@ -426,6 +448,17 @@ h2 {
 .status-generating_questions {
   color: #315890;
   background: #e3efff;
+}
+
+.processing-status::before {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.5rem;
+  border: 2px solid #aac2df;
+  border-top-color: #315890;
+  border-radius: 50%;
+  content: "";
+  animation: spin 0.8s linear infinite;
 }
 
 .status-failed {

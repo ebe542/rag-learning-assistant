@@ -439,7 +439,9 @@ already contains `metadata.sqlite3` and never initializes a library implicitly.
 The package page exposes a multipart upload form as the input boundary for a
 future preparation job. The server requires the loopback origin, a unique
 display name, 1 to 50 questions, a `.pdf` filename, a PDF signature within the
-first 1024 bytes, and at most 25 MiB. `PackagePreparationService` atomically
+first 1024 bytes, and at most 25 MiB. The same streaming pass calculates SHA-256
+and rejects content already present in pending requests or indexed documents
+before creating a visible request. `PackagePreparationService` atomically
 stores accepted content in the selected library's `uploads` directory using a
 UUID-derived filename; user input is retained only as display metadata. The
 matching pending request is persisted in SQLite after the file move, and failed
@@ -453,6 +455,26 @@ indexing to avoid orphaned document data. Preparation requests progress through
 time. A UUID lease token and expiry protect every phase transition from stale or
 concurrent workers, while retry clears only the failure state and preserves the
 uploaded PDF.
+`WorkspacePreparationWorker` scans direct library directories and delegates one
+request at a time to `PackagePreparationWorker`. The worker renews its lease on
+a heartbeat thread during expensive local-model calls, transfers the shared
+name reservation when indexing creates the materialized package, and advances
+the persisted phase only after each package checkpoint exists. Completion
+removes the request and uploaded PDF; failure records a bounded diagnostic and
+keeps both the upload and last successful package checkpoint. The GUI server
+starts this daemon worker for its lifetime. Model services are constructed only
+after a request is claimed, so an idle GUI does not load embedding or generation
+models. Active preparation prevents library deletion. While work is running, a
+small browser-side poll replaces only the server-rendered package-list fragment;
+the surrounding page and browser tab remain stable.
+The worker passes the sanitized original filename separately to `LibraryService`.
+Storage therefore remains UUID-based while extracted pages, persisted document
+metadata, and citations retain the user-recognizable source name.
+Successful upload uses Post/Redirect/Get to open that live package page instead
+of rendering a stale validation snapshot. Failed cards translate known internal
+exceptions into short user-facing explanations. Retry preserves checkpoints;
+Remove invokes the normal package-removal lifecycle when indexing already
+created a partial package, then deletes the request and owned upload.
 
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a
@@ -464,7 +486,9 @@ and question count. Unknown names return a user-facing HTTP 404 page. Templates
 and CSS are served from the installed package without external browser assets.
 All pages extend `base.html`, which owns document metadata and a responsive,
 server-rendered navigation bar. The shared template exposes library overview,
-management, and the opened library's packages without JavaScript.
+management, and the opened library's packages. JavaScript is limited to
+progressive status feedback and input-state improvements; core navigation and
+form actions remain server-rendered.
 
 Ready package details link to a server-rendered study form. Its GET route asks
 `LearningPackageStudyService` for the highest-priority due question without

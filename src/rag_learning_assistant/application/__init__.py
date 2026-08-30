@@ -33,6 +33,7 @@ from rag_learning_assistant.application.package_study import (
     LearningPackageNotReadyError,
     LearningPackageStudyService,
 )
+from rag_learning_assistant.application.preparation_worker import PackagePreparationWorker
 from rag_learning_assistant.application.question_answering import (
     QuestionAnsweringService,
 )
@@ -90,6 +91,7 @@ __all__ = [
     "LearningPackageNotFoundError",
     "LearningPackageNotReadyError",
     "PackagePreparationService",
+    "PackagePreparationWorker",
     "LearningProgressReport",
     "LearningProgressService",
 ]

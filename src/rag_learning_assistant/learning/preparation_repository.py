@@ -9,6 +9,7 @@ from uuid import UUID
 from rag_learning_assistant.learning.package_names import (
     ensure_name_reservation,
     initialize_name_registry,
+    release_name_reservation,
 )
 from rag_learning_assistant.learning.preparations import (
     PackagePreparation,
@@ -40,6 +41,7 @@ class SqlitePackagePreparationRepository:
                     stored_filename TEXT NOT NULL UNIQUE,
                     question_count INTEGER NOT NULL,
                     size_bytes INTEGER NOT NULL,
+                    content_sha256 TEXT,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -58,6 +60,7 @@ class SqlitePackagePreparationRepository:
                 "lease_token": "TEXT",
                 "lease_expires_at": "TEXT",
                 "failure_message": "TEXT",
+                "content_sha256": "TEXT",
             }
             for name, data_type in additions.items():
                 if name not in columns:
@@ -82,7 +85,20 @@ class SqlitePackagePreparationRepository:
                 )
 
     def save(self, preparation: PackagePreparation) -> None:
-        with closing(self._connect()) as connection, connection:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if preparation.content_sha256 is not None:
+                duplicate = connection.execute(
+                    """
+                    SELECT name FROM package_preparations
+                    WHERE content_sha256 = ?
+                    LIMIT 1
+                    """,
+                    (preparation.content_sha256,),
+                ).fetchone()
+                if duplicate is not None:
+                    connection.rollback()
+                    raise ValueError(f"This PDF is already queued as {duplicate['name']}")
             ensure_name_reservation(
                 connection,
                 name=preparation.name,
@@ -93,10 +109,10 @@ class SqlitePackagePreparationRepository:
                 """
                 INSERT INTO package_preparations (
                     id, name, source_filename, stored_filename,
-                    question_count, size_bytes, status, created_at, updated_at,
+                    question_count, size_bytes, content_sha256, status, created_at, updated_at,
                     lease_token, lease_expires_at, failure_message
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(preparation.id),
@@ -105,6 +121,7 @@ class SqlitePackagePreparationRepository:
                     preparation.stored_filename,
                     preparation.question_count,
                     preparation.size_bytes,
+                    preparation.content_sha256,
                     preparation.status.value,
                     _serialize_datetime(preparation.created_at),
                     _serialize_datetime(preparation.updated_at),
@@ -117,13 +134,37 @@ class SqlitePackagePreparationRepository:
                     preparation.failure_message,
                 ),
             )
+            connection.commit()
+
+    def find_by_content_hash(self, content_sha256: str) -> PackagePreparation | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT id, name, source_filename, stored_filename,
+                       question_count, size_bytes, content_sha256, status,
+                       created_at, updated_at, lease_token, lease_expires_at,
+                       failure_message
+                FROM package_preparations
+                WHERE content_sha256 = ?
+                LIMIT 1
+                """,
+                (content_sha256,),
+            ).fetchone()
+        return self._deserialize(row) if row is not None else None
+
+    def update_content_hash(self, preparation_id: UUID, content_sha256: str) -> None:
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "UPDATE package_preparations SET content_sha256 = ? WHERE id = ?",
+                (content_sha256, str(preparation_id)),
+            )
 
     def find_by_name(self, name: str) -> PackagePreparation | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
                 SELECT id, name, source_filename, stored_filename,
-                       question_count, size_bytes, status, created_at, updated_at,
+                       question_count, size_bytes, content_sha256, status, created_at, updated_at,
                        lease_token, lease_expires_at, failure_message
                 FROM package_preparations
                 WHERE name = ? COLLATE NOCASE
@@ -137,7 +178,7 @@ class SqlitePackagePreparationRepository:
             rows = connection.execute(
                 """
                 SELECT id, name, source_filename, stored_filename,
-                       question_count, size_bytes, status, created_at, updated_at,
+                       question_count, size_bytes, content_sha256, status, created_at, updated_at,
                        lease_token, lease_expires_at, failure_message
                 FROM package_preparations
                 ORDER BY name COLLATE NOCASE, id
@@ -249,6 +290,81 @@ class SqlitePackagePreparationRepository:
         assert advanced is not None
         return advanced
 
+    def renew_lease(
+        self,
+        preparation_id: UUID,
+        *,
+        lease_token: UUID,
+        now: datetime,
+        lease_duration: timedelta,
+    ) -> PackagePreparation:
+        """Extend an active lease while one expensive phase is still running."""
+
+        _validate_lease_arguments(now, lease_duration)
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """
+                UPDATE package_preparations
+                SET updated_at = ?, lease_expires_at = ?
+                WHERE id = ? AND lease_token = ? AND lease_expires_at > ?
+                """,
+                (
+                    _serialize_datetime(now),
+                    _serialize_datetime(now + lease_duration),
+                    str(preparation_id),
+                    str(lease_token),
+                    _serialize_datetime(now),
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Package preparation lease is no longer valid")
+            renewed = self._find_by_id(connection, preparation_id)
+        assert renewed is not None
+        return renewed
+
+    def complete(
+        self,
+        preparation_id: UUID,
+        *,
+        lease_token: UUID,
+        now: datetime,
+    ) -> PackagePreparation:
+        """Remove a ready preparation while retaining its package reservation."""
+
+        with closing(self._connect()) as connection, connection:
+            completed = self._find_by_id(connection, preparation_id)
+            if completed is None:
+                raise ValueError(f"Package preparation does not exist: {preparation_id}")
+            materialized = connection.execute(
+                """
+                SELECT 1
+                FROM package_names AS names
+                JOIN learning_packages AS packages
+                  ON names.owner_kind = 'package'
+                 AND names.owner_id = packages.id
+                WHERE names.name = ? COLLATE NOCASE
+                  AND packages.name = ? COLLATE NOCASE
+                """,
+                (completed.name, completed.name),
+            ).fetchone()
+            if materialized is None:
+                raise ValueError("Package preparation has no completed learning package")
+            cursor = connection.execute(
+                """
+                DELETE FROM package_preparations
+                WHERE id = ? AND status = ? AND lease_token = ? AND lease_expires_at > ?
+                """,
+                (
+                    str(preparation_id),
+                    PackagePreparationStatus.GENERATING_QUESTIONS.value,
+                    str(lease_token),
+                    _serialize_datetime(now),
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Package preparation lease is no longer valid")
+        return completed
+
     def mark_failed(
         self,
         preparation_id: UUID,
@@ -307,6 +423,24 @@ class SqlitePackagePreparationRepository:
         assert retried is not None
         return retried
 
+    def delete_failed(self, preparation_id: UUID) -> PackagePreparation:
+        """Delete one failed request and release any reservation it still owns."""
+
+        with closing(self._connect()) as connection, connection:
+            preparation = self._find_by_id(connection, preparation_id)
+            if preparation is None or preparation.status is not PackagePreparationStatus.FAILED:
+                raise ValueError("Only failed package preparations can be deleted")
+            connection.execute(
+                "DELETE FROM package_preparations WHERE id = ?",
+                (str(preparation_id),),
+            )
+            release_name_reservation(
+                connection,
+                owner_kind="preparation",
+                owner_id=preparation_id,
+            )
+        return preparation
+
     @staticmethod
     def _find_by_id(
         connection: sqlite3.Connection,
@@ -315,7 +449,7 @@ class SqlitePackagePreparationRepository:
         row = connection.execute(
             """
             SELECT id, name, source_filename, stored_filename,
-                   question_count, size_bytes, status, created_at, updated_at,
+                   question_count, size_bytes, content_sha256, status, created_at, updated_at,
                    lease_token, lease_expires_at, failure_message
             FROM package_preparations
             WHERE id = ?
@@ -333,6 +467,7 @@ class SqlitePackagePreparationRepository:
             stored_filename=row["stored_filename"],
             question_count=row["question_count"],
             size_bytes=row["size_bytes"],
+            content_sha256=row["content_sha256"],
             status=PackagePreparationStatus(row["status"]),
             created_at=_deserialize_datetime(row["created_at"]),
             updated_at=_deserialize_datetime(row["updated_at"]),

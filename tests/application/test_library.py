@@ -177,6 +177,31 @@ def test_add_document_rejects_duplicate_content_before_indexing(
     assert indexer.indexed_documents == []
 
 
+def test_add_document_uses_display_source_without_changing_storage_path(
+    tmp_path: Path,
+) -> None:
+    pdf = tmp_path / "11111111-1111-1111-1111-111111111111.pdf"
+    pdf.write_bytes(b"PDF contents")
+    extracted = Document(
+        source=pdf.name,
+        pages=(Page(1, "Python functions", pdf.name),),
+    )
+    repository = RecordingDocumentRepository()
+    indexer = FakeDocumentIndexer([])
+    service = LibraryService(
+        repository=repository,
+        extractor=FakeExtractor(extracted),
+        indexer=indexer,
+    )
+
+    indexed = service.add_document(pdf, source_name="course.pdf")
+
+    assert indexed.source == "course.pdf"
+    indexed_input = indexer.indexed_documents[0][0]
+    assert indexed_input.source == "course.pdf"
+    assert indexed_input.pages[0].source == "course.pdf"
+
+
 def test_catalog_lists_documents_without_processing_dependencies() -> None:
     document = IndexedDocument(
         id=UUID("12345678-1234-5678-1234-567812345678"),
