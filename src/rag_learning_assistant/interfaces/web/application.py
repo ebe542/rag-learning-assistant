@@ -187,7 +187,7 @@ def create_app(
             PackageListItem(
                 name=preparation.name,
                 status=preparation.status.value,
-                status_label=preparation.status.value.capitalize(),
+                status_label=preparation.status.value.replace("_", " ").capitalize(),
                 has_detail=False,
             )
             for preparation in libraries.list_package_preparations()

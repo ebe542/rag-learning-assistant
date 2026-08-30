@@ -18,8 +18,10 @@ class RecordingPackageRepository:
     def __init__(
         self,
         existing: LearningPackage | None = None,
+        reserved_names: tuple[str, ...] = (),
     ) -> None:
         self.existing = existing
+        self.reserved_names = reserved_names
         self.saved: list[LearningPackage] = []
         self.replaced: list[LearningPackage] = []
 
@@ -40,6 +42,11 @@ class RecordingPackageRepository:
 
     def replace(self, package: LearningPackage) -> None:
         self.replaced.append(package)
+
+    def is_name_reserved(self, name: str) -> bool:
+        return (
+            self.existing is not None and self.existing.name.casefold() == name.casefold()
+        ) or name.casefold() in {reserved.casefold() for reserved in self.reserved_names}
 
 
 class RecordingDocumentImporter:
@@ -71,6 +78,33 @@ class UnusedQuestionPreparer:
         question_count: int,
     ) -> str:
         raise AssertionError("Questions must not be generated")
+
+
+def test_prepare_rejects_a_pending_reserved_name_before_import() -> None:
+    document = IndexedDocument(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        source="python-book.pdf",
+        content_sha256="c" * 64,
+        page_count=1,
+        chunk_count=1,
+    )
+    packages = RecordingPackageRepository(reserved_names=("Python Basics",))
+    documents = RecordingDocumentImporter(document)
+    service = LearningPackageService(
+        packages=packages,
+        documents=documents,
+        summaries=FailingSummaryPreparer(),
+        questions=UnusedQuestionPreparer(),
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        service.prepare(
+            name="python basics",
+            pdf_path=Path("python-book.pdf"),
+            question_count=5,
+        )
+
+    assert documents.paths == []
 
 
 def test_prepare_preserves_indexed_checkpoint_when_summary_fails() -> None:

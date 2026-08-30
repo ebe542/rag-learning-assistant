@@ -81,6 +81,15 @@ package "Generated material" #FFF4D9 {
 }
 
 package "Learning workflow" #FFE8E8 {
+  entity package_names {
+    * name : TEXT <<PK, NOCASE>>
+    --
+    * owner_kind : TEXT
+    * owner_id : TEXT
+    --
+    UNIQUE (owner_kind, owner_id)
+  }
+
   entity package_preparations {
     * id : TEXT <<PK>>
     --
@@ -90,6 +99,11 @@ package "Learning workflow" #FFE8E8 {
     * question_count : INTEGER
     * size_bytes : INTEGER
     * status : TEXT
+    * created_at : TEXT <<ISO datetime>>
+    * updated_at : TEXT <<ISO datetime>>
+    lease_token : TEXT
+    lease_expires_at : TEXT <<ISO datetime>>
+    failure_message : TEXT
   }
 
   entity learning_packages {
@@ -147,10 +161,13 @@ question_banks |o..o{ learning_packages : question-bank identity
 question_banks ||..o{ question_progress : document, bank, question
 question_banks ||..o{ study_attempts : document, bank, question
 question_progress |o..o{ study_attempts : resulting schedule snapshot
+package_names ||..o| package_preparations : preparation reservation
+package_names ||..o| learning_packages : package reservation
 
 note right of package_preparations
   uploads/<id>.pdf contains the validated source.
-  A future worker converts this request into a learning package.
+  Lease fields prevent concurrent or stale workers
+  from advancing the same preparation phase.
 end note
 
 legend bottom

@@ -2,11 +2,15 @@
 
 import shutil
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import BinaryIO, Protocol
 from uuid import UUID, uuid4
 
-from rag_learning_assistant.learning.preparations import PackagePreparation
+from rag_learning_assistant.learning.preparations import (
+    PackagePreparation,
+    PackagePreparationStatus,
+)
 
 
 class PackagePreparationRepository(Protocol):
@@ -17,6 +21,36 @@ class PackagePreparationRepository(Protocol):
     def find_by_name(self, name: str) -> PackagePreparation | None: ...
 
     def list_all(self) -> list[PackagePreparation]: ...
+
+    def claim_next(
+        self,
+        *,
+        lease_token: UUID,
+        now: datetime,
+        lease_duration: timedelta,
+    ) -> PackagePreparation | None: ...
+
+    def advance(
+        self,
+        preparation_id: UUID,
+        *,
+        lease_token: UUID,
+        current_status: PackagePreparationStatus,
+        next_status: PackagePreparationStatus,
+        now: datetime,
+        lease_duration: timedelta,
+    ) -> PackagePreparation: ...
+
+    def mark_failed(
+        self,
+        preparation_id: UUID,
+        *,
+        lease_token: UUID,
+        now: datetime,
+        message: str,
+    ) -> PackagePreparation: ...
+
+    def retry_failed(self, preparation_id: UUID, *, now: datetime) -> PackagePreparation: ...
 
 
 class PackagePreparationService:
@@ -35,6 +69,56 @@ class PackagePreparationService:
 
     def list_all(self) -> list[PackagePreparation]:
         return self.repository.list_all()
+
+    def claim_next(
+        self,
+        *,
+        lease_token: UUID,
+        now: datetime,
+        lease_duration: timedelta,
+    ) -> PackagePreparation | None:
+        return self.repository.claim_next(
+            lease_token=lease_token,
+            now=now,
+            lease_duration=lease_duration,
+        )
+
+    def advance(
+        self,
+        preparation_id: UUID,
+        *,
+        lease_token: UUID,
+        current_status: PackagePreparationStatus,
+        next_status: PackagePreparationStatus,
+        now: datetime,
+        lease_duration: timedelta,
+    ) -> PackagePreparation:
+        return self.repository.advance(
+            preparation_id,
+            lease_token=lease_token,
+            current_status=current_status,
+            next_status=next_status,
+            now=now,
+            lease_duration=lease_duration,
+        )
+
+    def mark_failed(
+        self,
+        preparation_id: UUID,
+        *,
+        lease_token: UUID,
+        now: datetime,
+        message: str,
+    ) -> PackagePreparation:
+        return self.repository.mark_failed(
+            preparation_id,
+            lease_token=lease_token,
+            now=now,
+            message=message,
+        )
+
+    def retry_failed(self, preparation_id: UUID, *, now: datetime) -> PackagePreparation:
+        return self.repository.retry_failed(preparation_id, now=now)
 
     def store(
         self,

@@ -445,6 +445,14 @@ UUID-derived filename; user input is retained only as display metadata. The
 matching pending request is persisted in SQLite after the file move, and failed
 registration removes both partial and completed upload files. This deliberately
 separates upload ownership from later indexing and model-processing decisions.
+The shared `package_names` registry reserves display names case-insensitively
+across pending requests and materialized packages; the CLI checks it before
+indexing to avoid orphaned document data. Preparation requests progress through
+`pending`, `indexing`, `summarizing`, and `generating_questions`, or enter
+`failed`. SQLite `BEGIN IMMEDIATE` claims one queued or expired request at a
+time. A UUID lease token and expiry protect every phase transition from stale or
+concurrent workers, while retry clears only the failure state and preserves the
+uploaded PDF.
 
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a

@@ -5,6 +5,11 @@ from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
+from rag_learning_assistant.learning.package_names import (
+    ensure_name_reservation,
+    initialize_name_registry,
+    release_name_reservation,
+)
 from rag_learning_assistant.learning.packages import (
     LearningPackage,
     LearningPackageStatus,
@@ -38,6 +43,14 @@ class SqliteLearningPackageRepository:
                 )
                 """
             )
+            initialize_name_registry(connection)
+            for row in connection.execute("SELECT id, name FROM learning_packages"):
+                ensure_name_reservation(
+                    connection,
+                    name=row["name"],
+                    owner_kind="package",
+                    owner_id=UUID(row["id"]),
+                )
 
     def save(self, package: LearningPackage) -> None:
         existing = self.find_by_id(package.id)
@@ -49,6 +62,12 @@ class SqliteLearningPackageRepository:
             raise ValueError(f"Conflicting learning package already exists: {package.id}")
 
         with closing(self._connect()) as connection, connection:
+            ensure_name_reservation(
+                connection,
+                name=package.name,
+                owner_kind="package",
+                owner_id=package.id,
+            )
             connection.execute(
                 """
                 INSERT INTO learning_packages (
@@ -75,6 +94,24 @@ class SqliteLearningPackageRepository:
         """Replace the current state of an existing learning package."""
 
         with closing(self._connect()) as connection, connection:
+            existing_row = connection.execute(
+                "SELECT name FROM learning_packages WHERE id = ?",
+                (str(package.id),),
+            ).fetchone()
+            if existing_row is None:
+                raise ValueError(f"Learning package does not exist: {package.id}")
+            if existing_row["name"].casefold() != package.name.casefold():
+                release_name_reservation(
+                    connection,
+                    owner_kind="package",
+                    owner_id=package.id,
+                )
+                ensure_name_reservation(
+                    connection,
+                    name=package.name,
+                    owner_kind="package",
+                    owner_id=package.id,
+                )
             cursor = connection.execute(
                 """
                 UPDATE learning_packages
@@ -95,8 +132,7 @@ class SqliteLearningPackageRepository:
                 ),
             )
 
-        if cursor.rowcount == 0:
-            raise ValueError(f"Learning package does not exist: {package.id}")
+        assert cursor.rowcount == 1
 
     def find_by_name(self, name: str) -> LearningPackage | None:
         with closing(self._connect()) as connection:
@@ -119,6 +155,16 @@ class SqliteLearningPackageRepository:
             return None
 
         return self._deserialize(row)
+
+    def is_name_reserved(self, name: str) -> bool:
+        """Report reservations across pending and materialized packages."""
+
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM package_names WHERE name = ? COLLATE NOCASE",
+                (name,),
+            ).fetchone()
+        return row is not None
 
     def find_by_id(
         self,
@@ -169,6 +215,10 @@ class SqliteLearningPackageRepository:
         """Delete the user-facing package belonging to one document."""
 
         with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                "SELECT id FROM learning_packages WHERE document_id = ?",
+                (str(document_id),),
+            ).fetchone()
             cursor = connection.execute(
                 """
                 DELETE FROM learning_packages
@@ -176,6 +226,12 @@ class SqliteLearningPackageRepository:
                 """,
                 (str(document_id),),
             )
+            if row is not None:
+                release_name_reservation(
+                    connection,
+                    owner_kind="package",
+                    owner_id=UUID(row["id"]),
+                )
 
         return cursor.rowcount
 

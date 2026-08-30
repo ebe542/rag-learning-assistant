@@ -64,7 +64,9 @@ returns after a newly created library is opened.
 The package page also provides an initial PDF upload form. It validates package
 name uniqueness, question count, file extension, PDF signature, and a 25 MiB
 size limit. Valid PDFs are stored under internal UUID filenames and appear as
-pending packages; model processing is not connected yet.
+pending packages; model processing is not connected yet. SQLite reserves names
+across pending and completed packages and supports leased, resumable processing
+phases so queued uploads can later be handled serially without duplicate work.
 
 ## Product workflow
 

@@ -1,6 +1,7 @@
 """Persisted requests awaiting learning-package preparation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -9,6 +10,14 @@ class PackagePreparationStatus(StrEnum):
     """Describe work that has not entered the package checkpoints yet."""
 
     PENDING = "pending"
+    INDEXING = "indexing"
+    SUMMARIZING = "summarizing"
+    GENERATING_QUESTIONS = "generating_questions"
+    FAILED = "failed"
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +31,11 @@ class PackagePreparation:
     question_count: int
     size_bytes: int
     status: PackagePreparationStatus = PackagePreparationStatus.PENDING
+    created_at: datetime = field(default_factory=_utc_now)
+    updated_at: datetime | None = None
+    lease_token: UUID | None = None
+    lease_expires_at: datetime | None = None
+    failure_message: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -34,3 +48,25 @@ class PackagePreparation:
             raise ValueError("Question count must be between 1 and 50")
         if self.size_bytes < 1:
             raise ValueError("Stored PDF must not be empty")
+        if self.updated_at is None:
+            object.__setattr__(self, "updated_at", self.created_at)
+        if self.created_at.tzinfo is None or self.updated_at.tzinfo is None:
+            raise ValueError("Package preparation timestamps must be timezone-aware")
+        if (self.lease_token is None) != (self.lease_expires_at is None):
+            raise ValueError("Package preparation lease fields must be set together")
+        if self.lease_expires_at is not None and self.lease_expires_at.tzinfo is None:
+            raise ValueError("Package preparation lease expiry must be timezone-aware")
+        active_statuses = {
+            PackagePreparationStatus.INDEXING,
+            PackagePreparationStatus.SUMMARIZING,
+            PackagePreparationStatus.GENERATING_QUESTIONS,
+        }
+        if self.status in active_statuses and self.lease_token is None:
+            raise ValueError("Active package preparation requires a lease")
+        if self.status not in active_statuses and self.lease_token is not None:
+            raise ValueError("Inactive package preparation must not retain a lease")
+        if self.status is PackagePreparationStatus.FAILED:
+            if self.failure_message is None or not self.failure_message.strip():
+                raise ValueError("Failed package preparation requires an error message")
+        elif self.failure_message is not None:
+            raise ValueError("Only failed package preparation may contain an error message")

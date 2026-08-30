@@ -38,6 +38,8 @@ class LearningPackageRepository(
 
     def replace(self, package: LearningPackage) -> None: ...
 
+    def is_name_reserved(self, name: str) -> bool: ...
+
 
 class PackageDocumentImporter(Protocol):
     """Import one source document into the persistent library."""
@@ -125,6 +127,8 @@ class LearningPackageService:
         package = self.packages.find_by_name(name)
 
         if package is None:
+            if self.packages.is_name_reserved(name):
+                raise ValueError(f"Learning package already exists: {name}")
             self._report_progress("index")
             document = self.documents.add_document(pdf_path)
             package = LearningPackage(

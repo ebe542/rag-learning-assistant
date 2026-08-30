@@ -421,6 +421,18 @@ h2 {
   background: #fff0cb;
 }
 
+.status-indexing,
+.status-summarizing,
+.status-generating_questions {
+  color: #315890;
+  background: #e3efff;
+}
+
+.status-failed {
+  color: #8a2525;
+  background: #fde4e4;
+}
+
 .detail-shell {
   max-width: 62rem;
 }

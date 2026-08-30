@@ -2,8 +2,15 @@ from io import BytesIO
 from pathlib import Path
 from uuid import UUID
 
+import pytest
+
 from rag_learning_assistant.application.package_preparation import PackagePreparationService
-from rag_learning_assistant.learning import SqlitePackagePreparationRepository
+from rag_learning_assistant.learning import (
+    LearningPackage,
+    LearningPackageStatus,
+    SqliteLearningPackageRepository,
+    SqlitePackagePreparationRepository,
+)
 
 
 def test_service_stores_upload_under_internal_id_and_persists_request(
@@ -48,3 +55,32 @@ def test_repository_matches_pending_names_case_insensitively(tmp_path: Path) -> 
     )
 
     assert repository.find_by_name("python course") == stored
+
+
+def test_shared_name_reservation_removes_upload_when_package_exists(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    package_repository = SqliteLearningPackageRepository(database_path)
+    package_repository.save(
+        LearningPackage(
+            id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            name="Python Course",
+            document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            status=LearningPackageStatus.INDEXED,
+        )
+    )
+    service = PackagePreparationService(
+        SqlitePackagePreparationRepository(database_path),
+        tmp_path / "uploads",
+        id_factory=lambda: UUID("11111111-1111-1111-1111-111111111111"),
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        service.store(
+            name="python course",
+            source_filename="course.pdf",
+            question_count=5,
+            size_bytes=8,
+            source=BytesIO(b"%PDF-1.7"),
+        )
+
+    assert list((tmp_path / "uploads").iterdir()) == []

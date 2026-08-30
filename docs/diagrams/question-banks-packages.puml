@@ -43,6 +43,7 @@ package "application" #FFE8E8 {
   interface PackageDocumentImporter <<Protocol>>
   interface PackageSummaryPreparer <<Protocol>>
   interface PackageQuestionPreparer <<Protocol>>
+  interface PackagePreparationRepository <<Protocol>>
   class QuestionBankCatalog
   class QuestionBankService
   class LearningPackageCatalog
@@ -78,7 +79,8 @@ QuestionBankService ..|> PackageQuestionPreparer
 LearningPackage --> LearningPackageStatus
 PackagePreparation --> PackagePreparationStatus
 SqlitePackagePreparationRepository --> PackagePreparation
-PackagePreparationService o-- SqlitePackagePreparationRepository
+SqlitePackagePreparationRepository ..|> PackagePreparationRepository
+PackagePreparationService o-- PackagePreparationRepository
 PackagePreparationService --> PackagePreparation
 SqliteLearningPackageRepository ..|> LearningPackageRepository
 SqliteLearningPackageRepository ..|> LearningPackageReader
