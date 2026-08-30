@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -135,6 +136,8 @@ class StubLibraryManagement:
         ]
         self.preparations: list[PackagePreparation] = []
         self.uploaded_content = b""
+        self.renamed_package: tuple[str, str] | None = None
+        self.deleted_package: str | None = None
 
     @property
     def current_directory(self) -> Path | None:
@@ -250,6 +253,15 @@ class StubLibraryManagement:
         existing = next(item for item in self.preparations if item.id == preparation_id)
         self.preparations = [item for item in self.preparations if item.id != preparation_id]
         return existing
+
+    def rename_package(self, name: str, new_name: str) -> LearningPackage:
+        self.renamed_package = (name, new_name)
+        return replace(ready_package(), name=new_name)
+
+    def delete_package(self, name: str, *, confirmation: str) -> None:
+        if confirmation != name:
+            raise ValueError("Package name confirmation does not match")
+        self.deleted_package = name
 
 
 def build_client(
@@ -593,7 +605,9 @@ def test_library_can_be_renamed_without_changing_its_directory() -> None:
     )
 
     assert response.status_code == 303
-    assert libraries.current_library.name == "Renamed Library"
+    current_library = libraries.current_library
+    assert current_library is not None
+    assert current_library.name == "Renamed Library"
     assert libraries.current_directory == Path("personal-library")
 
 
@@ -750,6 +764,58 @@ def test_package_detail_shows_summary_and_question_count() -> None:
     assert "Questions" in response.text
     assert ">1<" in response.text
     assert str(package.document_id) in response.text
+    assert "<summary>Manage package</summary>" in response.text
+    assert '<details class="panel package-management">' in response.text
+    assert '<details class="panel package-management" open>' not in response.text
+    assert ">Rename</button>" in response.text
+    assert ">Delete package</button>" in response.text
+
+
+def test_ready_package_can_be_renamed_from_its_detail_page() -> None:
+    libraries = StubLibraryManagement()
+    response = build_client(
+        [ready_package()],
+        libraries=libraries,
+    ).post(
+        "/package/rename",
+        data={"name": "Python Basics", "new_name": "Python Essentials"},
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("/package?name=Python+Essentials")
+    assert libraries.renamed_package == ("Python Basics", "Python Essentials")
+
+
+def test_package_deletion_requires_its_exact_name() -> None:
+    libraries = StubLibraryManagement()
+    package = replace(
+        ready_package(),
+        status=LearningPackageStatus.INDEXED,
+        summary_identity_fingerprint=None,
+        question_bank_identity_fingerprint=None,
+    )
+    client = build_client([package], libraries=libraries)
+
+    rejected = client.post(
+        "/package/delete",
+        data={"name": "Python Basics", "confirmation": "python basics"},
+        headers={"origin": "http://testserver"},
+    )
+    assert rejected.status_code == 422
+    assert "Package name confirmation does not match" in rejected.text
+    assert '<details class="panel package-management" open>' in rejected.text
+
+    deleted = client.post(
+        "/package/delete",
+        data={"name": "Python Basics", "confirmation": "Python Basics"},
+        headers={"origin": "http://testserver"},
+        follow_redirects=False,
+    )
+    assert deleted.status_code == 303
+    assert deleted.headers["location"] == "http://testserver/library"
+    assert libraries.deleted_package == "Python Basics"
 
 
 def test_unknown_package_returns_a_helpful_not_found_page() -> None:

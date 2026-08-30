@@ -75,8 +75,10 @@ def test_manager_migrates_an_existing_library_without_moving_it(tmp_path: Path) 
 
     manager = LocalLibraryManager(initial_directory, id_factory=lambda: library_id)
 
-    assert manager.current_library.id == library_id
-    assert manager.current_library.name == "existing-folder"
+    current_library = manager.current_library
+    assert current_library is not None
+    assert current_library.id == library_id
+    assert current_library.name == "existing-folder"
     assert manager.current_directory == initial_directory.resolve()
     assert (initial_directory / "library.json").is_file()
 
@@ -301,3 +303,47 @@ def test_manager_removes_failed_upload_and_its_partial_package(tmp_path: Path) -
     assert manager.list_package_preparations() == []
     assert manager.list_packages() == []
     assert not (created.directory / "uploads" / preparation.stored_filename).exists()
+
+
+def test_manager_renames_a_package_and_preserves_its_identity(tmp_path: Path) -> None:
+    manager = LocalLibraryManager(tmp_path / "library")
+    created = manager.create_library("Courses")
+    manager.select_library(created.id)
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.INDEXED,
+    )
+    repository = SqliteLearningPackageRepository(created.directory / "metadata.sqlite3")
+    repository.save(package)
+
+    renamed = manager.rename_package(package.name, "Python Essentials")
+
+    assert renamed.id == package.id
+    assert renamed.document_id == package.document_id
+    assert repository.find_by_name(package.name) is None
+    assert repository.find_by_name("Python Essentials") == renamed
+
+
+def test_manager_deletes_a_package_only_after_exact_confirmation(tmp_path: Path) -> None:
+    removed: list[str] = []
+    manager = LocalLibraryManager(
+        tmp_path / "library",
+        package_remover=lambda _directory, name: removed.append(name),
+    )
+    created = manager.create_library("Courses")
+    manager.select_library(created.id)
+    package = LearningPackage(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        name="Python Basics",
+        document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        status=LearningPackageStatus.INDEXED,
+    )
+    SqliteLearningPackageRepository(created.directory / "metadata.sqlite3").save(package)
+
+    with pytest.raises(ValueError, match="confirmation does not match"):
+        manager.delete_package(package.name, confirmation="python basics")
+    manager.delete_package(package.name, confirmation=package.name)
+
+    assert removed == [package.name]

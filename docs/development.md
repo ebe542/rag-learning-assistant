@@ -475,6 +475,12 @@ of rendering a stale validation snapshot. Failed cards translate known internal
 exceptions into short user-facing explanations. Retry preserves checkpoints;
 Remove invokes the normal package-removal lifecycle when indexing already
 created a partial package, then deletes the request and owned upload.
+Completed packages can be renamed or deleted from their detail page. Rename
+updates the package row and shared case-insensitive name reservation atomically
+while retaining the document and derived-material identities. Delete requires
+an exact display-name confirmation and delegates to `LearningPackageService`
+so document, retrieval, generated material, and learning records are removed by
+the same lifecycle as the CLI.
 
 The web application receives its service protocols through the factory instead
 of importing CLI commands. Its start page is a library overview. Opening a

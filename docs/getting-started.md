@@ -75,6 +75,9 @@ workspace, and only the package list updates while work is active. Multiple
 uploads may wait in the queue, but model processing remains serial. A failed request
 shows a concise reason and offers **Retry** and **Remove**; removal also cleans
 an existing partial package checkpoint.
+The detail page of a completed package also provides package settings. Renaming
+changes only its display name; deleting requires the exact current name and
+removes the source document, derived material, and learning progress together.
 Use `rag-learn gui --library PATH` to choose
 the startup library and its parent workspace. Keep the terminal open while using
 it and press `Ctrl+C` there to stop the server. A ready

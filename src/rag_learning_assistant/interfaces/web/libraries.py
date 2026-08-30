@@ -5,7 +5,7 @@ import shutil
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
@@ -348,6 +348,43 @@ class LocalLibraryManager:
             assert self._current_directory is not None
             self.package_remover(self._current_directory, materialized.name)
         return services.preparations.delete_failed(preparation_id)
+
+    def rename_package(self, name: str, new_name: str) -> LearningPackage:
+        """Rename a materialized package without changing its derived content."""
+
+        normalized_name = new_name.strip()
+        if not normalized_name:
+            raise ValueError("Learning package name must not be blank")
+        if len(normalized_name) > 100:
+            raise ValueError("Learning package name must not exceed 100 characters")
+        services = self._require_services()
+        package = next(
+            (
+                item
+                for item in services.packages.list_packages()
+                if item.name.casefold() == name.casefold()
+            ),
+            None,
+        )
+        if package is None:
+            raise ValueError(f"Learning package does not exist: {name}")
+        renamed = replace(package, name=normalized_name)
+        assert self._current_directory is not None
+        SqliteLearningPackageRepository(self._current_directory / "metadata.sqlite3").replace(
+            renamed
+        )
+        return renamed
+
+    def delete_package(self, name: str, *, confirmation: str) -> None:
+        """Delete one package through the shared full removal lifecycle."""
+
+        package = self.get_package(name)
+        if confirmation != package.name:
+            raise ValueError("Package name confirmation does not match")
+        if self.package_remover is None:
+            raise RuntimeError("Package removal service is not configured")
+        assert self._current_directory is not None
+        self.package_remover(self._current_directory, package.name)
 
     def get_package(self, name: str) -> LearningPackage:
         return self._require_services().packages.get_package(name)

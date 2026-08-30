@@ -530,6 +530,32 @@ h2 {
   margin-top: 1rem;
 }
 
+.package-management {
+  margin-top: 1rem;
+}
+
+.package-management summary {
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.package-management summary:hover,
+.package-management summary:focus-visible {
+  color: #0d4938;
+  background: #e5f1ed;
+}
+
+.package-management summary:focus-visible {
+  outline: 3px solid rgba(38, 116, 95, 0.22);
+}
+
+.package-management-content {
+  margin-top: 1.5rem;
+}
+
 .package-actions {
   display: flex;
   flex-wrap: wrap;

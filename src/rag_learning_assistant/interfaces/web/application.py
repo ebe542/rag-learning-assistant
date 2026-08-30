@@ -5,6 +5,7 @@ from datetime import UTC, datetime, tzinfo
 from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, BinaryIO, Protocol
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -124,6 +125,10 @@ class LibraryManagement(Protocol):
         self,
         preparation_id: UUID,
     ) -> PackagePreparation: ...
+
+    def rename_package(self, name: str, new_name: str) -> LearningPackage: ...
+
+    def delete_package(self, name: str, *, confirmation: str) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,7 +299,7 @@ def create_app(
         return render_library_management(request, selected_library_id=library_id)
 
     @app.post("/libraries", response_class=HTMLResponse)
-    def create_library(request: Request, name: str = Form()) -> HTMLResponse:
+    def create_library(request: Request, name: str = Form()) -> Response:
         _require_same_origin(request)
         try:
             libraries.create_library(name)
@@ -311,7 +316,7 @@ def create_app(
         request: Request,
         library_id: Annotated[UUID, Form()],
         name: Annotated[str, Form()],
-    ) -> HTMLResponse:
+    ) -> Response:
         _require_same_origin(request)
         try:
             renamed = libraries.rename_library(library_id, name)
@@ -331,7 +336,7 @@ def create_app(
         library_id: Annotated[UUID, Form()],
         confirmation: Annotated[str, Form()],
         delete_contents: Annotated[str | None, Form()] = None,
-    ) -> HTMLResponse:
+    ) -> Response:
         _require_same_origin(request)
         try:
             libraries.delete_library(
@@ -352,7 +357,7 @@ def create_app(
     def select_library(
         request: Request,
         library_id: Annotated[UUID, Form()],
-    ) -> HTMLResponse:
+    ) -> Response:
         _require_same_origin(request)
         try:
             libraries.select_library(library_id)
@@ -364,8 +369,13 @@ def create_app(
             )
         return RedirectResponse(request.url_for("library_detail"), status_code=303)
 
-    @app.get("/package", response_class=HTMLResponse)
-    def package_detail(request: Request, name: str) -> Response:
+    def render_package_detail(
+        request: Request,
+        name: str,
+        *,
+        error_message: str | None = None,
+        status_code: int = 200,
+    ) -> Response:
         if libraries.current_library is None:
             return RedirectResponse(request.url_for("home"), status_code=303)
         try:
@@ -401,8 +411,51 @@ def create_app(
                 "package": package,
                 "question_count": len(bank.questions) if bank is not None else 0,
                 "summary": summary,
+                "error_message": error_message,
             },
+            status_code=status_code,
         )
+
+    @app.get("/package", response_class=HTMLResponse)
+    def package_detail(request: Request, name: str) -> Response:
+        return render_package_detail(request, name)
+
+    @app.post("/package/rename", response_class=HTMLResponse)
+    def rename_package(
+        request: Request,
+        name: Annotated[str, Form()],
+        new_name: Annotated[str, Form()],
+    ) -> Response:
+        _require_same_origin(request)
+        try:
+            renamed = libraries.rename_package(name, _validate_package_name(new_name))
+        except (LookupError, ValueError) as error:
+            return render_package_detail(
+                request,
+                name,
+                error_message=str(error),
+                status_code=422,
+            )
+        location = f"{request.url_for('package_detail')}?{urlencode({'name': renamed.name})}"
+        return RedirectResponse(location, status_code=303)
+
+    @app.post("/package/delete", response_class=HTMLResponse)
+    def delete_package(
+        request: Request,
+        name: Annotated[str, Form()],
+        confirmation: Annotated[str, Form()],
+    ) -> Response:
+        _require_same_origin(request)
+        try:
+            libraries.delete_package(name, confirmation=confirmation)
+        except (LookupError, RuntimeError, ValueError) as error:
+            return render_package_detail(
+                request,
+                name,
+                error_message=str(error),
+                status_code=422,
+            )
+        return RedirectResponse(request.url_for("library_detail"), status_code=303)
 
     @app.get("/package/new", response_class=HTMLResponse)
     def package_create(request: Request) -> Response:

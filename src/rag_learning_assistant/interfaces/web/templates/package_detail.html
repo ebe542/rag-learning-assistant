@@ -9,6 +9,7 @@
   </div>
   <span class="status status-{{ package.status.value }}">{{ package.status.value | capitalize }}</span>
 </header>
+{% if error_message %}<p class="form-error" role="alert">{{ error_message }}</p>{% endif %}
 <dl class="facts" aria-label="Package facts">
   <div><dt>Questions</dt><dd>{{ question_count }}</dd></div>
   <div><dt>Document ID</dt><dd class="technical-value">{{ package.document_id }}</dd></div>
@@ -25,4 +26,24 @@
   {% if summary %}<div class="summary-text">{{ summary.text }}</div>
   {% else %}<p class="muted">No completed summary is available yet.</p>{% endif %}
 </section>
+<details class="panel package-management"{% if error_message %} open{% endif %}>
+  <summary>Manage package</summary>
+  <div class="package-management-content">
+  <p class="section-label">Package settings</p>
+  <form class="library-form" action="{{ url_for('rename_package') }}" method="post">
+    <input name="name" type="hidden" value="{{ package.name }}">
+    <label for="renamed-package-name">Package name</label>
+    <div>
+      <input id="renamed-package-name" name="new_name" value="{{ package.name }}" maxlength="100" required>
+      <button type="submit">Rename</button>
+    </div>
+  </form>
+  <form class="delete-library-form" action="{{ url_for('delete_package') }}" method="post">
+    <input name="name" type="hidden" value="{{ package.name }}">
+    <label for="delete-package-confirmation">Type <strong>{{ package.name }}</strong> to confirm deletion</label>
+    <input id="delete-package-confirmation" name="confirmation" autocomplete="off" required>
+    <button class="danger-button" type="submit">Delete package</button>
+  </form>
+  </div>
+</details>
 {% endblock %}
