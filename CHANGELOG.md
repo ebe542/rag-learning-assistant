@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0a1] - 2026-08-30
+
+### Added
+
+- a loopback-only browser interface for the complete local learning workflow
+- library creation, selection, renaming, and confirmed deletion
+- PDF package uploads with persisted preparation requests and SHA-256 duplicate checks
+- a serial background worker with resumable preparation phases, leases, and retry support
+- live package-status updates without full-page reloads
+- package summaries, study sessions, answer feedback, and progress views in the GUI
+- collapsible package renaming and confirmed full package deletion
+- linked PlantUML software, module, and SQLite data-model overviews
+
+### Changed
+
+- package uploads now redirect to the live package list instead of a stale validation page
+- library directories use internal UUIDs independently of their display names
+- user-facing review timestamps are shown in local time
+- routine quality checks and release-package checks run in separate workflows
+
+### Fixed
+
+- duplicate PDFs renamed by the user are rejected before model processing starts
+- failed preparations show concise explanations and can be retried or removed
+- package preparation status and summaries remain current while background work runs
+- SQLite resources are closed deterministically during tests and repository reopening
+
 ## [0.3.0a1] - 2026-08-27
 
 ### Added
@@ -37,5 +64,6 @@ The `0.2.0` milestone established persistent summaries, grounded question banks,
 spaced review, written-answer evaluation, resumable learning packages, and
 learning-progress reporting.
 
+[0.4.0a1]: https://github.com/ebe542/rag-learning-assistant/compare/v0.3.0a1...v0.4.0a1
 [0.3.0a1]: https://github.com/ebe542/rag-learning-assistant/compare/v0.2.0...v0.3.0a1
 [0.2.0]: https://github.com/ebe542/rag-learning-assistant/releases/tag/v0.2.0
