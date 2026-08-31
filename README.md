@@ -504,7 +504,7 @@ python scripts/check_ci_environment.py
 ```
 
 This slower check creates a disposable virtual environment, installs exactly
-the `dev,storage` extras used by CI, verifies that tooling remains importable
+the `dev,gui,storage` extras used by CI, verifies that tooling remains importable
 without the optional Torch generation stack, and runs the shared milestone
 check. It uses the active Python version by default. To check another installed
 matrix version, select its interpreter explicitly, for example:
@@ -524,9 +524,12 @@ python scripts/check_release_package.py
 The release check builds into a temporary directory, validates package metadata,
 installs the wheel with its base dependencies in a fresh virtual environment,
 and runs the installed CLI version and help commands. It leaves no `dist`
-directory or test environment in the repository. The `package` job in the
-GitHub Actions `Release Package` workflow runs the same check when started
-manually and whenever a version tag matching `v*` is pushed.
+directory or test environment in the repository. An annotated version tag on
+`main` matching the package version and a dated changelog section starts the
+GitHub Actions `Release` workflow. It runs the quality and package checks,
+uploads the wheel and source distribution as a short-lived workflow artifact,
+then creates the GitHub release with both files attached. Alpha, beta, and
+release-candidate tags are published as pre-releases.
 
 Contributions are welcome.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md).

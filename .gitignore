@@ -19,6 +19,7 @@ htmlcov/
 # Build and packaging artifacts
 build/
 dist/
+release-dist/
 *.egg-info/
 
 # Local environment variables and secrets
