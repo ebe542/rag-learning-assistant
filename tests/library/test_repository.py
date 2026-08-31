@@ -1,10 +1,37 @@
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
 from rag_learning_assistant.library import (
+    DocumentLanguage,
     IndexedDocument,
     SqliteDocumentRepository,
 )
+
+
+def test_existing_document_schema_migrates_to_unknown_language(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    with closing(sqlite3.connect(database_path)) as connection, connection:
+        connection.execute(
+            """
+            CREATE TABLE documents (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL UNIQUE,
+                page_count INTEGER NOT NULL,
+                chunk_count INTEGER NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO documents VALUES (?, ?, ?, ?, ?)",
+            ("12345678-1234-5678-1234-567812345678", "legacy.pdf", "a" * 64, 1, 2),
+        )
+
+    documents = SqliteDocumentRepository(database_path).list_all()
+
+    assert documents[0].language is DocumentLanguage.UNKNOWN
 
 
 def test_documents_survive_reopening(tmp_path: Path) -> None:

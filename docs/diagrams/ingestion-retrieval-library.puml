@@ -31,10 +31,13 @@ package "retrieval" #E8F4FD {
   class RetrievalService
 }
 package "library" #EAF7EA {
+  enum DocumentLanguage
   class IndexedDocument <<immutable model>>
   interface DocumentRepository <<Protocol>>
   class SqliteDocumentRepository
 }
+
+IndexedDocument --> DocumentLanguage : detected language
 package "application" #FFE8E8 {
   interface DocumentExtractor <<Protocol>>
   interface DocumentIndexer <<Protocol>>

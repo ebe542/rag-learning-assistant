@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
+from rag_learning_assistant.library.languages import DocumentLanguage
 from rag_learning_assistant.library.models import IndexedDocument
 
 
@@ -66,9 +67,10 @@ class SqliteDocumentRepository:
                     source,
                     content_sha256,
                     page_count,
-                    chunk_count
+                    chunk_count,
+                    language
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(document.id),
@@ -76,6 +78,7 @@ class SqliteDocumentRepository:
                     document.content_sha256,
                     document.page_count,
                     document.chunk_count,
+                    document.language.value,
                 ),
             )
 
@@ -91,7 +94,8 @@ class SqliteDocumentRepository:
                     source,
                     content_sha256,
                     page_count,
-                    chunk_count
+                    chunk_count,
+                    language
                 FROM documents
                 ORDER BY rowid
                 """
@@ -104,6 +108,7 @@ class SqliteDocumentRepository:
                 content_sha256=row[2],
                 page_count=row[3],
                 chunk_count=row[4],
+                language=DocumentLanguage(row[5]),
             )
             for row in rows
         ]
@@ -123,7 +128,8 @@ class SqliteDocumentRepository:
                     source,
                     content_sha256,
                     page_count,
-                    chunk_count
+                    chunk_count,
+                    language
                 FROM documents
                 WHERE content_sha256 = ?
                 """,
@@ -150,7 +156,8 @@ class SqliteDocumentRepository:
                     source,
                     content_sha256,
                     page_count,
-                    chunk_count
+                    chunk_count,
+                    language
                 FROM documents
                 WHERE id = ?
                 """,
@@ -174,7 +181,8 @@ class SqliteDocumentRepository:
                     source = ?,
                     content_sha256 = ?,
                     page_count = ?,
-                    chunk_count = ?
+                    chunk_count = ?,
+                    language = ?
                 WHERE id = ?
                 """,
                 (
@@ -182,6 +190,7 @@ class SqliteDocumentRepository:
                     document.content_sha256,
                     document.page_count,
                     document.chunk_count,
+                    document.language.value,
                     str(document.id),
                 ),
             )
@@ -214,14 +223,22 @@ class SqliteDocumentRepository:
                     source TEXT NOT NULL,
                     content_sha256 TEXT NOT NULL UNIQUE,
                     page_count INTEGER NOT NULL,
-                    chunk_count INTEGER NOT NULL
+                    chunk_count INTEGER NOT NULL,
+                    language TEXT NOT NULL DEFAULT 'und'
                 )
                 """
             )
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(documents)").fetchall()
+            }
+            if "language" not in columns:
+                connection.execute(
+                    "ALTER TABLE documents ADD COLUMN language TEXT NOT NULL DEFAULT 'und'"
+                )
 
     @staticmethod
     def _document_from_row(
-        row: tuple[str, str, str, int, int],
+        row: tuple[str, str, str, int, int, str],
     ) -> IndexedDocument:
         """Convert one SQLite row into a library model."""
 
@@ -231,4 +248,5 @@ class SqliteDocumentRepository:
             content_sha256=row[2],
             page_count=row[3],
             chunk_count=row[4],
+            language=DocumentLanguage(row[5]),
         )

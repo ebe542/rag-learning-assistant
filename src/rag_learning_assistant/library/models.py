@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from rag_learning_assistant.library.languages import DocumentLanguage
+
 
 @dataclass(frozen=True, slots=True)
 class IndexedDocument:
@@ -13,6 +15,7 @@ class IndexedDocument:
     content_sha256: str
     page_count: int
     chunk_count: int
+    language: DocumentLanguage = DocumentLanguage.UNKNOWN
 
     def __post_init__(self) -> None:
         if not self.source.strip():
@@ -28,3 +31,6 @@ class IndexedDocument:
 
         if self.chunk_count < 0:
             raise ValueError("Chunk count must not be negative")
+
+        if not isinstance(self.language, DocumentLanguage):
+            raise ValueError("Document language must be a supported language code")

@@ -17,6 +17,7 @@ package "Library and retrieval" #E8F4FD {
     * content_sha256 : TEXT <<UQ>>
     * page_count : INTEGER
     * chunk_count : INTEGER
+    * language : TEXT = und
   }
 
   entity chunks {

@@ -12,6 +12,7 @@ from rag_learning_assistant.ingestion import Document
 from rag_learning_assistant.library import (
     DocumentRepository,
     IndexedDocument,
+    detect_document_language,
 )
 
 
@@ -132,6 +133,7 @@ class LibraryService(LibraryCatalog):
             content_sha256=content_sha256,
             page_count=len(document.pages),
             chunk_count=len(chunks),
+            language=detect_document_language(document.text),
         )
         self.repository.add(indexed_document)
         return indexed_document
@@ -167,6 +169,7 @@ class LibraryService(LibraryCatalog):
             content_sha256=content_sha256,
             page_count=len(document.pages),
             chunk_count=len(chunks),
+            language=detect_document_language(document.text),
         )
 
         # Derived records describe the previous document content and must not survive
