@@ -13,6 +13,7 @@
       <div>
         <h3>{% if package.has_detail %}<a href="{{ url_for('package_detail') }}?name={{ package.name | urlencode }}">{{ package.name }}</a>{% else %}{{ package.name }}{% endif %}</h3>
         <p>{% if package.has_detail %}Local learning package{% elif package.status == 'failed' %}{{ package.failure_message }}{% else %}PDF stored; preparation is {{ package.status_label | lower }}{% endif %}</p>
+        <p class="package-languages">Document language: {{ package.document_language_label }} · Learning language: {{ package.learning_language_label }}</p>
       </div>
       <div class="package-actions">
         <span class="status status-{{ package.status }}{% if package.status in ['indexing', 'summarizing', 'generating_questions'] %} processing-status{% endif %}">{{ package.status_label }}</span>

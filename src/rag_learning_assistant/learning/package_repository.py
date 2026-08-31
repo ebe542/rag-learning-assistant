@@ -5,6 +5,7 @@ from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
+from rag_learning_assistant.learning.languages import LearningLanguage
 from rag_learning_assistant.learning.package_names import (
     ensure_name_reservation,
     initialize_name_registry,
@@ -39,10 +40,17 @@ class SqliteLearningPackageRepository:
                     document_id TEXT NOT NULL UNIQUE,
                     status TEXT NOT NULL,
                     summary_identity_fingerprint TEXT,
-                    question_bank_identity_fingerprint TEXT
+                    question_bank_identity_fingerprint TEXT,
+                    learning_language TEXT NOT NULL DEFAULT 'same'
                 )
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(learning_packages)")}
+            if "learning_language" not in columns:
+                connection.execute(
+                    "ALTER TABLE learning_packages ADD COLUMN learning_language "
+                    "TEXT NOT NULL DEFAULT 'same'"
+                )
             initialize_name_registry(connection)
             for row in connection.execute("SELECT id, name FROM learning_packages"):
                 ensure_name_reservation(
@@ -76,9 +84,10 @@ class SqliteLearningPackageRepository:
                     document_id,
                     status,
                     summary_identity_fingerprint,
-                    question_bank_identity_fingerprint
+                    question_bank_identity_fingerprint,
+                    learning_language
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(package.id),
@@ -87,6 +96,7 @@ class SqliteLearningPackageRepository:
                     package.status.value,
                     package.summary_identity_fingerprint,
                     package.question_bank_identity_fingerprint,
+                    package.learning_language.value,
                 ),
             )
 
@@ -114,9 +124,10 @@ class SqliteLearningPackageRepository:
                 """
                 INSERT INTO learning_packages (
                     id, name, document_id, status,
-                    summary_identity_fingerprint, question_bank_identity_fingerprint
+                    summary_identity_fingerprint, question_bank_identity_fingerprint,
+                    learning_language
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(package.id),
@@ -125,6 +136,7 @@ class SqliteLearningPackageRepository:
                     package.status.value,
                     package.summary_identity_fingerprint,
                     package.question_bank_identity_fingerprint,
+                    package.learning_language.value,
                 ),
             )
 
@@ -157,7 +169,8 @@ class SqliteLearningPackageRepository:
                     document_id = ?,
                     status = ?,
                     summary_identity_fingerprint = ?,
-                    question_bank_identity_fingerprint = ?
+                    question_bank_identity_fingerprint = ?,
+                    learning_language = ?
                 WHERE id = ?
                 """,
                 (
@@ -166,6 +179,7 @@ class SqliteLearningPackageRepository:
                     package.status.value,
                     package.summary_identity_fingerprint,
                     package.question_bank_identity_fingerprint,
+                    package.learning_language.value,
                     str(package.id),
                 ),
             )
@@ -182,7 +196,8 @@ class SqliteLearningPackageRepository:
                     document_id,
                     status,
                     summary_identity_fingerprint,
-                    question_bank_identity_fingerprint
+                    question_bank_identity_fingerprint,
+                    learning_language
                 FROM learning_packages
                 WHERE name = ? COLLATE NOCASE
                 """,
@@ -217,7 +232,8 @@ class SqliteLearningPackageRepository:
                     document_id,
                     status,
                     summary_identity_fingerprint,
-                    question_bank_identity_fingerprint
+                    question_bank_identity_fingerprint,
+                    learning_language
                 FROM learning_packages
                 WHERE id = ?
                 """,
@@ -241,7 +257,8 @@ class SqliteLearningPackageRepository:
                     document_id,
                     status,
                     summary_identity_fingerprint,
-                    question_bank_identity_fingerprint
+                    question_bank_identity_fingerprint,
+                    learning_language
                 FROM learning_packages
                 ORDER BY name COLLATE NOCASE, id
                 """
@@ -284,4 +301,5 @@ class SqliteLearningPackageRepository:
             status=LearningPackageStatus(row["status"]),
             summary_identity_fingerprint=row["summary_identity_fingerprint"],
             question_bank_identity_fingerprint=row["question_bank_identity_fingerprint"],
+            learning_language=LearningLanguage(row["learning_language"]),
         )

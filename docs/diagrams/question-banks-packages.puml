@@ -23,6 +23,7 @@ package "learning" #F3E8FF {
   class StudyQuestion <<immutable model>>
   class QuestionBank <<immutable model>>
   class QuestionBankIdentity <<immutable model>>
+  enum LearningLanguage
   enum LearningPackageStatus
   class LearningPackage <<immutable model>>
   enum PackagePreparationStatus
@@ -78,7 +79,9 @@ QuestionBankService --> QuestionBankIdentity
 QuestionBankService --> QuestionBank
 QuestionBankService ..|> PackageQuestionPreparer
 LearningPackage --> LearningPackageStatus
+LearningPackage --> LearningLanguage
 PackagePreparation --> PackagePreparationStatus
+PackagePreparation --> LearningLanguage
 SqlitePackagePreparationRepository --> PackagePreparation
 SqlitePackagePreparationRepository ..|> PackagePreparationRepository
 PackagePreparationService o-- PackagePreparationRepository
@@ -96,6 +99,7 @@ LearningPackageService o-- PackageQuestionPreparer
 LearningPackageService --> LearningPackage
 LibraryService ..|> PackageDocumentImporter
 LearningPackageStatus --|> StrEnum
+LearningLanguage --|> StrEnum
 PackagePreparationStatus --|> StrEnum
 QuestionBankNotFoundError --|> LookupError
 LearningPackageNotFoundError --|> LookupError

@@ -22,11 +22,13 @@ from rag_learning_assistant.application.review import DueQuestion
 from rag_learning_assistant.generation import PersistedDocumentSummary
 from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackage,
     PackagePreparation,
     QuestionBank,
     StudyAttempt,
 )
+from rag_learning_assistant.library import DocumentLanguage
 
 WEB_ROOT = Path(__file__).resolve().parent
 MAX_PDF_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -108,6 +110,8 @@ class LibraryManagement(Protocol):
 
     def list_package_preparations(self) -> list[PackagePreparation]: ...
 
+    def get_document_language(self, document_id: UUID) -> DocumentLanguage: ...
+
     def store_package_upload(
         self,
         *,
@@ -116,6 +120,7 @@ class LibraryManagement(Protocol):
         question_count: int,
         size_bytes: int,
         content_sha256: str,
+        learning_language: LearningLanguage,
         source: BinaryIO,
     ) -> PackagePreparation: ...
 
@@ -141,6 +146,27 @@ class PackageListItem:
     has_detail: bool
     preparation_id: UUID | None
     failure_message: str | None
+    document_language_label: str
+    learning_language_label: str
+
+
+def _document_language_label(language: DocumentLanguage) -> str:
+    return {
+        DocumentLanguage.GERMAN: "German",
+        DocumentLanguage.ENGLISH: "English",
+        DocumentLanguage.UNKNOWN: "Unknown",
+    }[language]
+
+
+def _learning_language_label(
+    language: LearningLanguage,
+    document_language: DocumentLanguage | None = None,
+) -> str:
+    if language is LearningLanguage.SAME_AS_DOCUMENT:
+        if document_language is None:
+            return "Same as document"
+        return _document_language_label(language.resolve(document_language))
+    return "German" if language is LearningLanguage.GERMAN else "English"
 
 
 def format_local_datetime(
@@ -190,19 +216,34 @@ def create_app(
     )
 
     def package_items() -> tuple[PackageListItem, ...]:
-        prepared = [
-            PackageListItem(
-                name=package.name,
-                status=package.status.value,
-                status_label=package.status.value.capitalize(),
-                has_detail=True,
-                preparation_id=None,
-                failure_message=None,
+        stored_packages = packages.list_packages()
+        stored_packages_by_name = {package.name.casefold(): package for package in stored_packages}
+        prepared = []
+        for package in stored_packages:
+            document_language = libraries.get_document_language(package.document_id)
+            prepared.append(
+                PackageListItem(
+                    name=package.name,
+                    status=package.status.value,
+                    status_label=package.status.value.capitalize(),
+                    has_detail=True,
+                    preparation_id=None,
+                    failure_message=None,
+                    document_language_label=_document_language_label(document_language),
+                    learning_language_label=_learning_language_label(
+                        package.learning_language,
+                        document_language,
+                    ),
+                )
             )
-            for package in packages.list_packages()
-        ]
         items = {item.name.casefold(): item for item in prepared}
         for preparation in libraries.list_package_preparations():
+            stored_package = stored_packages_by_name.get(preparation.name.casefold())
+            document_language = (
+                libraries.get_document_language(stored_package.document_id)
+                if stored_package is not None
+                else None
+            )
             item = PackageListItem(
                 name=preparation.name,
                 status=preparation.status.value,
@@ -210,6 +251,15 @@ def create_app(
                 has_detail=False,
                 preparation_id=preparation.id,
                 failure_message=_friendly_preparation_error(preparation.failure_message),
+                document_language_label=(
+                    _document_language_label(document_language)
+                    if document_language is not None
+                    else "Not detected yet"
+                ),
+                learning_language_label=_learning_language_label(
+                    preparation.learning_language,
+                    document_language,
+                ),
             )
             items[item.name.casefold()] = item
         return tuple(sorted(items.values(), key=lambda item: item.name.casefold()))
@@ -469,6 +519,7 @@ def create_app(
         name: Annotated[str, Form()],
         question_count: Annotated[int, Form()],
         pdf: Annotated[UploadFile, File()],
+        learning_language: Annotated[LearningLanguage, Form()] = LearningLanguage.SAME_AS_DOCUMENT,
     ) -> Response:
         _require_same_origin(request)
         if libraries.current_library is None:
@@ -502,6 +553,7 @@ def create_app(
                 size_bytes=size,
                 content_sha256=content_sha256,
                 source=pdf.file,
+                learning_language=learning_language,
             )
         except ValueError as error:
             return render_package_create(

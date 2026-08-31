@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
+from rag_learning_assistant.learning.languages import LearningLanguage
+
 
 class PackagePreparationStatus(StrEnum):
     """Describe work that has not entered the package checkpoints yet."""
@@ -31,6 +33,7 @@ class PackagePreparation:
     question_count: int
     size_bytes: int
     content_sha256: str | None = None
+    learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT
     status: PackagePreparationStatus = PackagePreparationStatus.PENDING
     created_at: datetime = field(default_factory=_utc_now)
     updated_at: datetime | None = None
@@ -39,6 +42,8 @@ class PackagePreparation:
     failure_message: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.learning_language, LearningLanguage):
+            raise ValueError("Package preparation language must be a supported learning language")
         if not self.name.strip():
             raise ValueError("Package preparation name must not be blank")
         if not self.source_filename.strip():
@@ -54,9 +59,11 @@ class PackagePreparation:
             or any(character not in "0123456789abcdef" for character in self.content_sha256)
         ):
             raise ValueError("Package preparation hash must be a lowercase SHA-256 digest")
-        if self.updated_at is None:
-            object.__setattr__(self, "updated_at", self.created_at)
-        if self.created_at.tzinfo is None or self.updated_at.tzinfo is None:
+        updated_at = self.updated_at
+        if updated_at is None:
+            updated_at = self.created_at
+            object.__setattr__(self, "updated_at", updated_at)
+        if self.created_at.tzinfo is None or updated_at.tzinfo is None:
             raise ValueError("Package preparation timestamps must be timezone-aware")
         if (self.lease_token is None) != (self.lease_expires_at is None):
             raise ValueError("Package preparation lease fields must be set together")

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
 
+from rag_learning_assistant.learning.languages import LearningLanguage
+
 
 def _is_lowercase_sha256(value: str) -> bool:
     """Recognize the canonical fingerprint format used by persisted identities."""
@@ -29,8 +31,11 @@ class LearningPackage:
     status: LearningPackageStatus
     summary_identity_fingerprint: str | None = None
     question_bank_identity_fingerprint: str | None = None
+    learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT
 
     def __post_init__(self) -> None:
+        if not isinstance(self.learning_language, LearningLanguage):
+            raise ValueError("Learning package language must be a supported learning language")
         if not self.name.strip():
             raise ValueError("Learning package name must not be blank")
 

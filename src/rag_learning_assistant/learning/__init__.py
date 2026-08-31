@@ -7,6 +7,7 @@ from rag_learning_assistant.learning.feedback import (
     AnswerEvaluation,
     AnswerVerdict,
 )
+from rag_learning_assistant.learning.languages import LearningLanguage
 from rag_learning_assistant.learning.models import (
     QuestionBank,
     QuestionBankIdentity,
@@ -55,6 +56,7 @@ __all__ = [
     "SqliteStudyAttemptRepository",
     "StudyAttemptRepository",
     "LearningPackage",
+    "LearningLanguage",
     "LearningPackageStatus",
     "SqliteLearningPackageRepository",
     "PackagePreparation",

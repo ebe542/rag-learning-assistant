@@ -31,6 +31,7 @@ from rag_learning_assistant.generation import (
     SqliteDocumentSummaryRepository,
 )
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackage,
     PackagePreparation,
     QuestionBank,
@@ -41,7 +42,7 @@ from rag_learning_assistant.learning import (
     SqliteStudyAttemptRepository,
     StudyAttempt,
 )
-from rag_learning_assistant.library import SqliteDocumentRepository
+from rag_learning_assistant.library import DocumentLanguage, SqliteDocumentRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,6 +294,12 @@ class LocalLibraryManager:
     def list_package_preparations(self) -> list[PackagePreparation]:
         return self._require_services().preparations.list_all()
 
+    def get_document_language(self, document_id: UUID) -> DocumentLanguage:
+        document = self._require_services().documents.find_by_id(document_id)
+        if document is None:
+            raise LookupError(f"Document not found: {document_id}")
+        return document.language
+
     def store_package_upload(
         self,
         *,
@@ -302,6 +309,7 @@ class LocalLibraryManager:
         size_bytes: int,
         content_sha256: str,
         source: BinaryIO,
+        learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT,
     ) -> PackagePreparation:
         duplicate_document = self._require_services().documents.find_by_content_hash(content_sha256)
         if duplicate_document is not None:
@@ -315,6 +323,7 @@ class LocalLibraryManager:
             size_bytes=size_bytes,
             content_sha256=content_sha256,
             source=source,
+            learning_language=learning_language,
         )
 
     def retry_package_preparation(self, preparation_id: UUID) -> PackagePreparation:

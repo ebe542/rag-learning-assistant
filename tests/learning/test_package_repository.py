@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import UUID
 
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackage,
     LearningPackageStatus,
     SqliteLearningPackageRepository,
@@ -19,6 +20,7 @@ def test_learning_package_survives_repository_reopening(
         status=LearningPackageStatus.READY,
         summary_identity_fingerprint="c" * 64,
         question_bank_identity_fingerprint="d" * 64,
+        learning_language=LearningLanguage.GERMAN,
     )
 
     SqliteLearningPackageRepository(database_path).save(package)

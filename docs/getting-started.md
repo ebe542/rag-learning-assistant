@@ -69,7 +69,9 @@ pages, so returning through intermediate pages is unnecessary.
 The package page links to **Add package**. This first upload stage validates a
 text-based PDF and its settings, stores it under an internal UUID filename, and
 rejects content already queued or indexed by comparing its SHA-256 digest. An
-accepted upload redirects directly to the live package list and initially shows
+upload also selects **Same as document**, **German**, or **English** as its
+learning language; same-as-document is the default. An accepted upload redirects
+directly to the live package list and initially shows
 as **Pending**. A single background worker processes uploads across the
 workspace, and only the package list updates while work is active. Multiple
 uploads may wait in the queue, but model processing remains serial. A failed request

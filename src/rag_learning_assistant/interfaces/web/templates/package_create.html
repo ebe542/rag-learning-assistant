@@ -14,6 +14,12 @@
   <input id="package-pdf" name="pdf" type="file" accept="application/pdf,.pdf" required>
   <label for="question-count">Study questions</label>
   <input id="question-count" name="question_count" type="number" min="1" max="50" value="5" required>
+  <label for="learning-language">Learning language</label>
+  <select id="learning-language" name="learning_language">
+    <option value="same" selected>Same as document</option>
+    <option value="de">German</option>
+    <option value="en">English</option>
+  </select>
   <p class="muted">Maximum PDF size: 25 MiB. Scanned PDFs without embedded text are not supported.</p>
   <button type="submit">Validate upload</button>
 </form>

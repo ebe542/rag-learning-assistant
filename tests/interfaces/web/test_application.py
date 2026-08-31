@@ -19,6 +19,7 @@ from rag_learning_assistant.interfaces.web.libraries import LibraryListItem
 from rag_learning_assistant.learning import (
     AnswerEvaluation,
     AnswerVerdict,
+    LearningLanguage,
     LearningPackage,
     LearningPackageStatus,
     PackagePreparation,
@@ -29,6 +30,7 @@ from rag_learning_assistant.learning import (
     StudyAttempt,
     StudyQuestion,
 )
+from rag_learning_assistant.library import DocumentLanguage
 
 
 class StubPackageCatalog:
@@ -199,6 +201,10 @@ class StubLibraryManagement:
     def list_package_preparations(self) -> list[PackagePreparation]:
         return self.preparations
 
+    def get_document_language(self, document_id: UUID) -> DocumentLanguage:
+        assert document_id == UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        return DocumentLanguage.GERMAN
+
     def store_package_upload(
         self,
         *,
@@ -208,6 +214,7 @@ class StubLibraryManagement:
         size_bytes: int,
         content_sha256: str,
         source,
+        learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT,
     ) -> PackagePreparation:
         duplicate = next(
             (item for item in self.preparations if item.content_sha256 == content_sha256),
@@ -224,6 +231,7 @@ class StubLibraryManagement:
             question_count=question_count,
             size_bytes=size_bytes,
             content_sha256=content_sha256,
+            learning_language=learning_language,
         )
         self.uploaded_content = source.read()
         self.preparations.append(preparation)
@@ -331,6 +339,8 @@ def test_library_page_lists_packages_with_their_preparation_status() -> None:
     assert "Add package" in response.text
     assert '<h2 class="heading-with-count" id="packages-heading">' in response.text
     assert '<span class="package-count">1</span>' in response.text
+    assert "Document language: German" in response.text
+    assert "Learning language: German" in response.text
 
 
 def test_package_create_page_shows_upload_constraints() -> None:
@@ -340,6 +350,9 @@ def test_package_create_page_shows_upload_constraints() -> None:
     assert "Add learning package" in response.text
     assert 'enctype="multipart/form-data"' in response.text
     assert "Maximum PDF size: 25 MiB" in response.text
+    assert "Same as document" in response.text
+    assert '<option value="de">German</option>' in response.text
+    assert '<option value="en">English</option>' in response.text
 
 
 def test_valid_pdf_upload_redirects_to_live_package_status() -> None:
@@ -348,7 +361,11 @@ def test_valid_pdf_upload_redirects_to_live_package_status() -> None:
 
     response = client.post(
         "/package/new",
-        data={"name": "Python Course", "question_count": "7"},
+        data={
+            "name": "Python Course",
+            "question_count": "7",
+            "learning_language": "de",
+        },
         files={"pdf": ("course.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
         headers={"origin": "http://testserver"},
     )
@@ -358,16 +375,52 @@ def test_valid_pdf_upload_redirects_to_live_package_status() -> None:
     assert "Pending" in response.text
     assert "Model processing has not started yet" not in response.text
     assert '<meta http-equiv="refresh"' not in response.text
-    assert 'src="http://testserver/static/package-status.js?v=20260830"' in response.text
+    assert 'src="http://testserver/static/package-status.js?v=20260831"' in response.text
     assert 'data-refresh="true"' in response.text
     assert libraries.uploaded_content == b"%PDF-1.7\ncontent"
     assert libraries.preparations[0].content_sha256 == sha256(b"%PDF-1.7\ncontent").hexdigest()
+    assert libraries.preparations[0].learning_language is LearningLanguage.GERMAN
+    assert "Document language: Not detected yet" in response.text
+    assert "Learning language: German" in response.text
 
     package_response = client.get("/library")
 
     assert "Python Course" in package_response.text
     assert "PDF stored; preparation is pending" in package_response.text
     assert '<span class="package-count">1</span>' in package_response.text
+
+
+def test_package_status_shows_detected_language_after_indexing() -> None:
+    libraries = StubLibraryManagement()
+    preparation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+    libraries.preparations.append(
+        PackagePreparation(
+            id=preparation_id,
+            name="Python Basics",
+            source_filename="course.pdf",
+            stored_filename=f"{preparation_id}.pdf",
+            question_count=5,
+            size_bytes=1024,
+            learning_language=LearningLanguage.SAME_AS_DOCUMENT,
+            status=PackagePreparationStatus.SUMMARIZING,
+            lease_token=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=1),
+        )
+    )
+    indexed_package = replace(
+        ready_package(),
+        status=LearningPackageStatus.INDEXED,
+        summary_identity_fingerprint=None,
+        question_bank_identity_fingerprint=None,
+    )
+
+    response = build_client([indexed_package], libraries=libraries).get("/library")
+
+    assert response.status_code == 200
+    assert "Summarizing" in response.text
+    assert "Document language: German" in response.text
+    assert "Learning language: German" in response.text
+    assert "Not detected yet" not in response.text
 
 
 def test_package_upload_rejects_same_pdf_under_another_name() -> None:
@@ -987,6 +1040,14 @@ def test_static_styles_are_served_locally() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/css")
     assert ".panel" in response.text
+
+
+def test_package_status_script_replaces_only_changed_content() -> None:
+    response = build_client().get("/static/package-status.js")
+
+    assert response.status_code == 200
+    assert "region.isEqualNode(updatedRegion)" in response.text
+    assert "region.replaceWith(updatedRegion)" in response.text
 
 
 def test_study_script_is_served_locally_and_prevents_duplicate_submissions() -> None:

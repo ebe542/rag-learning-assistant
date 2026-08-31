@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackage,
     LearningPackageStatus,
     PackagePreparation,
@@ -18,7 +19,13 @@ from rag_learning_assistant.learning import (
 NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 
 
-def pending(preparation_id: UUID, name: str, *, created_at: datetime = NOW) -> PackagePreparation:
+def pending(
+    preparation_id: UUID,
+    name: str,
+    *,
+    created_at: datetime = NOW,
+    learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT,
+) -> PackagePreparation:
     return PackagePreparation(
         id=preparation_id,
         name=name,
@@ -27,7 +34,22 @@ def pending(preparation_id: UUID, name: str, *, created_at: datetime = NOW) -> P
         question_count=5,
         size_bytes=8,
         created_at=created_at,
+        learning_language=learning_language,
     )
+
+
+def test_learning_language_survives_preparation_repository_reopening(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    preparation = pending(
+        UUID("11111111-1111-1111-1111-111111111111"),
+        "German course",
+        learning_language=LearningLanguage.GERMAN,
+    )
+    SqlitePackagePreparationRepository(database_path).save(preparation)
+
+    reopened = SqlitePackagePreparationRepository(database_path)
+
+    assert reopened.find_by_name(preparation.name) == preparation
 
 
 def test_claim_is_atomic_and_uses_oldest_pending_request(tmp_path: Path) -> None:

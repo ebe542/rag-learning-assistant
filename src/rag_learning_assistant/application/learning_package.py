@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackage,
     LearningPackageStatus,
 )
@@ -128,6 +129,7 @@ class LearningPackageService:
         question_count: int,
         preparation_id: UUID | None = None,
         source_filename: str | None = None,
+        learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT,
     ) -> LearningPackage:
         """Prepare or resume one learning package by its user-facing name."""
 
@@ -153,6 +155,7 @@ class LearningPackageService:
                 name=name,
                 document_id=document.id,
                 status=LearningPackageStatus.INDEXED,
+                learning_language=learning_language,
             )
             # Persist each expensive completed phase before starting the next
             # one, so a later retry can resume without repeating earlier work.

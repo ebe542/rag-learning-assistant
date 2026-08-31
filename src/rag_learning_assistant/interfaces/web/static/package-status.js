@@ -11,7 +11,14 @@ const refreshPackageStatus = async () => {
       headers: { "X-Requested-With": "package-status" },
     });
     if (response.ok) {
-      region.outerHTML = await response.text();
+      const responseDocument = new DOMParser().parseFromString(
+        await response.text(),
+        "text/html",
+      );
+      const updatedRegion = responseDocument.querySelector("#package-status-region");
+      if (updatedRegion && !region.isEqualNode(updatedRegion)) {
+        region.replaceWith(updatedRegion);
+      }
     }
   } finally {
     const updatedRegion = document.querySelector("#package-status-region");

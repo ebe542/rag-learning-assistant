@@ -100,6 +100,7 @@ package "Learning workflow" #FFE8E8 {
     * question_count : INTEGER
     * size_bytes : INTEGER
     content_sha256 : TEXT <<SHA-256>>
+    * learning_language : TEXT = same
     * status : TEXT
     * created_at : TEXT <<ISO datetime>>
     * updated_at : TEXT <<ISO datetime>>
@@ -116,6 +117,7 @@ package "Learning workflow" #FFE8E8 {
     * status : TEXT
     summary_identity_fingerprint : TEXT
     question_bank_identity_fingerprint : TEXT
+    * learning_language : TEXT = same
   }
 
   entity question_progress {

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import BinaryIO, Protocol
 from uuid import UUID, uuid4
 
+from rag_learning_assistant.learning.languages import LearningLanguage
 from rag_learning_assistant.learning.preparations import (
     PackagePreparation,
     PackagePreparationStatus,
@@ -201,6 +202,7 @@ class PackagePreparationService:
         size_bytes: int,
         content_sha256: str,
         source: BinaryIO,
+        learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT,
     ) -> PackagePreparation:
         """Atomically store one PDF and then register its pending request."""
 
@@ -220,6 +222,7 @@ class PackagePreparationService:
             question_count=question_count,
             size_bytes=size_bytes,
             content_sha256=content_sha256,
+            learning_language=learning_language,
         )
         self.upload_directory.mkdir(parents=True, exist_ok=True)
         target = self.upload_directory / stored_filename

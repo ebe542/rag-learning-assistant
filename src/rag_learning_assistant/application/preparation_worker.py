@@ -104,6 +104,7 @@ class PackagePreparationWorker:
                 question_count=preparation.question_count,
                 preparation_id=preparation.id,
                 source_filename=preparation.source_filename,
+                learning_language=preparation.learning_language,
             )
             with state_lock:
                 if heartbeat_errors:

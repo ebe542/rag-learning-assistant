@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
+from rag_learning_assistant.learning.languages import LearningLanguage
 from rag_learning_assistant.learning.package_names import (
     ensure_name_reservation,
     initialize_name_registry,
@@ -42,6 +43,7 @@ class SqlitePackagePreparationRepository:
                     question_count INTEGER NOT NULL,
                     size_bytes INTEGER NOT NULL,
                     content_sha256 TEXT,
+                    learning_language TEXT NOT NULL DEFAULT 'same',
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -61,6 +63,7 @@ class SqlitePackagePreparationRepository:
                 "lease_expires_at": "TEXT",
                 "failure_message": "TEXT",
                 "content_sha256": "TEXT",
+                "learning_language": "TEXT NOT NULL DEFAULT 'same'",
             }
             for name, data_type in additions.items():
                 if name not in columns:
@@ -85,6 +88,10 @@ class SqlitePackagePreparationRepository:
                 )
 
     def save(self, preparation: PackagePreparation) -> None:
+        updated_at = preparation.updated_at
+        if updated_at is None:
+            raise ValueError("Package preparation must have an update timestamp")
+
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             if preparation.content_sha256 is not None:
@@ -109,10 +116,11 @@ class SqlitePackagePreparationRepository:
                 """
                 INSERT INTO package_preparations (
                     id, name, source_filename, stored_filename,
-                    question_count, size_bytes, content_sha256, status, created_at, updated_at,
+                    question_count, size_bytes, content_sha256, learning_language,
+                    status, created_at, updated_at,
                     lease_token, lease_expires_at, failure_message
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(preparation.id),
@@ -122,9 +130,10 @@ class SqlitePackagePreparationRepository:
                     preparation.question_count,
                     preparation.size_bytes,
                     preparation.content_sha256,
+                    preparation.learning_language.value,
                     preparation.status.value,
                     _serialize_datetime(preparation.created_at),
-                    _serialize_datetime(preparation.updated_at),
+                    _serialize_datetime(updated_at),
                     str(preparation.lease_token) if preparation.lease_token is not None else None,
                     (
                         _serialize_datetime(preparation.lease_expires_at)
@@ -141,7 +150,7 @@ class SqlitePackagePreparationRepository:
             row = connection.execute(
                 """
                 SELECT id, name, source_filename, stored_filename,
-                       question_count, size_bytes, content_sha256, status,
+                       question_count, size_bytes, content_sha256, learning_language, status,
                        created_at, updated_at, lease_token, lease_expires_at,
                        failure_message
                 FROM package_preparations
@@ -164,7 +173,8 @@ class SqlitePackagePreparationRepository:
             row = connection.execute(
                 """
                 SELECT id, name, source_filename, stored_filename,
-                       question_count, size_bytes, content_sha256, status, created_at, updated_at,
+                       question_count, size_bytes, content_sha256, learning_language,
+                       status, created_at, updated_at,
                        lease_token, lease_expires_at, failure_message
                 FROM package_preparations
                 WHERE name = ? COLLATE NOCASE
@@ -178,7 +188,8 @@ class SqlitePackagePreparationRepository:
             rows = connection.execute(
                 """
                 SELECT id, name, source_filename, stored_filename,
-                       question_count, size_bytes, content_sha256, status, created_at, updated_at,
+                       question_count, size_bytes, content_sha256, learning_language,
+                       status, created_at, updated_at,
                        lease_token, lease_expires_at, failure_message
                 FROM package_preparations
                 ORDER BY name COLLATE NOCASE, id
@@ -449,7 +460,8 @@ class SqlitePackagePreparationRepository:
         row = connection.execute(
             """
             SELECT id, name, source_filename, stored_filename,
-                   question_count, size_bytes, content_sha256, status, created_at, updated_at,
+                   question_count, size_bytes, content_sha256, learning_language,
+                   status, created_at, updated_at,
                    lease_token, lease_expires_at, failure_message
             FROM package_preparations
             WHERE id = ?
@@ -468,6 +480,7 @@ class SqlitePackagePreparationRepository:
             question_count=row["question_count"],
             size_bytes=row["size_bytes"],
             content_sha256=row["content_sha256"],
+            learning_language=LearningLanguage(row["learning_language"]),
             status=PackagePreparationStatus(row["status"]),
             created_at=_deserialize_datetime(row["created_at"]),
             updated_at=_deserialize_datetime(row["updated_at"]),

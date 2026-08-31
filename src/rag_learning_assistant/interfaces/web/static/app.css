@@ -172,7 +172,8 @@ h2 {
   font-weight: 750;
 }
 
-.package-create-form input {
+.package-create-form input,
+.package-create-form select {
   padding: 0.7rem 0.8rem;
   border: 1px solid #9eb6af;
   border-radius: 0.65rem;
