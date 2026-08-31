@@ -235,3 +235,24 @@ def test_pending_name_reservation_blocks_materialized_package(tmp_path: Path) ->
                 status=LearningPackageStatus.INDEXED,
             )
         )
+
+
+def test_indexed_checkpoint_can_reopen_with_its_preparation_request(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    preparation_id = UUID("11111111-1111-1111-1111-111111111111")
+    preparation_repository = SqlitePackagePreparationRepository(database_path)
+    preparation_repository.save(pending(preparation_id, "Python Course"))
+    package_repository = SqliteLearningPackageRepository(database_path)
+    package_repository.save_from_preparation(
+        LearningPackage(
+            id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            name="Python Course",
+            document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            status=LearningPackageStatus.INDEXED,
+        ),
+        preparation_id,
+    )
+
+    reopened = SqlitePackagePreparationRepository(database_path)
+
+    assert reopened.find_by_name("Python Course") is not None

@@ -72,7 +72,9 @@ rejects content already queued or indexed by comparing its SHA-256 digest. An
 upload also selects **Same as document**, **German**, or **English** as its
 learning language; same-as-document is the default. An accepted upload redirects
 directly to the live package list and initially shows
-as **Pending**. A single background worker processes uploads across the
+as **Pending**. The generated summary uses the selected language; choosing a
+different language from the detected PDF language produces a translated summary.
+A single background worker processes uploads across the
 workspace, and only the package list updates while work is active. Multiple
 uploads may wait in the queue, but model processing remains serial. A failed request
 shows a concise reason and offers **Retry** and **Remove**; removal also cleans

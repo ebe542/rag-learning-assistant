@@ -124,7 +124,8 @@ Do not wrap the JSON object in Markdown code fences.
 """.strip(),
 )
 
-_MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS = 4_000
+_MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS = 1_000
+_MIN_JSON_REPAIR_TOKENS = 512
 
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
@@ -169,9 +170,13 @@ def _add_model_failure_diagnostic(
     """Attach bounded model output to a terminal parsing error."""
 
     diagnostic_lines = [f"phase={phase}"]
-    diagnostic_lines.extend(
-        f"{name}={response[:_MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS]}" for name, response in responses
-    )
+    for name, response in responses:
+        if len(response) > _MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS:
+            half = _MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS // 2
+            response = f"{response[:half]}...[truncated]...{response[-half:]}"
+        # repr escapes line breaks and control characters so untrusted model
+        # output cannot imitate additional application-log records.
+        diagnostic_lines.append(f"{name}={response!r}")
     error.add_note("\n".join(diagnostic_lines))
 
 
@@ -244,9 +249,20 @@ class HuggingFaceTextGenerator:
             ]
             repaired_response = self._generate_raw_response(
                 repair_messages,
-                max_new_tokens=effective_max_new_tokens,
+                max_new_tokens=max(effective_max_new_tokens, _MIN_JSON_REPAIR_TOKENS),
             )
-        result = parse_generation_response(repaired_response)
+        try:
+            result = parse_generation_response(repaired_response)
+        except ValueError as error:
+            _add_model_failure_diagnostic(
+                error,
+                phase="summary-json-repair",
+                responses=(
+                    ("initial_model_response", raw_response),
+                    ("repaired_model_response", repaired_response),
+                ),
+            )
+            raise
 
         return replace(
             result,

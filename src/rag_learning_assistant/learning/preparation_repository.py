@@ -79,7 +79,23 @@ class SqlitePackagePreparationRepository:
                 "UPDATE package_preparations SET updated_at = created_at WHERE updated_at IS NULL"
             )
             initialize_name_registry(connection)
+            has_packages = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'learning_packages'"
+            ).fetchone()
+            materialized_names = (
+                {
+                    row["name"].casefold()
+                    for row in connection.execute("SELECT name FROM learning_packages")
+                }
+                if has_packages is not None
+                else set()
+            )
             for row in connection.execute("SELECT id, name FROM package_preparations"):
+                # An interrupted preparation deliberately retains its request
+                # beside the indexed package checkpoint. The package owns the
+                # shared name until the worker resumes and removes the request.
+                if row["name"].casefold() in materialized_names:
+                    continue
                 ensure_name_reservation(
                     connection,
                     name=row["name"],

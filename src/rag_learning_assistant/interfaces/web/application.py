@@ -690,6 +690,8 @@ def _friendly_preparation_error(message: str | None) -> str | None:
         return "This PDF already exists in the library. Remove this failed upload."
     if message.startswith("FileNotFoundError:"):
         return "The uploaded PDF could not be found. Remove this failed upload."
+    if "Model response must be valid JSON" in message:
+        return "Model processing produced an incomplete response. Retry this package."
     detail = message.split(":", 1)[-1].strip()
     return f"Preparation failed: {detail[:180]}"
 

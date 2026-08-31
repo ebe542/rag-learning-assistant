@@ -309,24 +309,31 @@ def test_generate_retries_once_after_invalid_json() -> None:
 
 
 def test_generate_stops_after_one_failed_json_repair() -> None:
+    initial_response = "not JSON\n" + ("a" * 1200)
     pipeline = SequentialRecordingPipeline(
         [
-            "not JSON",
+            initial_response,
             "still not JSON",
         ]
     )
     generator = HuggingFaceTextGenerator(
         pipeline=pipeline,
-        max_new_tokens=512,
+        max_new_tokens=64,
     )
 
     with pytest.raises(
         ValueError,
         match="Model response must be valid JSON",
-    ):
+    ) as exc_info:
         generator.generate("Question and contexts")
 
+    diagnostic = "\n".join(getattr(exc_info.value, "__notes__", []))
+    assert "phase=summary-json-repair" in diagnostic
+    assert "initial_model_response='not JSON\\n" in diagnostic
+    assert "...[truncated]..." in diagnostic
+    assert "repaired_model_response='still not JSON'" in diagnostic
     assert len(pipeline.calls) == 2
+    assert pipeline.generation_config.max_new_tokens == 512
 
 
 def test_huggingface_prompts_have_explicit_versions() -> None:
@@ -489,8 +496,8 @@ def test_generate_questions_stops_after_one_failed_repair() -> None:
     diagnostic = "\n".join(notes)
 
     assert "phase=question-json-repair" in diagnostic
-    assert "initial_model_response=not JSON" in diagnostic
-    assert "repaired_model_response=still not JSON" in diagnostic
+    assert "initial_model_response='not JSON'" in diagnostic
+    assert "repaired_model_response='still not JSON'" in diagnostic
     assert len(pipeline.calls) == 2
 
 

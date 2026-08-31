@@ -419,6 +419,26 @@ h2 {
   box-sizing: border-box;
 }
 
+.package-actions form {
+  display: flex;
+  margin: 0;
+}
+
+.package-actions button {
+  margin: 0;
+}
+
+.package-card > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.package-card > .package-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  margin: 0;
+}
+
 .status {
   flex: 0 0 auto;
   padding: 0.55rem 0.85rem;

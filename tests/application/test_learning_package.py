@@ -8,6 +8,7 @@ from rag_learning_assistant.application import (
     LearningPackageService,
 )
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackage,
     LearningPackageStatus,
 )
@@ -77,7 +78,12 @@ class RecordingDocumentImporter:
 
 
 class FailingSummaryPreparer:
-    def prepare_summary(self, document_id: UUID) -> str:
+    def prepare_summary(
+        self,
+        document_id: UUID,
+        *,
+        learning_language: LearningLanguage,
+    ) -> str:
         raise RuntimeError("Summary generation failed")
 
 
@@ -157,10 +163,15 @@ def test_prepare_preserves_indexed_checkpoint_when_summary_fails() -> None:
 
 class RecordingSummaryPreparer:
     def __init__(self) -> None:
-        self.document_ids: list[UUID] = []
+        self.calls: list[tuple[UUID, LearningLanguage]] = []
 
-    def prepare_summary(self, document_id: UUID) -> str:
-        self.document_ids.append(document_id)
+    def prepare_summary(
+        self,
+        document_id: UUID,
+        *,
+        learning_language: LearningLanguage,
+    ) -> str:
+        self.calls.append((document_id, learning_language))
         return "d" * 64
 
 
@@ -230,7 +241,7 @@ def test_prepare_creates_ready_learning_package() -> None:
         question_bank_identity_fingerprint="e" * 64,
     )
     assert documents.paths == [Path("python-book.pdf")]
-    assert summaries.document_ids == [document.id]
+    assert summaries.calls == [(document.id, LearningLanguage.SAME_AS_DOCUMENT)]
     assert questions.calls == [
         (document.id, "d" * 64, 20),
     ]
@@ -285,7 +296,7 @@ def test_prepare_resumes_summarized_learning_package() -> None:
     assert result.status is LearningPackageStatus.READY
     assert result.question_bank_identity_fingerprint == "e" * 64
     assert documents.paths == []
-    assert summaries.document_ids == []
+    assert summaries.calls == []
     assert questions.calls == [
         (document_id, "d" * 64, 20),
     ]
@@ -330,7 +341,7 @@ def test_prepare_reuses_ready_learning_package() -> None:
 
     assert result == existing
     assert documents.paths == []
-    assert summaries.document_ids == []
+    assert summaries.calls == []
     assert questions.calls == []
     assert packages.saved == []
     assert packages.replaced == []
@@ -401,7 +412,7 @@ def test_prepare_resumes_indexed_learning_package() -> None:
 
     assert result.status is LearningPackageStatus.READY
     assert documents.paths == []
-    assert summaries.document_ids == [document_id]
+    assert summaries.calls == [(document_id, LearningLanguage.SAME_AS_DOCUMENT)]
     assert questions.calls == [
         (document_id, "d" * 64, 20),
     ]
@@ -482,6 +493,12 @@ class StaticPackageRepository:
 
     def list_all(self) -> list[LearningPackage]:
         return list(self.packages)
+
+    def find_by_name(self, name: str) -> LearningPackage | None:
+        return next(
+            (package for package in self.packages if package.name.casefold() == name.casefold()),
+            None,
+        )
 
 
 def test_learning_package_catalog_lists_available_packages() -> None:

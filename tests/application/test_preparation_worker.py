@@ -8,7 +8,9 @@ from rag_learning_assistant.application import (
     PackagePreparationWorker,
 )
 from rag_learning_assistant.learning import (
+    LearningLanguage,
     LearningPackageStatus,
+    PackagePreparation,
     PackagePreparationStatus,
     SqliteLearningPackageRepository,
     SqlitePackagePreparationRepository,
@@ -38,12 +40,22 @@ class StubDocumentImporter:
 
 
 class StubSummaryPreparer:
-    def prepare_summary(self, document_id: UUID) -> str:
+    def prepare_summary(
+        self,
+        document_id: UUID,
+        *,
+        learning_language: LearningLanguage,
+    ) -> str:
         return "d" * 64
 
 
 class FailingSummaryPreparer:
-    def prepare_summary(self, document_id: UUID) -> str:
+    def prepare_summary(
+        self,
+        document_id: UUID,
+        *,
+        learning_language: LearningLanguage,
+    ) -> str:
         raise RuntimeError("Summary failed")
 
 
@@ -116,6 +128,7 @@ def test_failed_worker_attempt_can_resume_from_indexed_checkpoint(tmp_path: Path
     preparations, packages, uploads = build_preparation(tmp_path)
     package_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
     lease_token = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+    reported_failures: list[tuple[Exception, PackagePreparation]] = []
     failing_worker = PackagePreparationWorker(
         preparations,
         lambda progress: LearningPackageService(
@@ -129,13 +142,20 @@ def test_failed_worker_attempt_can_resume_from_indexed_checkpoint(tmp_path: Path
         uploads,
         token_factory=lambda: lease_token,
         heartbeat_interval=3600,
+        failure_reporter=lambda error, preparation: reported_failures.append((error, preparation)),
     )
 
     assert failing_worker.run_once() is True
     failed = preparations.list_all()[0]
     assert failed.status is PackagePreparationStatus.FAILED
     assert failed.failure_message == "RuntimeError: Summary failed"
-    assert packages.find_by_name("Python Course").status is LearningPackageStatus.INDEXED
+    assert len(reported_failures) == 1
+    assert isinstance(reported_failures[0][0], RuntimeError)
+    assert reported_failures[0][1].name == "Python Course"
+    indexed_package = packages.find_by_name("Python Course")
+    assert indexed_package is not None
+    assert indexed_package.status is LearningPackageStatus.INDEXED
+    assert failed.updated_at is not None
     preparations.retry_failed(failed.id, now=failed.updated_at)
 
     resumed_worker = PackagePreparationWorker(
@@ -153,5 +173,7 @@ def test_failed_worker_attempt_can_resume_from_indexed_checkpoint(tmp_path: Path
         heartbeat_interval=3600,
     )
     assert resumed_worker.run_once() is True
-    assert packages.find_by_name("Python Course").status is LearningPackageStatus.READY
+    ready_package = packages.find_by_name("Python Course")
+    assert ready_package is not None
+    assert ready_package.status is LearningPackageStatus.READY
     assert preparations.list_all() == []

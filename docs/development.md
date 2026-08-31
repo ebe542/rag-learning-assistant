@@ -327,10 +327,14 @@ Document ingestion deterministically classifies extracted text as German
 (`de`), English (`en`), or unknown (`und`) without a network or model call. The
 language is stored with `IndexedDocument`; existing SQLite libraries migrate to
 `und` so legacy documents are not incorrectly relabeled. This source-language
-metadata is deliberately separate from the package's future learning-language
-choice used by generation prompts. Package creation stores that choice as
+metadata is deliberately separate from the package's learning-language choice.
+Package creation stores that choice as
 `same`, `de`, or `en` on both the durable preparation request and materialized
-package. `same` remains the default for CLI calls and migrated databases.
+package. `same` remains the default for CLI calls and migrated databases. The
+summarization service resolves `same` against the detected document language and
+adds an explicit German or English instruction to every Map, Reduce, and repair
+request. The language prompt reference is part of the generation identity, so
+translated summaries cannot reuse source-language cache entries.
 
 `LearningPackage` is the product-facing projection over one indexed document
 and its active summary and question-bank identities. Its status records the

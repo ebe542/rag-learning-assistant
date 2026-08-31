@@ -1,6 +1,6 @@
 """Workspace loop for serial GUI package preparation."""
 
-import logging
+import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -10,9 +10,41 @@ from rag_learning_assistant.application import (
     PackagePreparationService,
     PackagePreparationWorker,
 )
+from rag_learning_assistant.interfaces.cli.error_reporting import write_exception_log
 from rag_learning_assistant.learning import SqlitePackagePreparationRepository
 
-LOGGER = logging.getLogger(__name__)
+
+def _report_failure(
+    error: Exception,
+    *,
+    library_directory: Path,
+    package_name: str | None = None,
+) -> None:
+    """Log a technical worker failure and keep console output user-facing."""
+
+    try:
+        log_path = write_exception_log(
+            error,
+            command="gui-package-worker",
+            context={
+                "library_directory": library_directory,
+                **({"package_name": package_name} if package_name is not None else {}),
+            },
+        )
+    except Exception:
+        print(
+            "Package preparation failed. The diagnostic log could not be written.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return
+
+    subject = (
+        f"Package preparation failed for {package_name}."
+        if package_name
+        else ("Package preparation worker failed.")
+    )
+    print(f"{subject} Details were written to: {log_path}", file=sys.stderr, flush=True)
 
 
 class WorkspacePreparationWorker:
@@ -51,14 +83,21 @@ class WorkspacePreparationWorker:
                             directory, progress
                         ),
                         library_directory / "uploads",
+                        failure_reporter=(
+                            lambda error, preparation, directory=library_directory: _report_failure(
+                                error,
+                                library_directory=directory,
+                                package_name=preparation.name,
+                            )
+                        ),
                     )
                     if worker.run_once():
                         processed = True
                         break
-                except Exception:
-                    LOGGER.exception(
-                        "Package preparation worker failed for %s",
-                        library_directory,
+                except Exception as error:
+                    _report_failure(
+                        error,
+                        library_directory=library_directory,
                     )
             if not processed:
                 stop_event.wait(self.poll_interval)

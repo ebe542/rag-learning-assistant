@@ -1,8 +1,13 @@
+from dataclasses import replace
 from uuid import UUID
 
 import pytest
 
 from rag_learning_assistant.application import DocumentSummarizationService
+from rag_learning_assistant.application.summarization import (
+    SUMMARY_ENGLISH_PROMPT,
+    SUMMARY_GERMAN_PROMPT,
+)
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.generation import (
     Citation,
@@ -13,7 +18,8 @@ from rag_learning_assistant.generation import (
     SqliteDocumentSummaryRepository,
 )
 from rag_learning_assistant.generation.cache import CachedSummaryBatch
-from rag_learning_assistant.library import IndexedDocument
+from rag_learning_assistant.learning import LearningLanguage
+from rag_learning_assistant.library import DocumentLanguage, IndexedDocument
 
 
 class RecordingMapCache:
@@ -680,6 +686,7 @@ def test_prepare_summary_returns_persisted_identity() -> None:
         content_sha256="c" * 64,
         page_count=1,
         chunk_count=1,
+        language=DocumentLanguage.GERMAN,
     )
     identity = GenerationIdentity(
         model_name="Qwen/Qwen3-1.7B",
@@ -720,8 +727,24 @@ def test_prepare_summary_returns_persisted_identity() -> None:
         final_summaries=repository,
     )
 
-    fingerprint = service.prepare_summary(document_id)
+    german_fingerprint = service.prepare_summary(document_id)
+    english_fingerprint = service.prepare_summary(
+        document_id,
+        learning_language=LearningLanguage.ENGLISH,
+    )
+    german_identity = replace(
+        identity,
+        prompt_references=(*identity.prompt_references, SUMMARY_GERMAN_PROMPT.reference),
+    )
+    english_identity = replace(
+        identity,
+        prompt_references=(*identity.prompt_references, SUMMARY_ENGLISH_PROMPT.reference),
+    )
 
-    assert fingerprint == identity.fingerprint
-    assert len(repository.saved) == 1
-    assert repository.saved[0].identity_fingerprint == identity.fingerprint
+    assert german_fingerprint == german_identity.fingerprint
+    assert english_fingerprint == english_identity.fingerprint
+    assert german_fingerprint != english_fingerprint
+    assert [summary.identity_fingerprint for summary in repository.saved] == [
+        german_fingerprint,
+        english_fingerprint,
+    ]

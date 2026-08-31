@@ -38,7 +38,7 @@ def test_parser_uses_separate_summary_token_defaults() -> None:
         ]
     )
 
-    assert DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS == 192
+    assert DEFAULT_SUMMARY_MAX_MAP_NEW_TOKENS == 256
     # The final reduction must have enough room for the document-wide answer
     # and the complete conservative citation union required by validation.
     assert DEFAULT_SUMMARY_MAX_REDUCE_NEW_TOKENS == 384

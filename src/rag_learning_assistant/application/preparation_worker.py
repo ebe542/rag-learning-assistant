@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from rag_learning_assistant.application.learning_package import LearningPackageService
 from rag_learning_assistant.application.package_preparation import PackagePreparationService
-from rag_learning_assistant.learning import PackagePreparationStatus
+from rag_learning_assistant.learning import PackagePreparation, PackagePreparationStatus
 
 
 class PackagePreparationWorker:
@@ -25,6 +25,7 @@ class PackagePreparationWorker:
         token_factory: Callable[[], UUID] = uuid4,
         lease_duration: timedelta = timedelta(minutes=5),
         heartbeat_interval: float = 60.0,
+        failure_reporter: Callable[[Exception, PackagePreparation], None] | None = None,
     ) -> None:
         self.preparations = preparations
         self.package_service_factory = package_service_factory
@@ -33,6 +34,7 @@ class PackagePreparationWorker:
         self.token_factory = token_factory
         self.lease_duration = lease_duration
         self.heartbeat_interval = heartbeat_interval
+        self.failure_reporter = failure_reporter
 
     def run_once(self) -> bool:
         """Process one queued request and report whether work was claimed."""
@@ -127,6 +129,11 @@ class PackagePreparationWorker:
                     now=self.clock(),
                     message=f"{type(error).__name__}: {error}"[:1000],
                 )
+            if self.failure_reporter is not None:
+                # Diagnostics must not prevent the durable Failed state from
+                # being returned to the GUI or stop later queued work.
+                with suppress(Exception):
+                    self.failure_reporter(error, preparation)
         finally:
             stop_heartbeat.set()
             heartbeat_thread.join(timeout=max(self.heartbeat_interval * 2, 1.0))

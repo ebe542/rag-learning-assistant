@@ -525,14 +525,18 @@ def test_failed_package_preparation_can_be_retried() -> None:
             size_bytes=pending.size_bytes,
             status=PackagePreparationStatus.FAILED,
             created_at=pending.created_at,
-            failure_message="Summary failed",
+            failure_message=(
+                "ValueError: Model response must be valid JSON: "
+                "Unterminated string at line 2, column 11"
+            ),
         )
     )
     client = build_client(libraries=libraries)
 
     page = client.get("/library")
     assert "Failed" in page.text
-    assert "Preparation failed: Summary failed" in page.text
+    assert "Model processing produced an incomplete response. Retry this package." in page.text
+    assert "Unterminated string" not in page.text
     assert ">Retry</button>" in page.text
     assert ">Remove</button>" in page.text
 
@@ -1040,6 +1044,7 @@ def test_static_styles_are_served_locally() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/css")
     assert ".panel" in response.text
+    assert ".package-actions button {\n  margin: 0;\n}" in response.text
 
 
 def test_package_status_script_replaces_only_changed_content() -> None:

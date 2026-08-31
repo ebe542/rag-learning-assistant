@@ -4,6 +4,9 @@ import pytest
 
 from rag_learning_assistant.application.library import DocumentNotFoundError
 from rag_learning_assistant.application.summarization import (
+    SUMMARY_ENGLISH_PROMPT,
+    SUMMARY_GERMAN_PROMPT,
+    SUMMARY_LANGUAGE_REPAIR_PROMPT,
     SUMMARY_MAP_PROMPT,
     SUMMARY_REDUCE_COVERAGE_REPAIR_PROMPT,
     SUMMARY_REDUCE_PROMPT,
@@ -12,7 +15,8 @@ from rag_learning_assistant.application.summarization import (
 )
 from rag_learning_assistant.chunking import Chunk
 from rag_learning_assistant.generation import Citation, GenerationResult, PromptTemplate
-from rag_learning_assistant.library import IndexedDocument
+from rag_learning_assistant.learning import LearningLanguage
+from rag_learning_assistant.library import DocumentLanguage, IndexedDocument
 
 
 class RecordingDocumentLookup:
@@ -216,6 +220,152 @@ def test_summarize_reads_complete_document_and_maps_citations() -> None:
     assert '<context number="2">' in generator.prompts[0]
     assert chunks[0].text in generator.prompts[0]
     assert chunks[1].text in generator.prompts[0]
+
+
+@pytest.mark.parametrize(
+    ("document_language", "learning_language", "language_prompt"),
+    [
+        (
+            DocumentLanguage.GERMAN,
+            LearningLanguage.SAME_AS_DOCUMENT,
+            SUMMARY_GERMAN_PROMPT,
+        ),
+        (
+            DocumentLanguage.ENGLISH,
+            LearningLanguage.GERMAN,
+            SUMMARY_GERMAN_PROMPT,
+        ),
+        (
+            DocumentLanguage.GERMAN,
+            LearningLanguage.ENGLISH,
+            SUMMARY_ENGLISH_PROMPT,
+        ),
+    ],
+)
+def test_summarize_instructs_the_selected_output_language(
+    document_language: DocumentLanguage,
+    learning_language: LearningLanguage,
+    language_prompt: PromptTemplate,
+) -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    document = IndexedDocument(
+        id=document_id,
+        source="course.pdf",
+        content_sha256="a" * 64,
+        page_count=1,
+        chunk_count=1,
+        language=document_language,
+    )
+    generator = RecordingSummaryGenerator(
+        GenerationResult(text="Grounded summary.", citation_numbers=(1,))
+    )
+    service = DocumentSummarizationService(
+        documents=RecordingDocumentLookup(document),
+        chunks=RecordingChunkReader(
+            [
+                Chunk(
+                    text="Grounded source text.",
+                    source=document.source,
+                    page_number=1,
+                    index=0,
+                    document_id=document_id,
+                )
+            ]
+        ),
+        generator=generator,
+    )
+
+    summary = service.summarize(document_id, learning_language=learning_language)
+
+    assert language_prompt.text in generator.prompts[0]
+    assert language_prompt.reference in summary.prompt_references
+
+
+def test_summarize_translates_a_summary_returned_in_the_source_language() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    document = IndexedDocument(
+        id=document_id,
+        source="course-de.pdf",
+        content_sha256="a" * 64,
+        page_count=1,
+        chunk_count=1,
+        language=DocumentLanguage.GERMAN,
+    )
+    generator = SequentialSummaryGenerator(
+        [
+            GenerationResult(
+                text="Das Dokument erklärt die Grundlagen und die wichtigen Verfahren.",
+                citation_numbers=(1,),
+            ),
+            GenerationResult(
+                text="The document explains the foundations and the important methods.",
+                citation_numbers=(1,),
+            ),
+        ]
+    )
+    service = DocumentSummarizationService(
+        documents=RecordingDocumentLookup(document),
+        chunks=RecordingChunkReader(
+            [
+                Chunk(
+                    text="Das Dokument erklärt die Grundlagen.",
+                    source=document.source,
+                    page_number=1,
+                    index=0,
+                    document_id=document_id,
+                )
+            ]
+        ),
+        generator=generator,
+    )
+
+    summary = service.summarize(
+        document_id,
+        learning_language=LearningLanguage.ENGLISH,
+    )
+
+    assert summary.text.startswith("The document")
+    assert SUMMARY_LANGUAGE_REPAIR_PROMPT.reference in summary.prompt_references
+    assert SUMMARY_LANGUAGE_REPAIR_PROMPT.text in generator.prompts[1]
+    assert SUMMARY_ENGLISH_PROMPT.text in generator.prompts[1]
+    assert "Das Dokument erklärt" in generator.prompts[1]
+
+
+def test_summarize_rejects_language_repair_in_the_wrong_language() -> None:
+    document_id = UUID("12345678-1234-5678-1234-567812345678")
+    document = IndexedDocument(
+        id=document_id,
+        source="course-de.pdf",
+        content_sha256="a" * 64,
+        page_count=1,
+        chunk_count=1,
+        language=DocumentLanguage.GERMAN,
+    )
+    german_result = GenerationResult(
+        text="Das Dokument erklärt die Grundlagen und die wichtigen Verfahren.",
+        citation_numbers=(1,),
+    )
+    service = DocumentSummarizationService(
+        documents=RecordingDocumentLookup(document),
+        chunks=RecordingChunkReader(
+            [
+                Chunk(
+                    text="Das Dokument erklärt die Grundlagen.",
+                    source=document.source,
+                    page_number=1,
+                    index=0,
+                    document_id=document_id,
+                )
+            ]
+        ),
+        generator=SequentialSummaryGenerator([german_result, german_result]),
+    )
+
+    with pytest.raises(ValueError, match="requested language"):
+        service.summarize(
+            document_id,
+            learning_language=LearningLanguage.ENGLISH,
+        )
 
 
 def test_summarize_rejects_incomplete_chunk_storage_before_generation() -> None:

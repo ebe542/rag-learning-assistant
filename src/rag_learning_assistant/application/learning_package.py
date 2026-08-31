@@ -64,7 +64,12 @@ class PackageDocumentImporter(Protocol):
 class PackageSummaryPreparer(Protocol):
     """Prepare one persisted summary and return its identity."""
 
-    def prepare_summary(self, document_id: UUID) -> str: ...
+    def prepare_summary(
+        self,
+        document_id: UUID,
+        *,
+        learning_language: LearningLanguage,
+    ) -> str: ...
 
 
 class PackageQuestionPreparer(Protocol):
@@ -166,7 +171,10 @@ class LearningPackageService:
 
         if package.status is LearningPackageStatus.INDEXED:
             self._report_progress("summarize")
-            summary_identity = self.summaries.prepare_summary(package.document_id)
+            summary_identity = self.summaries.prepare_summary(
+                package.document_id,
+                learning_language=package.learning_language,
+            )
             package = replace(
                 package,
                 status=LearningPackageStatus.SUMMARIZED,
