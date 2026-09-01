@@ -119,7 +119,13 @@ The project uses stable identities at every persistent boundary:
 `PdfExtractor` uses PyMuPDF to read text-based PDFs and returns immutable
 `Document` and `Page` models. Page numbers are one-based and every page retains
 the source filename. PDF handles are closed through their context-manager
-contract. OCR is intentionally not part of the current ingestion adapter.
+contract. The extractor rejects password-protected files and files without
+pages before page access, reports the one-based page number for a failed text
+stream, removes invalid control characters, and requires at least one
+machine-readable word across the document. Textless pages inside an otherwise
+readable document remain present with their original page number; this boundary
+allows a future OCR adapter to process only affected pages. OCR is intentionally
+not part of the current ingestion adapter.
 
 ### Chunking
 

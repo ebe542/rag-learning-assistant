@@ -30,6 +30,9 @@ class PdfHandle(Protocol):
     @property
     def page_count(self) -> int: ...
 
+    @property
+    def needs_pass(self) -> bool: ...
+
     def load_page(self, page_id: int) -> PdfPage: ...
 
 
@@ -71,12 +74,13 @@ class PdfExtractor:
             self._capture_diagnostics(pdf_path),
             self._open(pdf_path) as pdf,
         ):
+            if pdf.needs_pass:
+                raise ValueError("PDF is password protected")
+            if pdf.page_count < 1:
+                raise ValueError("PDF does not contain any pages")
+
             pages = tuple(
-                Page(
-                    number=page_index + 1,
-                    text=self._normalise(pdf.load_page(page_index).get_text("text")),
-                    source=pdf_path.name,
-                )
+                self._extract_page(pdf, page_index, source=pdf_path.name)
                 for page_index in range(pdf.page_count)
             )
 
@@ -84,6 +88,20 @@ class PdfExtractor:
         if _MACHINE_READABLE_WORD.search(document.text) is None:
             raise ValueError("PDF does not contain machine-readable text")
         return document
+
+    def _extract_page(self, pdf: PdfHandle, page_index: int, *, source: str) -> Page:
+        """Extract one page and identify its one-based location on failure."""
+
+        page_number = page_index + 1
+        try:
+            text = pdf.load_page(page_index).get_text("text")
+        except Exception as error:
+            raise ValueError(f"Could not extract text from PDF page {page_number}") from error
+        return Page(
+            number=page_number,
+            text=self._normalise(text),
+            source=source,
+        )
 
     def _open(self, path: Path) -> PdfHandle:
         try:

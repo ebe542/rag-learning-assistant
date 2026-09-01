@@ -7,17 +7,21 @@ from rag_learning_assistant.ingestion import Page, PdfExtractor
 
 
 class FakePage:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, *, error: Exception | None = None) -> None:
         self.text = text
+        self.error = error
 
     def get_text(self, option: str = "text") -> str:
         assert option == "text"
+        if self.error is not None:
+            raise self.error
         return self.text
 
 
 class FakePdf:
-    def __init__(self, pages: list[FakePage]) -> None:
+    def __init__(self, pages: list[FakePage], *, needs_pass: bool = False) -> None:
         self.pages = pages
+        self.needs_pass = needs_pass
 
     def __enter__(self):
         return self
@@ -74,13 +78,15 @@ class StubExtractor(PdfExtractor):
         *,
         diagnostic_handler: Callable[[Path, str], None] | None = None,
         diagnostic_tools: FakeDiagnosticTools | None = None,
+        needs_pass: bool = False,
     ) -> None:
         super().__init__(diagnostic_handler=diagnostic_handler)
         self.pages = pages
         self.diagnostic_tools = diagnostic_tools
+        self.needs_pass = needs_pass
 
     def _open(self, path: Path) -> FakePdf:
-        return FakePdf(self.pages)
+        return FakePdf(self.pages, needs_pass=self.needs_pass)
 
     def _get_diagnostic_tools(
         self,
@@ -134,6 +140,37 @@ def test_extract_removes_control_characters_from_readable_text(tmp_path: Path) -
     document = extractor.extract(pdf)
 
     assert document.text == "Readable\ttext\nnext line"
+
+
+def test_rejects_password_protected_pdf_before_reading_pages(tmp_path: Path) -> None:
+    pdf = tmp_path / "protected.pdf"
+    pdf.touch()
+    extractor = StubExtractor(
+        [FakePage("must not be read", error=AssertionError("page was read"))],
+        needs_pass=True,
+    )
+
+    with pytest.raises(ValueError, match="PDF is password protected"):
+        extractor.extract(pdf)
+
+
+def test_rejects_pdf_without_pages(tmp_path: Path) -> None:
+    pdf = tmp_path / "empty.pdf"
+    pdf.touch()
+
+    with pytest.raises(ValueError, match="PDF does not contain any pages"):
+        StubExtractor([]).extract(pdf)
+
+
+def test_reports_page_number_when_text_extraction_fails(tmp_path: Path) -> None:
+    pdf = tmp_path / "broken-page.pdf"
+    pdf.touch()
+    extractor = StubExtractor(
+        [FakePage("Readable first page"), FakePage("", error=RuntimeError("broken stream"))]
+    )
+
+    with pytest.raises(ValueError, match="Could not extract text from PDF page 2"):
+        extractor.extract(pdf)
 
 
 @pytest.mark.parametrize("filename", ["notes.txt", "book.epub", "pdf"])

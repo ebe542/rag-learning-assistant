@@ -184,8 +184,12 @@ Common causes of failure:
 - A dependency is `missing`: repeat the installation command from step 1.
 - The library is `incomplete`: select the intended library and verify that it
   contains both `metadata.sqlite3` and `vectors.faiss`.
-- A PDF produces little or no text: it is probably scanned and requires OCR,
-  which is not supported in this alpha.
+- A PDF is password protected: save an unlocked copy before importing it.
+- A PDF has no machine-readable text: it is probably scanned or uses an
+  unsupported text encoding and requires OCR, which is not supported in this
+  alpha.
+- Extraction fails on one numbered page: recreate that PDF or inspect the
+  reported page for a damaged content stream.
 - Generation uses the CPU unexpectedly: check the PyTorch CUDA installation
   described in the main README.
 
