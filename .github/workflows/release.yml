@@ -97,6 +97,11 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out repository history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Download verified release assets
         uses: actions/download-artifact@v4
         with:
