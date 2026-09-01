@@ -251,6 +251,10 @@ The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
 Each page reports whether it contains machine-readable text, and the document
 lists affected page numbers so future OCR processing can target them directly.
+Pages also report whether PyMuPDF found embedded raster images; empty pages
+without images are not treated as scanned OCR input. OCR candidates are
+reported separately and conservatively require exactly one image covering at
+least 90 percent of a page without native text.
 Chunk size and overlap can be configured through the command-line options shown above.
 
 Create a persistent library and add one or more documents:

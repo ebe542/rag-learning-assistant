@@ -1094,6 +1094,8 @@ def run_extract(
                 "source": page.source,
                 "text": page.text,
                 "has_machine_readable_text": page.has_machine_readable_text,
+                "has_embedded_images": page.has_embedded_images,
+                "is_probable_full_page_scan": page.is_probable_full_page_scan,
             }
             for page in document.pages
         ],

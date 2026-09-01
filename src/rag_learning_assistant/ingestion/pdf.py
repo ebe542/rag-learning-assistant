@@ -21,6 +21,20 @@ class PdfPage(Protocol):
 
     def get_text(self, option: str = "text") -> str: ...
 
+    def get_image_info(self) -> list[dict[str, object]]: ...
+
+    @property
+    def rect(self) -> PdfRect: ...
+
+
+class PdfRect(Protocol):
+    """The page rectangle coordinates needed for image coverage checks."""
+
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
 
 class PdfHandle(Protocol):
     """A readable PDF handle, kept abstract for lightweight tests."""
@@ -110,11 +124,22 @@ class PdfExtractor:
 
         page_number = page_index + 1
         try:
-            text = pdf.load_page(page_index).get_text("text")
+            pdf_page = pdf.load_page(page_index)
+            text = pdf_page.get_text("text")
+            image_info = pdf_page.get_image_info()
+            has_embedded_images = bool(image_info)
+            is_probable_full_page_scan = self._is_probable_full_page_scan(
+                pdf_page.rect,
+                image_info,
+            )
         except Exception as error:
             raise ValueError(f"Could not extract text from PDF page {page_number}") from error
         text = self._normalise(text)
-        if not has_machine_readable_text(text) and self.ocr is not None:
+        if (
+            not has_machine_readable_text(text)
+            and is_probable_full_page_scan
+            and self.ocr is not None
+        ):
             try:
                 text = self._normalise(self.ocr.extract_text(path, page_number))
             except Exception as error:
@@ -123,7 +148,40 @@ class PdfExtractor:
             number=page_number,
             text=text,
             source=source,
+            has_embedded_images=has_embedded_images,
+            is_probable_full_page_scan=is_probable_full_page_scan,
         )
+
+    @staticmethod
+    def _is_probable_full_page_scan(
+        page_rect: PdfRect,
+        image_info: list[dict[str, object]],
+    ) -> bool:
+        """Return whether one image conservatively covers almost the entire page."""
+
+        if len(image_info) != 1:
+            return False
+
+        bbox = image_info[0].get("bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            return False
+
+        image_x0, image_y0, image_x1, image_y1 = (float(value) for value in bbox)
+        page_width = max(0.0, page_rect.x1 - page_rect.x0)
+        page_height = max(0.0, page_rect.y1 - page_rect.y0)
+        page_area = page_width * page_height
+        if page_area == 0:
+            return False
+
+        covered_width = max(
+            0.0,
+            min(page_rect.x1, image_x1) - max(page_rect.x0, image_x0),
+        )
+        covered_height = max(
+            0.0,
+            min(page_rect.y1, image_y1) - max(page_rect.y0, image_y0),
+        )
+        return covered_width * covered_height / page_area >= 0.9
 
     def _open(self, path: Path) -> PdfHandle:
         try:

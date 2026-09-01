@@ -6,16 +6,40 @@ import pytest
 from rag_learning_assistant.ingestion import Page, PdfExtractor
 
 
+class FakeRect:
+    x0 = 0.0
+    y0 = 0.0
+    x1 = 100.0
+    y1 = 100.0
+
+
 class FakePage:
-    def __init__(self, text: str, *, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        *,
+        error: Exception | None = None,
+        has_embedded_images: bool = False,
+        image_bbox: tuple[float, float, float, float] = (0.0, 0.0, 100.0, 100.0),
+        image_count: int = 1,
+    ) -> None:
         self.text = text
         self.error = error
+        self.has_embedded_images = has_embedded_images
+        self.image_bbox = image_bbox
+        self.image_count = image_count
+        self.rect = FakeRect()
 
     def get_text(self, option: str = "text") -> str:
         assert option == "text"
         if self.error is not None:
             raise self.error
         return self.text
+
+    def get_image_info(self) -> list[dict[str, object]]:
+        if not self.has_embedded_images:
+            return []
+        return [{"bbox": self.image_bbox} for _ in range(self.image_count)]
 
 
 class FakePdf:
@@ -181,7 +205,7 @@ def test_extract_uses_ocr_only_for_pages_without_readable_text(tmp_path: Path) -
     pdf.touch()
     ocr = FakeOcr({2: " OCR result\r\n"})
     extractor = StubExtractor(
-        [FakePage("Native text"), FakePage("123 --")],
+        [FakePage("Native text"), FakePage("123 --", has_embedded_images=True)],
         ocr=ocr,
     )
 
@@ -189,7 +213,13 @@ def test_extract_uses_ocr_only_for_pages_without_readable_text(tmp_path: Path) -
 
     assert document.pages == (
         Page(number=1, text="Native text", source=pdf.name),
-        Page(number=2, text="OCR result", source=pdf.name),
+        Page(
+            number=2,
+            text="OCR result",
+            source=pdf.name,
+            has_embedded_images=True,
+            is_probable_full_page_scan=True,
+        ),
     )
     assert document.pages_without_machine_readable_text == ()
     assert ocr.calls == [(pdf, 2)]
@@ -199,12 +229,66 @@ def test_extract_reports_page_number_when_ocr_fails(tmp_path: Path) -> None:
     pdf = tmp_path / "broken-scan.pdf"
     pdf.touch()
     extractor = StubExtractor(
-        [FakePage("Native text"), FakePage("")],
+        [FakePage("Native text"), FakePage("", has_embedded_images=True)],
         ocr=FakeOcr({2: RuntimeError("OCR backend failed")}),
     )
 
     with pytest.raises(ValueError, match="Could not OCR PDF page 2"):
         extractor.extract(pdf)
+
+
+def test_extract_does_not_ocr_an_empty_page_without_images(tmp_path: Path) -> None:
+    pdf = tmp_path / "document-with-empty-page.pdf"
+    pdf.touch()
+    ocr = FakeOcr({2: "must not be used"})
+    extractor = StubExtractor([FakePage("Native text"), FakePage("")], ocr=ocr)
+
+    document = extractor.extract(pdf)
+
+    assert document.pages_without_machine_readable_text == (2,)
+    assert document.pages[1].has_embedded_images is False
+    assert ocr.calls == []
+
+
+def test_extract_does_not_ocr_a_small_embedded_image(tmp_path: Path) -> None:
+    pdf = tmp_path / "page-with-illustration.pdf"
+    pdf.touch()
+    ocr = FakeOcr({2: "must not be used"})
+    extractor = StubExtractor(
+        [
+            FakePage("Native text"),
+            FakePage(
+                "",
+                has_embedded_images=True,
+                image_bbox=(20.0, 20.0, 80.0, 80.0),
+            ),
+        ],
+        ocr=ocr,
+    )
+
+    document = extractor.extract(pdf)
+
+    assert document.pages[1].has_embedded_images is True
+    assert document.pages[1].is_probable_full_page_scan is False
+    assert ocr.calls == []
+
+
+def test_extract_does_not_ocr_multiple_full_page_images(tmp_path: Path) -> None:
+    pdf = tmp_path / "page-with-multiple-images.pdf"
+    pdf.touch()
+    ocr = FakeOcr({2: "must not be used"})
+    extractor = StubExtractor(
+        [
+            FakePage("Native text"),
+            FakePage("", has_embedded_images=True, image_count=2),
+        ],
+        ocr=ocr,
+    )
+
+    document = extractor.extract(pdf)
+
+    assert document.pages[1].is_probable_full_page_scan is False
+    assert ocr.calls == []
 
 
 def test_rejects_password_protected_pdf_before_reading_pages(tmp_path: Path) -> None:

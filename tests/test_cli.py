@@ -111,6 +111,8 @@ def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) 
                 "source": "course.pdf",
                 "text": "Lesson",
                 "has_machine_readable_text": True,
+                "has_embedded_images": False,
+                "is_probable_full_page_scan": False,
             }
         ],
         "chunks": [

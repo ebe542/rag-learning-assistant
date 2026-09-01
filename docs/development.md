@@ -129,8 +129,11 @@ one-based page numbers in `pages_without_machine_readable_text`. This neutral
 classification forms the boundary for a future OCR adapter without assuming
 that every empty page requires OCR. `PageOcr` defines the optional backend port;
 when configured, `PdfExtractor` sends only pages without extracted letters to
-that backend and preserves their original page numbers. No concrete OCR backend
-or additional OCR dependency is installed yet.
+that backend only when PyMuPDF reports exactly one raster image covering at
+least 90 percent of a page, and preserves the original page number. This avoids
+treating small illustrations or logos as complete scanned pages. Empty pages
+without images are not sent to OCR. No concrete OCR backend or additional OCR
+dependency is installed yet.
 
 ### Chunking
 
