@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Protocol, cast
 
-from rag_learning_assistant.ingestion.models import Document, Page
-
-_MACHINE_READABLE_WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
+from rag_learning_assistant.ingestion.models import (
+    Document,
+    Page,
+    has_machine_readable_text,
+)
 
 
 class PdfPage(Protocol):
@@ -85,7 +86,7 @@ class PdfExtractor:
             )
 
         document = Document(source=pdf_path.name, pages=pages)
-        if _MACHINE_READABLE_WORD.search(document.text) is None:
+        if not has_machine_readable_text(document.text):
             raise ValueError("PDF does not contain machine-readable text")
         return document
 

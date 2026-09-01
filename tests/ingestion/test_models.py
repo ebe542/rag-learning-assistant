@@ -10,6 +10,24 @@ def test_document_text_ignores_empty_pages() -> None:
     )
 
     assert document.text == "Content"
+    assert document.pages_without_machine_readable_text == (1,)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Readable text", True),
+        ("Überblick", True),
+        ("E-Mail", True),
+        ("A 123 --", True),
+        ("123 --", False),
+        ("", False),
+    ],
+)
+def test_page_reports_machine_readable_text(text: str, expected: bool) -> None:
+    page = Page(number=1, text=text, source="book.pdf")
+
+    assert page.has_machine_readable_text is expected
 
 
 def test_page_numbers_must_be_positive() -> None:

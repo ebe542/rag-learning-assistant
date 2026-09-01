@@ -117,7 +117,6 @@ def test_extract_preserves_page_numbers_and_source(tmp_path: Path) -> None:
     [
         ["", "  \r\n"],
         ["\x00\x01", "1234 -- ???"],
-        ["A 1234"],
     ],
 )
 def test_rejects_pdf_without_machine_readable_text(
@@ -132,6 +131,15 @@ def test_rejects_pdf_without_machine_readable_text(
         extractor.extract(pdf)
 
 
+def test_accepts_pdf_with_a_single_extracted_letter(tmp_path: Path) -> None:
+    pdf = tmp_path / "single-letter.pdf"
+    pdf.touch()
+
+    document = StubExtractor([FakePage("A")]).extract(pdf)
+
+    assert document.text == "A"
+
+
 def test_extract_removes_control_characters_from_readable_text(tmp_path: Path) -> None:
     pdf = tmp_path / "readable.pdf"
     pdf.touch()
@@ -140,6 +148,18 @@ def test_extract_removes_control_characters_from_readable_text(tmp_path: Path) -
     document = extractor.extract(pdf)
 
     assert document.text == "Readable\ttext\nnext line"
+
+
+def test_extract_reports_unreadable_pages_in_readable_document(tmp_path: Path) -> None:
+    pdf = tmp_path / "partly-readable.pdf"
+    pdf.touch()
+    extractor = StubExtractor(
+        [FakePage("Readable first page"), FakePage("123 --"), FakePage("Final page")]
+    )
+
+    document = extractor.extract(pdf)
+
+    assert document.pages_without_machine_readable_text == (2,)
 
 
 def test_rejects_password_protected_pdf_before_reading_pages(tmp_path: Path) -> None:

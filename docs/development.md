@@ -121,11 +121,14 @@ The project uses stable identities at every persistent boundary:
 the source filename. PDF handles are closed through their context-manager
 contract. The extractor rejects password-protected files and files without
 pages before page access, reports the one-based page number for a failed text
-stream, removes invalid control characters, and requires at least one
-machine-readable word across the document. Textless pages inside an otherwise
-readable document remain present with their original page number; this boundary
-allows a future OCR adapter to process only affected pages. OCR is intentionally
-not part of the current ingestion adapter.
+stream, removes invalid control characters, and requires at least one Unicode
+letter across the document. Textless pages inside an otherwise
+readable document remain present with their original page number. Each `Page`
+exposes `has_machine_readable_text`, while `Document` collects the affected
+one-based page numbers in `pages_without_machine_readable_text`. This neutral
+classification forms the boundary for a future OCR adapter without assuming
+that every empty page requires OCR. OCR is intentionally not part of the current
+ingestion adapter.
 
 ### Chunking
 

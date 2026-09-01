@@ -3,6 +3,12 @@
 from dataclasses import dataclass
 
 
+def has_machine_readable_text(text: str) -> bool:
+    """Return whether extracted text contains at least one Unicode letter."""
+
+    return any(character.isalpha() for character in text)
+
+
 @dataclass(frozen=True, slots=True)
 class Page:
     """Text extracted from one document page."""
@@ -17,6 +23,12 @@ class Page:
         if not self.source:
             raise ValueError("A page needs a source")
 
+    @property
+    def has_machine_readable_text(self) -> bool:
+        """Report whether this page can enter the text-processing pipeline."""
+
+        return has_machine_readable_text(self.text)
+
 
 @dataclass(frozen=True, slots=True)
 class Document:
@@ -30,3 +42,9 @@ class Document:
         """Return non-empty pages separated by a blank line."""
 
         return "\n\n".join(page.text for page in self.pages if page.text)
+
+    @property
+    def pages_without_machine_readable_text(self) -> tuple[int, ...]:
+        """Return stable OCR-candidate page numbers in document order."""
+
+        return tuple(page.number for page in self.pages if not page.has_machine_readable_text)

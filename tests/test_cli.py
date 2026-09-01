@@ -104,11 +104,13 @@ def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) 
     assert cli.main(["extract", str(pdf)]) == 0
     assert json.loads(capsys.readouterr().out) == {
         "source": "course.pdf",
+        "pages_without_machine_readable_text": [],
         "pages": [
             {
                 "number": 1,
                 "source": "course.pdf",
                 "text": "Lesson",
+                "has_machine_readable_text": True,
             }
         ],
         "chunks": [

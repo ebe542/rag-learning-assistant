@@ -1087,11 +1087,13 @@ def run_extract(
     chunks = chunker.chunk_pages(document.pages)
     payload = {
         "source": document.source,
+        "pages_without_machine_readable_text": list(document.pages_without_machine_readable_text),
         "pages": [
             {
                 "number": page.number,
                 "source": page.source,
                 "text": page.text,
+                "has_machine_readable_text": page.has_machine_readable_text,
             }
             for page in document.pages
         ],
@@ -1422,6 +1424,9 @@ def run_gui(
             ) from error
         raise
 
+    def remove_package(directory: Path, name: str) -> None:
+        build_learning_package_service(directory, progress=None).remove(name)
+
     run_server(
         library_directory=library_directory,
         port=port,
@@ -1430,9 +1435,6 @@ def run_gui(
             directory,
             progress=progress,
         ),
-        package_remover=lambda directory, name: build_learning_package_service(
-            directory,
-            progress=None,
-        ).remove(name),
+        package_remover=remove_package,
     )
     return 0

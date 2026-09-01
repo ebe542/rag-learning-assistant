@@ -249,6 +249,8 @@ rag-learn extract path\to\book.pdf --max-chars 1000 --overlap-chars 150
 
 The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
+Each page reports whether it contains machine-readable text, and the document
+lists affected page numbers so future OCR processing can target them directly.
 Chunk size and overlap can be configured through the command-line options shown above.
 
 Create a persistent library and add one or more documents:
