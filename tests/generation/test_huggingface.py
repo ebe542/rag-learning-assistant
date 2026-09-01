@@ -75,6 +75,7 @@ class SequentialRecordingPipeline:
     def __init__(self, response_texts: list[str]) -> None:
         self.response_texts = response_texts
         self.calls: list[tuple[list[dict[str, str]], dict[str, Any]]] = []
+        self.observed_token_limits: list[int | None] = []
         self.generation_config = RecordingGenerationConfig()
 
     def __call__(
@@ -83,6 +84,7 @@ class SequentialRecordingPipeline:
         **options: Any,
     ) -> list[dict[str, object]]:
         self.calls.append((messages, options))
+        self.observed_token_limits.append(self.generation_config.max_new_tokens)
         response_text = self.response_texts[len(self.calls) - 1]
 
         return [
@@ -334,6 +336,37 @@ def test_generate_stops_after_one_failed_json_repair() -> None:
     assert "repaired_model_response='still not JSON'" in diagnostic
     assert len(pipeline.calls) == 2
     assert pipeline.generation_config.max_new_tokens == 512
+
+
+def test_generate_increases_budget_for_repeatedly_truncated_json() -> None:
+    first_truncated_response = '{"text": "The first response is unfinished'
+    second_truncated_response = '{"text": "The repair is still unfinished'
+    pipeline = SequentialRecordingPipeline(
+        [
+            first_truncated_response,
+            second_truncated_response,
+            '{"text": "Complete response.", "citation_numbers": [1]}',
+        ]
+    )
+    generator = HuggingFaceTextGenerator(
+        pipeline=pipeline,
+        max_new_tokens=128,
+    )
+
+    result = generator.generate("Question and contexts")
+
+    assert result.text == "Complete response."
+    assert pipeline.observed_token_limits == [128, 512, 1024]
+    assert len(pipeline.calls) == 3
+    final_messages, _ = pipeline.calls[2]
+    assert final_messages[-2] == {
+        "role": "assistant",
+        "content": second_truncated_response,
+    }
+    assert result.prompt_references == (
+        SYSTEM_PROMPT.reference,
+        JSON_REPAIR_PROMPT.reference,
+    )
 
 
 def test_huggingface_prompts_have_explicit_versions() -> None:

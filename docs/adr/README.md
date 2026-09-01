@@ -33,3 +33,5 @@ If a decision changes, add a new ADR that supersedes the earlier record instead 
 - [0025: Select study sessions by learning-package name](0025-study-learning-packages-by-name.md)
 - [0026: Report learning-package progress from persisted study data](0026-report-learning-package-progress.md)
 - [0027: Generate question banks in resumable batches](0027-resume-question-bank-generation.md)
+- [0028: Introduce a local web interface](0028-introduce-local-web-interface.md)
+- [0029: Adapt JSON repair budgets for truncated model output](0029-adapt-json-repair-budgets.md)

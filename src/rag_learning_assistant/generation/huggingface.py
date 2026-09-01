@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
 
 if TYPE_CHECKING:
     from rag_learning_assistant.learning.feedback import (
@@ -126,6 +128,10 @@ Do not wrap the JSON object in Markdown code fences.
 
 _MAX_MODEL_RESPONSE_DIAGNOSTIC_CHARS = 1_000
 _MIN_JSON_REPAIR_TOKENS = 512
+_MAX_JSON_REPAIR_TOKENS = 1_024
+_MAX_JSON_ATTEMPTS = 3
+
+_StructuredResult = TypeVar("_StructuredResult")
 
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B"
 DEFAULT_MODEL_REVISION = "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"
@@ -189,14 +195,22 @@ class HuggingFaceTextGenerator:
         model_revision: str = DEFAULT_MODEL_REVISION,
         pipeline: ChatPipeline | None = None,
         max_new_tokens: int = 512,
+        max_json_repair_tokens: int = _MAX_JSON_REPAIR_TOKENS,
+        max_json_attempts: int = _MAX_JSON_ATTEMPTS,
     ) -> None:
         if max_new_tokens < 1:
             raise ValueError("max_new_tokens must be positive")
+        if max_json_repair_tokens < 1:
+            raise ValueError("max_json_repair_tokens must be positive")
+        if max_json_attempts < 1:
+            raise ValueError("max_json_attempts must be positive")
 
         self.model_name = model_name
         self.model_revision = model_revision
         self._pipeline = pipeline
         self.max_new_tokens = max_new_tokens
+        self.max_json_repair_tokens = max_json_repair_tokens
+        self.max_json_attempts = max_json_attempts
 
     def generate(
         self,
@@ -221,55 +235,19 @@ class HuggingFaceTextGenerator:
                 "content": prompt,
             },
         ]
-        raw_response = self._generate_raw_response(
+        result, repaired = self._generate_structured_response(
             messages,
-            max_new_tokens=effective_max_new_tokens,
+            parser=parse_generation_response,
+            repair_prompt=JSON_REPAIR_PROMPT,
+            initial_max_new_tokens=effective_max_new_tokens,
+            phase="summary-json-repair",
         )
-
-        try:
-            result = parse_generation_response(raw_response)
-            return replace(
-                result,
-                prompt_references=(SYSTEM_PROMPT.reference,),
-            )
-        except ValueError:
-            # A small local model can produce grounded content but malformed JSON.
-            # Give it exactly one format-repair attempt without permitting factual
-            # or citation changes.
-            repair_messages = [
-                *messages,
-                {
-                    "role": "assistant",
-                    "content": raw_response,
-                },
-                {
-                    "role": "user",
-                    "content": JSON_REPAIR_PROMPT.text,
-                },
-            ]
-            repaired_response = self._generate_raw_response(
-                repair_messages,
-                max_new_tokens=max(effective_max_new_tokens, _MIN_JSON_REPAIR_TOKENS),
-            )
-        try:
-            result = parse_generation_response(repaired_response)
-        except ValueError as error:
-            _add_model_failure_diagnostic(
-                error,
-                phase="summary-json-repair",
-                responses=(
-                    ("initial_model_response", raw_response),
-                    ("repaired_model_response", repaired_response),
-                ),
-            )
-            raise
 
         return replace(
             result,
-            prompt_references=(
-                SYSTEM_PROMPT.reference,
-                JSON_REPAIR_PROMPT.reference,
-            ),
+            prompt_references=(SYSTEM_PROMPT.reference,)
+            if not repaired
+            else (SYSTEM_PROMPT.reference, JSON_REPAIR_PROMPT.reference),
         )
 
     def generate_questions(
@@ -294,61 +272,18 @@ class HuggingFaceTextGenerator:
                 "content": prompt,
             },
         ]
-        raw_response = self._generate_raw_response(
+        questions, repaired = self._generate_structured_response(
             messages,
-            max_new_tokens=effective_max_new_tokens,
+            parser=parse_question_generation_response,
+            repair_prompt=QUESTION_JSON_REPAIR_PROMPT,
+            initial_max_new_tokens=effective_max_new_tokens,
+            phase="question-json-repair",
         )
-
-        try:
-            questions = parse_question_generation_response(
-                raw_response,
-            )
-            return QuestionGenerationResult(
-                questions=questions,
-                prompt_references=(QUESTION_SYSTEM_PROMPT.reference,),
-            )
-        except ValueError:
-            # Repair only the representation. Source grounding and question
-            # contents must remain unchanged.
-            repair_messages = [
-                *messages,
-                {
-                    "role": "assistant",
-                    "content": raw_response,
-                },
-                {
-                    "role": "user",
-                    "content": QUESTION_JSON_REPAIR_PROMPT.text,
-                },
-            ]
-            repaired_response = self._generate_raw_response(
-                repair_messages,
-                max_new_tokens=effective_max_new_tokens,
-            )
-
-        try:
-            questions = parse_question_generation_response(
-                repaired_response,
-            )
-        except ValueError as error:
-            _add_model_failure_diagnostic(
-                error,
-                phase="question-json-repair",
-                responses=(
-                    (
-                        "initial_model_response",
-                        raw_response,
-                    ),
-                    (
-                        "repaired_model_response",
-                        repaired_response,
-                    ),
-                ),
-            )
-            raise
         return QuestionGenerationResult(
             questions=questions,
-            prompt_references=(
+            prompt_references=(QUESTION_SYSTEM_PROMPT.reference,)
+            if not repaired
+            else (
                 QUESTION_SYSTEM_PROMPT.reference,
                 QUESTION_JSON_REPAIR_PROMPT.reference,
             ),
@@ -376,44 +311,94 @@ class HuggingFaceTextGenerator:
                 "content": prompt,
             },
         ]
-        raw_response = self._generate_raw_response(
+        evaluation, repaired = self._generate_structured_response(
             messages,
-            max_new_tokens=effective_max_new_tokens,
+            parser=parse_answer_evaluation,
+            repair_prompt=ANSWER_EVALUATION_JSON_REPAIR_PROMPT,
+            initial_max_new_tokens=effective_max_new_tokens,
+            phase="answer-evaluation-json-repair",
         )
-
-        try:
-            evaluation = parse_answer_evaluation(raw_response)
-            return replace(
-                evaluation,
-                prompt_references=(ANSWER_EVALUATION_SYSTEM_PROMPT.reference,),
-            )
-        except ValueError:
-            # Repair only the structured representation. The evaluator must
-            # preserve its original judgment and may not change scheduling.
-            repair_messages = [
-                *messages,
-                {
-                    "role": "assistant",
-                    "content": raw_response,
-                },
-                {
-                    "role": "user",
-                    "content": (ANSWER_EVALUATION_JSON_REPAIR_PROMPT.text),
-                },
-            ]
-            repaired_response = self._generate_raw_response(
-                repair_messages,
-                max_new_tokens=effective_max_new_tokens,
-            )
-
-        evaluation = parse_answer_evaluation(repaired_response)
         return replace(
             evaluation,
-            prompt_references=(
+            prompt_references=(ANSWER_EVALUATION_SYSTEM_PROMPT.reference,)
+            if not repaired
+            else (
                 ANSWER_EVALUATION_SYSTEM_PROMPT.reference,
                 ANSWER_EVALUATION_JSON_REPAIR_PROMPT.reference,
             ),
         )
+
+    def _generate_structured_response(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        parser: Callable[[str], _StructuredResult],
+        repair_prompt: PromptTemplate,
+        initial_max_new_tokens: int,
+        phase: str,
+    ) -> tuple[_StructuredResult, bool]:
+        """Parse structured output with bounded, adaptive JSON repair."""
+
+        response = self._generate_raw_response(
+            messages,
+            max_new_tokens=initial_max_new_tokens,
+        )
+        responses = [("initial_model_response", response)]
+
+        try:
+            return parser(response), False
+        except ValueError as error:
+            last_error = error
+
+        repair_limit = max(initial_max_new_tokens, self.max_json_repair_tokens)
+        repair_tokens = min(
+            repair_limit,
+            max(_MIN_JSON_REPAIR_TOKENS, initial_max_new_tokens * 2),
+        )
+
+        for attempt in range(1, self.max_json_attempts):
+            repair_messages = [
+                *messages,
+                {"role": "assistant", "content": response},
+                {"role": "user", "content": repair_prompt.text},
+            ]
+            response = self._generate_raw_response(
+                repair_messages,
+                max_new_tokens=repair_tokens,
+            )
+            response_name = (
+                "repaired_model_response" if attempt == 1 else f"repaired_model_response_{attempt}"
+            )
+            responses.append((response_name, response))
+
+            try:
+                return parser(response), True
+            except ValueError as error:
+                last_error = error
+
+            if not self._looks_truncated_json(response) or repair_tokens >= repair_limit:
+                break
+            repair_tokens = min(repair_limit, repair_tokens * 2)
+
+        _add_model_failure_diagnostic(
+            last_error,
+            phase=phase,
+            responses=tuple(responses),
+        )
+        raise last_error
+
+    @staticmethod
+    def _looks_truncated_json(response: str) -> bool:
+        """Return whether JSON decoding failed at an apparent output boundary."""
+
+        try:
+            json.loads(response)
+        except json.JSONDecodeError as error:
+            stripped_length = len(response.rstrip())
+            return error.msg.startswith("Unterminated string") or error.pos >= max(
+                0, stripped_length - 2
+            )
+        return False
 
     def _generate_raw_response(
         self,

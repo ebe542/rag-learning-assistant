@@ -191,10 +191,18 @@ Revision: 70d244cc86ccca08cf5af4e1e306ecf908b1ad5e
 ```
 
 The adapter loads its pipeline lazily, uses deterministic generation, disables
-Qwen reasoning output for structured responses, parses strict JSON, and permits
-one format-only repair attempt. Repair does not add source facts. Every prompt
-has an explicit version and SHA-256 reference; results report which prompts were
-actually used.
+Qwen reasoning output for structured responses, and parses strict JSON. An
+invalid response receives one format-only repair attempt with an adaptively
+larger output budget. The first repair receives at least 512 generated tokens
+and normally doubles the caller's budget. If that response is still invalid and
+its JSON is recognizably truncated, one final repair doubles the budget again,
+up to the default 1,024-token ceiling. A non-truncation error, an exhausted
+ceiling, or three unsuccessful total generation attempts fails immediately.
+The ceiling and attempt count are configurable on the adapter, and a caller's
+larger initial budget is never reduced. This bounded policy applies uniformly
+to summaries, question batches, and answer evaluations. Repair does not add or
+remove source facts or citation numbers. Every prompt has an explicit version
+and SHA-256 reference; results report which prompts were actually used.
 
 ### Document-wide summarization
 
@@ -275,7 +283,7 @@ intermediate cache reads and writes, while a normal interruption leaves
 completed batches available for the next run.
 
 Terminal JSON-repair failures attach bounded diagnostics to the raised
-exception and record up to 4,000 characters from each model response. The
+exception and record up to 1,000 characters from each model response. The
 central exception logger preserves these notes while the
 console remains concise. Because the rotating per-user log may therefore contain
 source-derived text, it must be treated as private diagnostic data and must not

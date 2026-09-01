@@ -72,6 +72,38 @@ phases. SQLite reserves names across pending and completed packages and leases
 each claimed request to prevent duplicate work. Failed requests retain their PDF
 and show a short explanation with actions to retry or remove them completely.
 
+### GUI worker smoke test
+
+The public smoke-test template creates a disposable GUI workspace, queues a
+configurable set of PDF packages, and then starts the normal loopback GUI and
+its serial preparation worker:
+
+```bash
+python scripts/smoke_test_gui_worker.py
+```
+
+Before running it, place private PDF fixtures in `local-data/books` and add
+their definitions to `PACKAGE_FIXTURES` in
+[`scripts/smoke_test_gui_worker.py`](scripts/smoke_test_gui_worker.py). For
+example:
+
+```python
+PACKAGE_FIXTURES = [
+    PackageFixture(
+        name="Example PDF",
+        filename="example.pdf",
+        learning_language=LearningLanguage.SAME_AS_DOCUMENT,
+    ),
+]
+```
+
+Additional fixture directories can be added to `TEST_DIRECTORIES`. Each run
+creates a new `My Lib` library below
+`local-data/smoke-gui-worker-<YYYYMMDD-HHMMSS>` and opens the GUI on
+`127.0.0.1:8765`. The generated workspace and PDFs remain private because the
+repository ignores `local-data` and PDF files. Stop the GUI with `Ctrl+C` after
+the packages have reached their final states.
+
 ## Product workflow
 
 Turn one PDF into a ready-to-study package without copying document UUIDs or
