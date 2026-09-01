@@ -13,6 +13,7 @@ from rag_learning_assistant.ingestion.models import (
     Page,
     has_machine_readable_text,
 )
+from rag_learning_assistant.ingestion.ocr import PageOcr
 
 
 class PdfPage(Protocol):
@@ -64,8 +65,10 @@ class PdfExtractor:
     def __init__(
         self,
         diagnostic_handler: Callable[[Path, str], None] | None = None,
+        ocr: PageOcr | None = None,
     ) -> None:
         self.diagnostic_handler = diagnostic_handler
+        self.ocr = ocr
 
     def extract(self, path: str | Path) -> Document:
         pdf_path = Path(path)
@@ -81,7 +84,12 @@ class PdfExtractor:
                 raise ValueError("PDF does not contain any pages")
 
             pages = tuple(
-                self._extract_page(pdf, page_index, source=pdf_path.name)
+                self._extract_page(
+                    pdf,
+                    page_index,
+                    path=pdf_path,
+                    source=pdf_path.name,
+                )
                 for page_index in range(pdf.page_count)
             )
 
@@ -90,7 +98,14 @@ class PdfExtractor:
             raise ValueError("PDF does not contain machine-readable text")
         return document
 
-    def _extract_page(self, pdf: PdfHandle, page_index: int, *, source: str) -> Page:
+    def _extract_page(
+        self,
+        pdf: PdfHandle,
+        page_index: int,
+        *,
+        path: Path,
+        source: str,
+    ) -> Page:
         """Extract one page and identify its one-based location on failure."""
 
         page_number = page_index + 1
@@ -98,9 +113,15 @@ class PdfExtractor:
             text = pdf.load_page(page_index).get_text("text")
         except Exception as error:
             raise ValueError(f"Could not extract text from PDF page {page_number}") from error
+        text = self._normalise(text)
+        if not has_machine_readable_text(text) and self.ocr is not None:
+            try:
+                text = self._normalise(self.ocr.extract_text(path, page_number))
+            except Exception as error:
+                raise ValueError(f"Could not OCR PDF page {page_number}") from error
         return Page(
             number=page_number,
-            text=self._normalise(text),
+            text=text,
             source=source,
         )
 

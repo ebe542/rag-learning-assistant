@@ -127,8 +127,10 @@ readable document remain present with their original page number. Each `Page`
 exposes `has_machine_readable_text`, while `Document` collects the affected
 one-based page numbers in `pages_without_machine_readable_text`. This neutral
 classification forms the boundary for a future OCR adapter without assuming
-that every empty page requires OCR. OCR is intentionally not part of the current
-ingestion adapter.
+that every empty page requires OCR. `PageOcr` defines the optional backend port;
+when configured, `PdfExtractor` sends only pages without extracted letters to
+that backend and preserves their original page numbers. No concrete OCR backend
+or additional OCR dependency is installed yet.
 
 ### Chunking
 

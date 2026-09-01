@@ -71,6 +71,19 @@ class FakeDiagnosticTools:
         return self.message
 
 
+class FakeOcr:
+    def __init__(self, results: dict[int, str | Exception]) -> None:
+        self.results = results
+        self.calls: list[tuple[Path, int]] = []
+
+    def extract_text(self, path: Path, page_number: int) -> str:
+        self.calls.append((path, page_number))
+        result = self.results[page_number]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
 class StubExtractor(PdfExtractor):
     def __init__(
         self,
@@ -79,8 +92,9 @@ class StubExtractor(PdfExtractor):
         diagnostic_handler: Callable[[Path, str], None] | None = None,
         diagnostic_tools: FakeDiagnosticTools | None = None,
         needs_pass: bool = False,
+        ocr: FakeOcr | None = None,
     ) -> None:
-        super().__init__(diagnostic_handler=diagnostic_handler)
+        super().__init__(diagnostic_handler=diagnostic_handler, ocr=ocr)
         self.pages = pages
         self.diagnostic_tools = diagnostic_tools
         self.needs_pass = needs_pass
@@ -160,6 +174,37 @@ def test_extract_reports_unreadable_pages_in_readable_document(tmp_path: Path) -
     document = extractor.extract(pdf)
 
     assert document.pages_without_machine_readable_text == (2,)
+
+
+def test_extract_uses_ocr_only_for_pages_without_readable_text(tmp_path: Path) -> None:
+    pdf = tmp_path / "partly-scanned.pdf"
+    pdf.touch()
+    ocr = FakeOcr({2: " OCR result\r\n"})
+    extractor = StubExtractor(
+        [FakePage("Native text"), FakePage("123 --")],
+        ocr=ocr,
+    )
+
+    document = extractor.extract(pdf)
+
+    assert document.pages == (
+        Page(number=1, text="Native text", source=pdf.name),
+        Page(number=2, text="OCR result", source=pdf.name),
+    )
+    assert document.pages_without_machine_readable_text == ()
+    assert ocr.calls == [(pdf, 2)]
+
+
+def test_extract_reports_page_number_when_ocr_fails(tmp_path: Path) -> None:
+    pdf = tmp_path / "broken-scan.pdf"
+    pdf.touch()
+    extractor = StubExtractor(
+        [FakePage("Native text"), FakePage("")],
+        ocr=FakeOcr({2: RuntimeError("OCR backend failed")}),
+    )
+
+    with pytest.raises(ValueError, match="Could not OCR PDF page 2"):
+        extractor.extract(pdf)
 
 
 def test_rejects_password_protected_pdf_before_reading_pages(tmp_path: Path) -> None:
