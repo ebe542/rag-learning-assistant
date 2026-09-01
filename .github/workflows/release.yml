@@ -80,8 +80,13 @@ jobs:
       - name: Check release asset metadata
         run: python -m twine check dist/*
 
+      - name: Extract release notes from changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/extract_release_notes.py "${RELEASE_TAG#v}" --output dist/release-notes.md
+
       - name: Upload verified release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-${{ github.ref_name }}
           path: dist/
@@ -103,7 +108,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download verified release assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-assets-${{ github.ref_name }}
           path: dist
@@ -124,8 +129,9 @@ jobs:
           fi
 
           gh release create "$RELEASE_TAG" \
-            dist/* \
+            dist/*.whl \
+            dist/*.tar.gz \
             --verify-tag \
-            --generate-notes \
+            --notes-file dist/release-notes.md \
             --title "$RELEASE_TAG" \
             "${release_options[@]}"

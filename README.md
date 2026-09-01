@@ -560,8 +560,10 @@ directory or test environment in the repository. An annotated version tag on
 `main` matching the package version and a dated changelog section starts the
 GitHub Actions `Release` workflow. It runs the quality and package checks,
 uploads the wheel and source distribution as a short-lived workflow artifact,
-then creates the GitHub release with both files attached. Alpha, beta, and
-release-candidate tags are published as pre-releases.
+extracts the matching version section from `CHANGELOG.md`, then creates the
+GitHub release with that section as its description and both distributions
+attached. A missing, duplicate, or empty version section stops publication.
+Alpha, beta, and release-candidate tags are published as pre-releases.
 
 Contributions are welcome.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md).
