@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Protocol, cast
 
 from rag_learning_assistant.ingestion.models import Document, Page
+
+_MACHINE_READABLE_WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
 
 
 class PdfPage(Protocol):
@@ -76,7 +80,10 @@ class PdfExtractor:
                 for page_index in range(pdf.page_count)
             )
 
-        return Document(source=pdf_path.name, pages=pages)
+        document = Document(source=pdf_path.name, pages=pages)
+        if _MACHINE_READABLE_WORD.search(document.text) is None:
+            raise ValueError("PDF does not contain machine-readable text")
+        return document
 
     def _open(self, path: Path) -> PdfHandle:
         try:
@@ -146,5 +153,11 @@ class PdfExtractor:
 
     @staticmethod
     def _normalise(text: str) -> str:
-        lines = (line.rstrip() for line in text.replace("\r\n", "\n").split("\n"))
+        normalized_newlines = text.replace("\r\n", "\n").replace("\r", "\n")
+        cleaned = "".join(
+            character
+            for character in normalized_newlines
+            if character in "\n\t" or not unicodedata.category(character).startswith("C")
+        )
+        lines = (line.rstrip() for line in cleaned.split("\n"))
         return "\n".join(lines).strip()

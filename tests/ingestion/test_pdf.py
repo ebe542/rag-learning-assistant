@@ -106,6 +106,36 @@ def test_extract_preserves_page_numbers_and_source(tmp_path: Path) -> None:
     assert document.text == "First page\n\nSecond page"
 
 
+@pytest.mark.parametrize(
+    "page_texts",
+    [
+        ["", "  \r\n"],
+        ["\x00\x01", "1234 -- ???"],
+        ["A 1234"],
+    ],
+)
+def test_rejects_pdf_without_machine_readable_text(
+    tmp_path: Path,
+    page_texts: list[str],
+) -> None:
+    pdf = tmp_path / "scanned-or-empty.pdf"
+    pdf.touch()
+    extractor = StubExtractor([FakePage(text) for text in page_texts])
+
+    with pytest.raises(ValueError, match="does not contain machine-readable text"):
+        extractor.extract(pdf)
+
+
+def test_extract_removes_control_characters_from_readable_text(tmp_path: Path) -> None:
+    pdf = tmp_path / "readable.pdf"
+    pdf.touch()
+    extractor = StubExtractor([FakePage("\x00Readable\x01\ttext\rnext line")])
+
+    document = extractor.extract(pdf)
+
+    assert document.text == "Readable\ttext\nnext line"
+
+
 @pytest.mark.parametrize("filename", ["notes.txt", "book.epub", "pdf"])
 def test_rejects_non_pdf_files(tmp_path: Path, filename: str) -> None:
     path = tmp_path / filename
