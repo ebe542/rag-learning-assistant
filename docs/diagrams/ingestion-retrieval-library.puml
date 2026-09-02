@@ -10,6 +10,7 @@ package "Python standard types" #EEEEEE {
 }
 
 package "ingestion" #E8F4FD {
+  enum PageTextOrigin
   class Page <<immutable model>>
   class Document <<immutable model>>
   interface PdfPage <<Protocol>>
@@ -61,6 +62,7 @@ package "application" #FFE8E8 {
 }
 
 Document *-- "1..*" Page
+Page --> PageTextOrigin : final text source
 PdfHandle o-- "1..*" PdfPage
 PdfExtractor --> PdfHandle : opens
 PdfExtractor o-- PageOcr : optional fallback

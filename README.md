@@ -282,6 +282,8 @@ export RAG_LEARN_OCR_LANGUAGES='eng'
 Text-based PDFs do not invoke Tesseract and therefore do not require its
 language data. OCR also provides a recovery path for PDFs whose broken font
 mapping yields mostly invalid control characters instead of readable text.
+The extraction JSON records `ocr_applied` and the final `text_origin` (`native`,
+`ocr`, or `none`) for every page, including mixed documents.
 
 Create a persistent library and add one or more documents:
 

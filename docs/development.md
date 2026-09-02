@@ -141,6 +141,9 @@ Pages whose native extraction consists of at least ten invalid control
 characters and at least 50 percent invalid non-whitespace content also use OCR
 as a narrowly scoped recovery for corrupt PDF font mappings. Ordinary numeric
 or symbol-only pages do not satisfy this condition.
+Each page retains whether OCR ran and exposes its final text origin as `native`,
+`ocr`, or `none`. These values describe the final extraction result while the
+scan and corrupt-mapping flags preserve why OCR was selected.
 
 ### Chunking
 

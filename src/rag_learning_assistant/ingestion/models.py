@@ -1,12 +1,21 @@
 """Data models produced during document ingestion."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 def has_machine_readable_text(text: str) -> bool:
     """Return whether extracted text contains at least one Unicode letter."""
 
     return any(character.isalpha() for character in text)
+
+
+class PageTextOrigin(StrEnum):
+    """Identify where a page's final machine-readable text came from."""
+
+    NATIVE = "native"
+    OCR = "ocr"
+    NONE = "none"
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +28,7 @@ class Page:
     has_embedded_images: bool = False
     is_probable_full_page_scan: bool = False
     has_corrupt_text_mapping: bool = False
+    ocr_applied: bool = False
 
     def __post_init__(self) -> None:
         if self.number < 1:
@@ -31,6 +41,16 @@ class Page:
         """Report whether this page can enter the text-processing pipeline."""
 
         return has_machine_readable_text(self.text)
+
+    @property
+    def text_origin(self) -> PageTextOrigin:
+        """Return the source of the final readable page text."""
+
+        if not self.has_machine_readable_text:
+            return PageTextOrigin.NONE
+        if self.ocr_applied:
+            return PageTextOrigin.OCR
+        return PageTextOrigin.NATIVE
 
 
 @dataclass(frozen=True, slots=True)

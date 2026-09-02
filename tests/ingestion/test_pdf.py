@@ -219,6 +219,7 @@ def test_extract_uses_ocr_only_for_pages_without_readable_text(tmp_path: Path) -
             source=pdf.name,
             has_embedded_images=True,
             is_probable_full_page_scan=True,
+            ocr_applied=True,
         ),
     )
     assert document.pages_without_machine_readable_text == ()
@@ -301,7 +302,34 @@ def test_extract_uses_ocr_for_a_corrupt_font_mapping(tmp_path: Path) -> None:
 
     assert document.pages[0].text == "Recovered text"
     assert document.pages[0].has_corrupt_text_mapping is True
+    assert document.pages[0].ocr_applied is True
     assert ocr.calls == [(pdf, 1)]
+
+
+def test_extract_tracks_text_origin_across_mixed_pages(tmp_path: Path) -> None:
+    pdf = tmp_path / "mixed.pdf"
+    pdf.touch()
+    ocr = FakeOcr({2: "Scanned text", 4: "Recovered mapping"})
+    extractor = StubExtractor(
+        [
+            FakePage("Native text"),
+            FakePage("", has_embedded_images=True),
+            FakePage(""),
+            FakePage("\x01\x02\x03\x04\x05" * 3),
+        ],
+        ocr=ocr,
+    )
+
+    document = extractor.extract(pdf)
+
+    assert [page.text_origin for page in document.pages] == [
+        "native",
+        "ocr",
+        "none",
+        "ocr",
+    ]
+    assert document.pages_without_machine_readable_text == (3,)
+    assert ocr.calls == [(pdf, 2), (pdf, 4)]
 
 
 def test_extract_does_not_ocr_a_symbol_only_page(tmp_path: Path) -> None:

@@ -1118,6 +1118,8 @@ def run_extract(
                 "has_embedded_images": page.has_embedded_images,
                 "is_probable_full_page_scan": page.is_probable_full_page_scan,
                 "has_corrupt_text_mapping": page.has_corrupt_text_mapping,
+                "ocr_applied": page.ocr_applied,
+                "text_origin": page.text_origin,
             }
             for page in document.pages
         ],

@@ -136,6 +136,7 @@ class PdfExtractor:
             raise ValueError(f"Could not extract text from PDF page {page_number}") from error
         has_corrupt_text_mapping = self._has_corrupt_text_mapping(raw_text)
         text = self._normalise(raw_text)
+        ocr_applied = False
         if (
             not has_machine_readable_text(text)
             and (is_probable_full_page_scan or has_corrupt_text_mapping)
@@ -143,6 +144,7 @@ class PdfExtractor:
         ):
             try:
                 text = self._normalise(self.ocr.extract_text(path, page_number))
+                ocr_applied = True
             except Exception as error:
                 raise ValueError(f"Could not OCR PDF page {page_number}: {error}") from error
         return Page(
@@ -152,6 +154,7 @@ class PdfExtractor:
             has_embedded_images=has_embedded_images,
             is_probable_full_page_scan=is_probable_full_page_scan,
             has_corrupt_text_mapping=has_corrupt_text_mapping,
+            ocr_applied=ocr_applied,
         )
 
     @staticmethod
