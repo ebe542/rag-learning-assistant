@@ -12,6 +12,7 @@ from rag_learning_assistant.ingestion.models import (
     Document,
     Page,
     has_machine_readable_text,
+    has_usable_ocr_text,
 )
 from rag_learning_assistant.ingestion.ocr import PageOcr
 
@@ -108,7 +109,11 @@ class PdfExtractor:
             )
 
         document = Document(source=pdf_path.name, pages=pages)
-        if not has_machine_readable_text(document.text):
+        if not has_machine_readable_text(document.text) and not any(
+            page.ocr_text_usable for page in document.pages
+        ):
+            if any(page.ocr_applied for page in document.pages):
+                raise ValueError("OCR did not produce usable machine-readable text")
             raise ValueError("PDF does not contain machine-readable text")
         return document
 
@@ -137,14 +142,17 @@ class PdfExtractor:
         has_corrupt_text_mapping = self._has_corrupt_text_mapping(raw_text)
         text = self._normalise(raw_text)
         ocr_applied = False
+        ocr_text_usable: bool | None = None
         if (
             not has_machine_readable_text(text)
             and (is_probable_full_page_scan or has_corrupt_text_mapping)
             and self.ocr is not None
         ):
             try:
-                text = self._normalise(self.ocr.extract_text(path, page_number))
+                recognized_text = self._normalise(self.ocr.extract_text(path, page_number))
                 ocr_applied = True
+                ocr_text_usable = has_usable_ocr_text(recognized_text)
+                text = recognized_text if ocr_text_usable else ""
             except Exception as error:
                 raise ValueError(f"Could not OCR PDF page {page_number}: {error}") from error
         return Page(
@@ -155,6 +163,7 @@ class PdfExtractor:
             is_probable_full_page_scan=is_probable_full_page_scan,
             has_corrupt_text_mapping=has_corrupt_text_mapping,
             ocr_applied=ocr_applied,
+            ocr_text_usable=ocr_text_usable,
         )
 
     @staticmethod

@@ -115,6 +115,7 @@ def test_cli_outputs_machine_readable_json(monkeypatch, tmp_path: Path, capsys) 
                 "is_probable_full_page_scan": False,
                 "has_corrupt_text_mapping": False,
                 "ocr_applied": False,
+                "ocr_text_usable": None,
                 "text_origin": "native",
             }
         ],

@@ -10,6 +10,12 @@ def has_machine_readable_text(text: str) -> bool:
     return any(character.isalpha() for character in text)
 
 
+def has_usable_ocr_text(text: str) -> bool:
+    """Apply a conservative structural sanity check to recognized text."""
+
+    return any(character.isalnum() for character in text)
+
+
 class PageTextOrigin(StrEnum):
     """Identify where a page's final machine-readable text came from."""
 
@@ -29,6 +35,7 @@ class Page:
     is_probable_full_page_scan: bool = False
     has_corrupt_text_mapping: bool = False
     ocr_applied: bool = False
+    ocr_text_usable: bool | None = None
 
     def __post_init__(self) -> None:
         if self.number < 1:
@@ -40,16 +47,16 @@ class Page:
     def has_machine_readable_text(self) -> bool:
         """Report whether this page can enter the text-processing pipeline."""
 
-        return has_machine_readable_text(self.text)
+        return has_machine_readable_text(self.text) or self.ocr_text_usable is True
 
     @property
     def text_origin(self) -> PageTextOrigin:
         """Return the source of the final readable page text."""
 
+        if self.ocr_applied and self.ocr_text_usable:
+            return PageTextOrigin.OCR
         if not self.has_machine_readable_text:
             return PageTextOrigin.NONE
-        if self.ocr_applied:
-            return PageTextOrigin.OCR
         return PageTextOrigin.NATIVE
 
 

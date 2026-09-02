@@ -5,6 +5,7 @@ from rag_learning_assistant.ingestion.models import (
     Page,
     PageTextOrigin,
     has_machine_readable_text,
+    has_usable_ocr_text,
 )
 from rag_learning_assistant.ingestion.ocr import PageOcr
 from rag_learning_assistant.ingestion.pdf import PdfExtractor
@@ -22,4 +23,5 @@ __all__ = [
     "PdfExtractor",
     "TesseractPageOcr",
     "has_machine_readable_text",
+    "has_usable_ocr_text",
 ]

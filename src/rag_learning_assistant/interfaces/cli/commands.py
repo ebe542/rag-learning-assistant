@@ -1119,6 +1119,7 @@ def run_extract(
                 "is_probable_full_page_scan": page.is_probable_full_page_scan,
                 "has_corrupt_text_mapping": page.has_corrupt_text_mapping,
                 "ocr_applied": page.ocr_applied,
+                "ocr_text_usable": page.ocr_text_usable,
                 "text_origin": page.text_origin,
             }
             for page in document.pages

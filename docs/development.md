@@ -144,6 +144,11 @@ or symbol-only pages do not satisfy this condition.
 Each page retains whether OCR ran and exposes its final text origin as `native`,
 `ocr`, or `none`. These values describe the final extraction result while the
 scan and corrupt-mapping flags preserve why OCR was selected.
+OCR output must contain at least one Unicode letter or number. This deliberately
+preserves numeric tables and formula-heavy mathematics pages without imposing a
+language-specific letter ratio. Empty and punctuation-only OCR output is cleared
+before chunking and therefore cannot enter retrieval or generation. Mathematical
+layout recognition remains outside the guarantees of the Tesseract backend.
 
 ### Chunking
 

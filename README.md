@@ -283,7 +283,10 @@ Text-based PDFs do not invoke Tesseract and therefore do not require its
 language data. OCR also provides a recovery path for PDFs whose broken font
 mapping yields mostly invalid control characters instead of readable text.
 The extraction JSON records `ocr_applied` and the final `text_origin` (`native`,
-`ocr`, or `none`) for every page, including mixed documents.
+`ocr`, or `none`) for every page, including mixed documents. `ocr_text_usable`
+reports whether OCR produced at least one alphanumeric character; rejected empty
+or punctuation-only output is not indexed. Numeric and formula-heavy pages are
+preserved for mathematics material.
 
 Create a persistent library and add one or more documents:
 
