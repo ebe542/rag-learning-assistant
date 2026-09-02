@@ -9,7 +9,7 @@ format may still change before a stable release.
 
 ## Current features
 
-- extract text from text-based PDF files
+- extract text from text-based PDFs and conservative full-page scans
 - retain document name and one-based page numbers
 - output structured JSON through a small command-line interface
 - testable core with no model or cloud-service dependency
@@ -23,7 +23,7 @@ format may still change before a stable release.
   grounded summary, and a grounded question bank
 - open an optional local browser interface through `rag-learn gui`
 
-Scanned documents do not yet support OCR.
+Full-page scans can optionally use Tesseract OCR through PyMuPDF.
 
 ## Start here
 
@@ -191,6 +191,8 @@ rag-learn doctor
 
 Add `--json` for a machine-readable support report. The command exits with
 status 1 when the full local learning workflow needs attention.
+Optional OCR readiness is reported separately and does not make an otherwise
+usable text-PDF environment fail the diagnostic command.
 
 UUIDs and SHA-256 identities remain in the JSON output for provenance and
 automation, but they are not required for the product-level workflow.
@@ -250,12 +252,36 @@ rag-learn extract path\to\book.pdf --max-chars 1000 --overlap-chars 150
 The command emits JSON containing the extracted pages and searchable chunks.
 Every chunk retains its source file, page number, and document-wide index.
 Each page reports whether it contains machine-readable text, and the document
-lists affected page numbers so future OCR processing can target them directly.
+lists affected page numbers so OCR processing can target them directly.
 Pages also report whether PyMuPDF found embedded raster images; empty pages
 without images are not treated as scanned OCR input. OCR candidates are
 reported separately and conservatively require exactly one image covering at
 least 90 percent of a page without native text.
 Chunk size and overlap can be configured through the command-line options shown above.
+
+### Optional OCR for full-page scans
+
+OCR uses PyMuPDF's Tesseract integration only for conservatively detected
+full-page scans. Install Tesseract with the German and English language data,
+following the [PyMuPDF OCR setup](https://pymupdf.readthedocs.io/en/latest/installation.html#enabling-integrated-ocr-support),
+then point PyMuPDF to its `tessdata` directory. For Git Bash on Windows:
+
+```bash
+export TESSDATA_PREFIX='C:/Program Files/Tesseract-OCR/tessdata'
+rag-learn extract local-data/books/scanned-document.pdf
+```
+
+The default OCR languages are German and English (`deu+eng`). Override them in
+the current shell or the repository `.env` file when different installed
+language data should be used:
+
+```bash
+export RAG_LEARN_OCR_LANGUAGES='eng'
+```
+
+Text-based PDFs do not invoke Tesseract and therefore do not require its
+language data. OCR also provides a recovery path for PDFs whose broken font
+mapping yields mostly invalid control characters instead of readable text.
 
 Create a persistent library and add one or more documents:
 

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from rag_learning_assistant import cli
+from rag_learning_assistant.ingestion import TesseractPageOcr
 from rag_learning_assistant.interfaces.cli import commands
 from rag_learning_assistant.interfaces.cli.error_reporting import (
     default_log_path,
@@ -241,3 +242,12 @@ def test_pdf_extractor_builder_logs_mupdf_diagnostics(
             },
         )
     ]
+
+
+def test_pdf_extractor_builder_configures_ocr_languages(monkeypatch) -> None:
+    monkeypatch.setenv("RAG_LEARN_OCR_LANGUAGES", "eng")
+
+    extractor = commands.build_pdf_extractor()
+
+    assert isinstance(extractor.ocr, TesseractPageOcr)
+    assert extractor.ocr.languages == "eng"

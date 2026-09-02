@@ -125,7 +125,7 @@ class PdfExtractor:
         page_number = page_index + 1
         try:
             pdf_page = pdf.load_page(page_index)
-            text = pdf_page.get_text("text")
+            raw_text = pdf_page.get_text("text")
             image_info = pdf_page.get_image_info()
             has_embedded_images = bool(image_info)
             is_probable_full_page_scan = self._is_probable_full_page_scan(
@@ -134,22 +134,24 @@ class PdfExtractor:
             )
         except Exception as error:
             raise ValueError(f"Could not extract text from PDF page {page_number}") from error
-        text = self._normalise(text)
+        has_corrupt_text_mapping = self._has_corrupt_text_mapping(raw_text)
+        text = self._normalise(raw_text)
         if (
             not has_machine_readable_text(text)
-            and is_probable_full_page_scan
+            and (is_probable_full_page_scan or has_corrupt_text_mapping)
             and self.ocr is not None
         ):
             try:
                 text = self._normalise(self.ocr.extract_text(path, page_number))
             except Exception as error:
-                raise ValueError(f"Could not OCR PDF page {page_number}") from error
+                raise ValueError(f"Could not OCR PDF page {page_number}: {error}") from error
         return Page(
             number=page_number,
             text=text,
             source=source,
             has_embedded_images=has_embedded_images,
             is_probable_full_page_scan=is_probable_full_page_scan,
+            has_corrupt_text_mapping=has_corrupt_text_mapping,
         )
 
     @staticmethod
@@ -182,6 +184,20 @@ class PdfExtractor:
             min(page_rect.y1, image_y1) - max(page_rect.y0, image_y0),
         )
         return covered_width * covered_height / page_area >= 0.9
+
+    @staticmethod
+    def _has_corrupt_text_mapping(text: str) -> bool:
+        """Detect substantial invalid control output from a broken PDF font map."""
+
+        content = tuple(character for character in text if not character.isspace())
+        if not content:
+            return False
+
+        invalid_controls = sum(
+            character not in "\n\r\t" and unicodedata.category(character).startswith("C")
+            for character in content
+        )
+        return invalid_controls >= 10 and invalid_controls / len(content) >= 0.5
 
     def _open(self, path: Path) -> PdfHandle:
         try:

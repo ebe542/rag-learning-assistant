@@ -2,9 +2,13 @@
 
 import importlib
 import importlib.util
+import os
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+from rag_learning_assistant.ingestion import DEFAULT_OCR_LANGUAGES
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +21,16 @@ class DependencyCheck:
 
 
 @dataclass(frozen=True, slots=True)
+class OcrCheck:
+    """Describe optional Tesseract language-data readiness."""
+
+    available: bool
+    tessdata_directory: str | None
+    languages: tuple[str, ...]
+    missing_languages: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DoctorReport:
     """Describe local readiness without changing application state."""
 
@@ -25,6 +39,7 @@ class DoctorReport:
     library_directory: str
     library_status: str
     dependencies: tuple[DependencyCheck, ...]
+    ocr: OcrCheck
     cuda_available: bool
     gpu_name: str | None
 
@@ -70,6 +85,7 @@ def build_doctor_report(library_directory: Path) -> DoctorReport:
         library_directory=str(library_directory),
         library_status=_library_status(library_directory),
         dependencies=dependencies,
+        ocr=_ocr_check(os.environ),
         cuda_available=cuda_available,
         gpu_name=gpu_name,
     )
@@ -92,6 +108,42 @@ def _library_status(library_directory: Path) -> str:
     if not metadata_exists and not vectors_exist:
         return "not created"
     return "incomplete"
+
+
+def _ocr_check(environment: Mapping[str, str]) -> OcrCheck:
+    """Inspect optional Tesseract data without invoking OCR."""
+
+    configured_languages = environment.get(
+        "RAG_LEARN_OCR_LANGUAGES",
+        DEFAULT_OCR_LANGUAGES,
+    )
+    languages = tuple(
+        language
+        for language in (part.strip() for part in configured_languages.split("+"))
+        if language
+    )
+    if not languages:
+        languages = tuple(DEFAULT_OCR_LANGUAGES.split("+"))
+
+    configured_directory = environment.get("TESSDATA_PREFIX", "").strip()
+    tessdata_directory = Path(configured_directory) if configured_directory else None
+    if tessdata_directory is None or not tessdata_directory.is_dir():
+        missing_languages = languages
+    else:
+        missing_languages = tuple(
+            language
+            for language in languages
+            if not (tessdata_directory / f"{language}.traineddata").is_file()
+        )
+
+    return OcrCheck(
+        available=tessdata_directory is not None
+        and tessdata_directory.is_dir()
+        and not missing_languages,
+        tessdata_directory=str(tessdata_directory) if tessdata_directory is not None else None,
+        languages=languages,
+        missing_languages=missing_languages,
+    )
 
 
 def _probe_cuda(*, torch_available: bool) -> tuple[bool, str | None]:

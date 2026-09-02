@@ -15,6 +15,7 @@ package "ingestion" #E8F4FD {
   interface PdfPage <<Protocol>>
   interface PdfHandle <<Protocol>>
   interface PageOcr <<Protocol>>
+  class TesseractPageOcr
   class PdfExtractor
 }
 package "chunking" #E8F4FD {
@@ -63,6 +64,7 @@ Document *-- "1..*" Page
 PdfHandle o-- "1..*" PdfPage
 PdfExtractor --> PdfHandle : opens
 PdfExtractor o-- PageOcr : optional fallback
+TesseractPageOcr ..|> PageOcr
 PdfExtractor ..|> DocumentExtractor
 TextChunker --> Page : processes
 TextChunker --> Chunk : creates

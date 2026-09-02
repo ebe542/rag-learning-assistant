@@ -291,6 +291,31 @@ def test_extract_does_not_ocr_multiple_full_page_images(tmp_path: Path) -> None:
     assert ocr.calls == []
 
 
+def test_extract_uses_ocr_for_a_corrupt_font_mapping(tmp_path: Path) -> None:
+    pdf = tmp_path / "broken-font-map.pdf"
+    pdf.touch()
+    ocr = FakeOcr({1: "Recovered text"})
+    extractor = StubExtractor([FakePage("\x01\x02\x03\x04\x05" * 3)], ocr=ocr)
+
+    document = extractor.extract(pdf)
+
+    assert document.pages[0].text == "Recovered text"
+    assert document.pages[0].has_corrupt_text_mapping is True
+    assert ocr.calls == [(pdf, 1)]
+
+
+def test_extract_does_not_ocr_a_symbol_only_page(tmp_path: Path) -> None:
+    pdf = tmp_path / "symbols.pdf"
+    pdf.touch()
+    ocr = FakeOcr({1: "must not be used"})
+    extractor = StubExtractor([FakePage("123 -- ???")], ocr=ocr)
+
+    with pytest.raises(ValueError, match="does not contain machine-readable text"):
+        extractor.extract(pdf)
+
+    assert ocr.calls == []
+
+
 def test_rejects_password_protected_pdf_before_reading_pages(tmp_path: Path) -> None:
     pdf = tmp_path / "protected.pdf"
     pdf.touch()

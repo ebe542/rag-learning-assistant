@@ -132,8 +132,15 @@ when configured, `PdfExtractor` sends only pages without extracted letters to
 that backend only when PyMuPDF reports exactly one raster image covering at
 least 90 percent of a page, and preserves the original page number. This avoids
 treating small illustrations or logos as complete scanned pages. Empty pages
-without images are not sent to OCR. No concrete OCR backend or additional OCR
-dependency is installed yet.
+without images are not sent to OCR. `TesseractPageOcr` is wired by the
+composition root and uses PyMuPDF's native Tesseract integration at 300 DPI
+with full-page OCR. The language selection defaults to `deu+eng` and can be
+overridden with `RAG_LEARN_OCR_LANGUAGES`; Tesseract language data remain an
+optional system dependency configured through `TESSDATA_PREFIX`.
+Pages whose native extraction consists of at least ten invalid control
+characters and at least 50 percent invalid non-whitespace content also use OCR
+as a narrowly scoped recovery for corrupt PDF font mappings. Ordinary numeric
+or symbol-only pages do not satisfy this condition.
 
 ### Chunking
 

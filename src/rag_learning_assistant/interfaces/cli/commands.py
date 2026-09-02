@@ -1,6 +1,7 @@
 """Command execution and dependency wiring for the CLI."""
 
 import json
+import os
 import sys
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -54,7 +55,12 @@ from rag_learning_assistant.generation.huggingface import (
 )
 from rag_learning_assistant.generation.question_cache import SqliteQuestionBatchCache
 from rag_learning_assistant.generation.sqlite_cache import SqliteSummaryCache
-from rag_learning_assistant.ingestion import Document, PdfExtractor
+from rag_learning_assistant.ingestion import (
+    DEFAULT_OCR_LANGUAGES,
+    Document,
+    PdfExtractor,
+    TesseractPageOcr,
+)
 from rag_learning_assistant.interfaces.cli.doctor import build_doctor_report
 from rag_learning_assistant.interfaces.cli.error_reporting import (
     write_diagnostic_log,
@@ -147,8 +153,16 @@ def build_pdf_extractor() -> PdfExtractor:
             },
         )
 
+    ocr_languages = os.environ.get(
+        "RAG_LEARN_OCR_LANGUAGES",
+        DEFAULT_OCR_LANGUAGES,
+    ).strip()
+    if not ocr_languages:
+        ocr_languages = DEFAULT_OCR_LANGUAGES
+
     return PdfExtractor(
         diagnostic_handler=log_diagnostic,
+        ocr=TesseractPageOcr(languages=ocr_languages),
     )
 
 
@@ -590,6 +604,13 @@ def run_doctor(
     for dependency in report.dependencies:
         status = "available" if dependency.available else "missing"
         print(f"- {dependency.name}: {status}")
+    if report.ocr.available:
+        print(f"OCR: available ({'+'.join(report.ocr.languages)})")
+    elif report.ocr.tessdata_directory is None:
+        print("OCR: unavailable (optional; TESSDATA_PREFIX is not configured)")
+    else:
+        missing_languages = ", ".join(report.ocr.missing_languages)
+        print(f"OCR: unavailable (optional; missing language data: {missing_languages})")
     if report.cuda_available:
         print(f"GPU: {report.gpu_name} (CUDA available)")
     else:
@@ -1096,6 +1117,7 @@ def run_extract(
                 "has_machine_readable_text": page.has_machine_readable_text,
                 "has_embedded_images": page.has_embedded_images,
                 "is_probable_full_page_scan": page.is_probable_full_page_scan,
+                "has_corrupt_text_mapping": page.has_corrupt_text_mapping,
             }
             for page in document.pages
         ],

@@ -182,6 +182,8 @@ Common causes of failure:
 
 - `rag-learn: command not found`: activate `.venv` again.
 - A dependency is `missing`: repeat the installation command from step 1.
+- OCR is `unavailable`: text-based PDFs still work; scanned PDFs additionally
+  require `TESSDATA_PREFIX` and the configured Tesseract language data.
 - The library is `incomplete`: select the intended library and verify that it
   contains both `metadata.sqlite3` and `vectors.faiss`.
 - A PDF is password protected: save an unlocked copy before importing it.

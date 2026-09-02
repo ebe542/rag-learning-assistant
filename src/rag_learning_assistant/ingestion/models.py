@@ -18,6 +18,7 @@ class Page:
     source: str
     has_embedded_images: bool = False
     is_probable_full_page_scan: bool = False
+    has_corrupt_text_mapping: bool = False
 
     def __post_init__(self) -> None:
         if self.number < 1:

@@ -7,6 +7,7 @@ from rag_learning_assistant.interfaces.cli import commands, doctor, entrypoint
 from rag_learning_assistant.interfaces.cli.doctor import (
     DependencyCheck,
     DoctorReport,
+    OcrCheck,
 )
 from rag_learning_assistant.interfaces.cli.parser import build_parser
 
@@ -20,6 +21,12 @@ def make_report(*, ready: bool) -> DoctorReport:
         dependencies=(
             DependencyCheck("PyMuPDF", "fitz", True),
             DependencyCheck("PyTorch", "torch", ready),
+        ),
+        ocr=OcrCheck(
+            available=False,
+            tessdata_directory=None,
+            languages=("deu", "eng"),
+            missing_languages=("deu", "eng"),
         ),
         cuda_available=True,
         gpu_name="Test GPU",
@@ -57,6 +64,7 @@ def test_run_doctor_prints_human_readable_ready_report(monkeypatch, capsys) -> N
         "Dependencies:\n"
         "- PyMuPDF: available\n"
         "- PyTorch: available\n"
+        "OCR: unavailable (optional; TESSDATA_PREFIX is not configured)\n"
         "GPU: Test GPU (CUDA available)\n"
         "Status: ready\n"
     )
@@ -94,6 +102,39 @@ def test_build_doctor_report_inspects_library_and_dependencies(
     assert report.cuda_available is True
     assert report.gpu_name == "Test GPU"
     assert report.ready is True
+
+
+def test_ocr_check_reports_installed_language_data(tmp_path: Path) -> None:
+    (tmp_path / "deu.traineddata").write_bytes(b"data")
+    (tmp_path / "eng.traineddata").write_bytes(b"data")
+
+    result = doctor._ocr_check(
+        {
+            "TESSDATA_PREFIX": str(tmp_path),
+            "RAG_LEARN_OCR_LANGUAGES": "deu+eng",
+        }
+    )
+
+    assert result == OcrCheck(
+        available=True,
+        tessdata_directory=str(tmp_path),
+        languages=("deu", "eng"),
+        missing_languages=(),
+    )
+
+
+def test_ocr_check_reports_missing_language_data(tmp_path: Path) -> None:
+    (tmp_path / "eng.traineddata").write_bytes(b"data")
+
+    result = doctor._ocr_check(
+        {
+            "TESSDATA_PREFIX": str(tmp_path),
+            "RAG_LEARN_OCR_LANGUAGES": "deu+eng",
+        }
+    )
+
+    assert result.missing_languages == ("deu",)
+    assert result.available is False
 
 
 @pytest.mark.parametrize(
