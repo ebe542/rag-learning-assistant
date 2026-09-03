@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 import pytest
@@ -32,6 +33,17 @@ def test_learning_package_rejects_blank_name(name: str) -> None:
             name=name,
             document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
             status=LearningPackageStatus.INDEXED,
+        )
+
+
+def test_learning_package_rejects_naive_creation_time() -> None:
+    with pytest.raises(ValueError, match="creation time must be timezone-aware"):
+        LearningPackage(
+            id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            name="python-basics",
+            document_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            status=LearningPackageStatus.INDEXED,
+            created_at=datetime(2026, 9, 3, 12, 0),
         )
 
 

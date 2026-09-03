@@ -2,6 +2,7 @@
 
 import sqlite3
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -41,7 +42,8 @@ class SqliteLearningPackageRepository:
                     status TEXT NOT NULL,
                     summary_identity_fingerprint TEXT,
                     question_bank_identity_fingerprint TEXT,
-                    learning_language TEXT NOT NULL DEFAULT 'same'
+                    learning_language TEXT NOT NULL DEFAULT 'same',
+                    created_at TEXT NOT NULL
                 )
                 """
             )
@@ -50,6 +52,12 @@ class SqliteLearningPackageRepository:
                 connection.execute(
                     "ALTER TABLE learning_packages ADD COLUMN learning_language "
                     "TEXT NOT NULL DEFAULT 'same'"
+                )
+            if "created_at" not in columns:
+                connection.execute("ALTER TABLE learning_packages ADD COLUMN created_at TEXT")
+                connection.execute(
+                    "UPDATE learning_packages SET created_at = ? WHERE created_at IS NULL",
+                    (_serialize_datetime(datetime.now(UTC)),),
                 )
             initialize_name_registry(connection)
             for row in connection.execute("SELECT id, name FROM learning_packages"):
@@ -85,9 +93,10 @@ class SqliteLearningPackageRepository:
                     status,
                     summary_identity_fingerprint,
                     question_bank_identity_fingerprint,
-                    learning_language
+                    learning_language,
+                    created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(package.id),
@@ -97,6 +106,7 @@ class SqliteLearningPackageRepository:
                     package.summary_identity_fingerprint,
                     package.question_bank_identity_fingerprint,
                     package.learning_language.value,
+                    _serialize_datetime(package.created_at),
                 ),
             )
 
@@ -108,6 +118,12 @@ class SqliteLearningPackageRepository:
         """Atomically transfer a pending name reservation to its indexed package."""
 
         with closing(self._connect()) as connection, connection:
+            preparation = connection.execute(
+                "SELECT created_at FROM package_preparations WHERE id = ?",
+                (str(preparation_id),),
+            ).fetchone()
+            if preparation is None:
+                raise ValueError(f"Package preparation does not exist: {preparation_id}")
             cursor = connection.execute(
                 """
                 UPDATE package_names
@@ -125,9 +141,9 @@ class SqliteLearningPackageRepository:
                 INSERT INTO learning_packages (
                     id, name, document_id, status,
                     summary_identity_fingerprint, question_bank_identity_fingerprint,
-                    learning_language
+                    learning_language, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(package.id),
@@ -137,6 +153,7 @@ class SqliteLearningPackageRepository:
                     package.summary_identity_fingerprint,
                     package.question_bank_identity_fingerprint,
                     package.learning_language.value,
+                    preparation["created_at"],
                 ),
             )
 
@@ -197,7 +214,8 @@ class SqliteLearningPackageRepository:
                     status,
                     summary_identity_fingerprint,
                     question_bank_identity_fingerprint,
-                    learning_language
+                    learning_language,
+                    created_at
                 FROM learning_packages
                 WHERE name = ? COLLATE NOCASE
                 """,
@@ -233,7 +251,8 @@ class SqliteLearningPackageRepository:
                     status,
                     summary_identity_fingerprint,
                     question_bank_identity_fingerprint,
-                    learning_language
+                    learning_language,
+                    created_at
                 FROM learning_packages
                 WHERE id = ?
                 """,
@@ -246,7 +265,7 @@ class SqliteLearningPackageRepository:
         return self._deserialize(row)
 
     def list_all(self) -> list[LearningPackage]:
-        """Return all learning packages in stable user-facing order."""
+        """Return all learning packages in stable arrival order."""
 
         with closing(self._connect()) as connection:
             rows = connection.execute(
@@ -258,9 +277,10 @@ class SqliteLearningPackageRepository:
                     status,
                     summary_identity_fingerprint,
                     question_bank_identity_fingerprint,
-                    learning_language
+                    learning_language,
+                    created_at
                 FROM learning_packages
-                ORDER BY name COLLATE NOCASE, id
+                ORDER BY created_at, rowid
                 """
             ).fetchall()
 
@@ -302,4 +322,22 @@ class SqliteLearningPackageRepository:
             summary_identity_fingerprint=row["summary_identity_fingerprint"],
             question_bank_identity_fingerprint=row["question_bank_identity_fingerprint"],
             learning_language=LearningLanguage(row["learning_language"]),
+            created_at=_deserialize_datetime(row["created_at"]),
         )
+
+
+def _serialize_datetime(value: datetime) -> str:
+    """Store one aware timestamp in a stable UTC representation."""
+
+    if value.tzinfo is None:
+        raise ValueError("Learning package timestamps must be timezone-aware")
+    return value.astimezone(UTC).isoformat()
+
+
+def _deserialize_datetime(value: str) -> datetime:
+    """Restore one persisted aware timestamp."""
+
+    result = datetime.fromisoformat(value)
+    if result.tzinfo is None:
+        raise ValueError("Stored learning package timestamp must be timezone-aware")
+    return result

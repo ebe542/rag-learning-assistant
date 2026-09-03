@@ -516,7 +516,11 @@ starts this daemon worker for its lifetime. Model services are constructed only
 after a request is claimed, so an idle GUI does not load embedding or generation
 models. Active preparation prevents library deletion. While work is running, a
 small browser-side poll replaces only the server-rendered package-list fragment;
-the surrounding page and browser tab remain stable.
+the surrounding page and browser tab remain stable. While requests remain,
+completed packages appear first and active or pending requests follow in the
+same `created_at` order used by the worker queue. The original preparation
+timestamp is transferred to the materialized package, so this arrival order
+remains stable after every request has completed.
 The worker passes the sanitized original filename separately to `LibraryService`.
 Storage therefore remains UUID-based while extracted pages, persisted document
 metadata, and citations retain the user-recognizable source name.

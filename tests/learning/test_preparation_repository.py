@@ -256,3 +256,6 @@ def test_indexed_checkpoint_can_reopen_with_its_preparation_request(tmp_path: Pa
     reopened = SqlitePackagePreparationRepository(database_path)
 
     assert reopened.find_by_name("Python Course") is not None
+    materialized = package_repository.find_by_name("Python Course")
+    assert materialized is not None
+    assert materialized.created_at == NOW

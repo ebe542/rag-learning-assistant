@@ -1,6 +1,7 @@
 """User-facing grouping of versioned learning material."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -11,6 +12,10 @@ def _is_lowercase_sha256(value: str) -> bool:
     """Recognize the canonical fingerprint format used by persisted identities."""
 
     return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 class LearningPackageStatus(StrEnum):
@@ -32,12 +37,15 @@ class LearningPackage:
     summary_identity_fingerprint: str | None = None
     question_bank_identity_fingerprint: str | None = None
     learning_language: LearningLanguage = LearningLanguage.SAME_AS_DOCUMENT
+    created_at: datetime = field(default_factory=_utc_now, compare=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.learning_language, LearningLanguage):
             raise ValueError("Learning package language must be a supported learning language")
         if not self.name.strip():
             raise ValueError("Learning package name must not be blank")
+        if self.created_at.tzinfo is None:
+            raise ValueError("Learning package creation time must be timezone-aware")
 
         if self.summary_identity_fingerprint is not None and not _is_lowercase_sha256(
             self.summary_identity_fingerprint

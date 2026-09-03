@@ -343,6 +343,30 @@ def test_library_page_lists_packages_with_their_preparation_status() -> None:
     assert "Learning language: German" in response.text
 
 
+def test_library_page_displays_preparations_in_worker_queue_order() -> None:
+    libraries = StubLibraryManagement()
+    created_at = datetime.now(UTC)
+    for preparation_id, name, offset in (
+        (UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "Z First", 0),
+        (UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), "A Second", 1),
+    ):
+        libraries.preparations.append(
+            PackagePreparation(
+                id=preparation_id,
+                name=name,
+                source_filename=f"{name}.pdf",
+                stored_filename=f"{preparation_id}.pdf",
+                question_count=5,
+                size_bytes=1024,
+                created_at=created_at + timedelta(seconds=offset),
+            )
+        )
+
+    response = build_client(libraries=libraries).get("/library")
+
+    assert response.text.index("Z First") < response.text.index("A Second")
+
+
 def test_package_create_page_shows_upload_constraints() -> None:
     response = build_client().get("/package/new")
 

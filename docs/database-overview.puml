@@ -118,6 +118,7 @@ package "Learning workflow" #FFE8E8 {
     summary_identity_fingerprint : TEXT
     question_bank_identity_fingerprint : TEXT
     * learning_language : TEXT = same
+    * created_at : TEXT <<ISO datetime>>
   }
 
   entity question_progress {

@@ -218,26 +218,28 @@ def create_app(
     def package_items() -> tuple[PackageListItem, ...]:
         stored_packages = packages.list_packages()
         stored_packages_by_name = {package.name.casefold(): package for package in stored_packages}
-        prepared = []
+        items: dict[str, tuple[datetime, str, PackageListItem]] = {}
         for package in stored_packages:
             document_language = libraries.get_document_language(package.document_id)
-            prepared.append(
-                PackageListItem(
-                    name=package.name,
-                    status=package.status.value,
-                    status_label=package.status.value.capitalize(),
-                    has_detail=True,
-                    preparation_id=None,
-                    failure_message=None,
-                    document_language_label=_document_language_label(document_language),
-                    learning_language_label=_learning_language_label(
-                        package.learning_language,
-                        document_language,
-                    ),
-                )
+            item = PackageListItem(
+                name=package.name,
+                status=package.status.value,
+                status_label=package.status.value.capitalize(),
+                has_detail=True,
+                preparation_id=None,
+                failure_message=None,
+                document_language_label=_document_language_label(document_language),
+                learning_language_label=_learning_language_label(
+                    package.learning_language,
+                    document_language,
+                ),
             )
-        items = {item.name.casefold(): item for item in prepared}
-        for preparation in libraries.list_package_preparations():
+            items[item.name.casefold()] = (package.created_at, str(package.id), item)
+        preparations = sorted(
+            libraries.list_package_preparations(),
+            key=lambda preparation: (preparation.created_at, str(preparation.id)),
+        )
+        for preparation in preparations:
             stored_package = stored_packages_by_name.get(preparation.name.casefold())
             document_language = (
                 libraries.get_document_language(stored_package.document_id)
@@ -261,8 +263,9 @@ def create_app(
                     document_language,
                 ),
             )
-            items[item.name.casefold()] = item
-        return tuple(sorted(items.values(), key=lambda item: item.name.casefold()))
+            items[item.name.casefold()] = (preparation.created_at, str(preparation.id), item)
+
+        return tuple(item for _, _, item in sorted(items.values(), key=lambda entry: entry[:2]))
 
     def package_list_context() -> dict[str, object]:
         items = package_items()

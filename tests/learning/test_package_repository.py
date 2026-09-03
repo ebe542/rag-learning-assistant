@@ -1,3 +1,5 @@
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from uuid import UUID
 
@@ -76,7 +78,7 @@ def test_saving_identical_learning_package_is_idempotent(
     assert repository.find_by_name("python-basics") == package
 
 
-def test_list_all_returns_packages_by_name(
+def test_list_all_returns_packages_by_arrival_time(
     tmp_path: Path,
 ) -> None:
     repository = SqliteLearningPackageRepository(tmp_path / "metadata.sqlite3")
@@ -97,12 +99,64 @@ def test_list_all_returns_packages_by_name(
         )
     )
 
+    with closing(sqlite3.connect(tmp_path / "metadata.sqlite3")) as connection, connection:
+        connection.execute(
+            "UPDATE learning_packages SET created_at = ? WHERE name = ?",
+            ("2026-09-03T10:00:00+00:00", "Python Advanced"),
+        )
+        connection.execute(
+            "UPDATE learning_packages SET created_at = ? WHERE name = ?",
+            ("2026-09-03T11:00:00+00:00", "Algorithms"),
+        )
+
     packages = repository.list_all()
 
     assert [package.name for package in packages] == [
-        "Algorithms",
         "Python Advanced",
+        "Algorithms",
     ]
+
+
+def test_existing_package_schema_receives_arrival_timestamps(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.sqlite3"
+    with closing(sqlite3.connect(database_path)) as connection, connection:
+        connection.execute(
+            """
+            CREATE TABLE learning_packages (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                document_id TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                summary_identity_fingerprint TEXT,
+                question_bank_identity_fingerprint TEXT,
+                learning_language TEXT NOT NULL DEFAULT 'same'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO learning_packages (
+                id, name, document_id, status, learning_language
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "Existing",
+                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "indexed",
+                "same",
+            ),
+        )
+
+    repository = SqliteLearningPackageRepository(database_path)
+
+    assert [package.name for package in repository.list_all()] == ["Existing"]
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT created_at FROM learning_packages WHERE name = 'Existing'"
+        ).fetchone()
+    assert row is not None
+    assert row[0] is not None
 
 
 def test_delete_document_removes_its_learning_package(
